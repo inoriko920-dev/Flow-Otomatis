@@ -185,7 +185,9 @@ def build_workspace_right_panel(
         "7.32s": f"{scene.target_duration_s:.2f}s",
         "8s": f"{scene.recommended_flow_duration_s}s",
         "APPROVED IMAGE\nSCENE_016": (
-            f"APPROVED IMAGE\n{scene.scene_id}" if scene.image_exists else f"MISSING IMAGE\n{scene.scene_id}"
+            f"APPROVED IMAGE\n{scene.scene_id}"
+            if scene.image_exists
+            else f"MISSING IMAGE\n{scene.scene_id}"
         ),
         "Auto-mapped • Approved": (
             "Auto-mapped • Approved" if scene.image_exists else "Gambar Hilang"
@@ -212,7 +214,5 @@ def build_workspace_right_panel(
             scene.recommended_flow_duration_s == duration
         )
         button.setObjectName("Primary" if is_selected or is_recommended else "")
-        button.clicked.connect(
-            lambda _checked=False, value=duration: on_select_duration(value)
-        )
+        button.clicked.connect(lambda _checked=False, value=duration: on_select_duration(value))
     return panel
