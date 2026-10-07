@@ -60,9 +60,7 @@ class FixtureSessionPort:
             profile_id=profile_id,
             current_state=self.profile.state,
             first_ready_at=self.profile.last_checked_at,
-            restart_verified_at=(
-                datetime.now(UTC) if self.restart_verified else None
-            ),
+            restart_verified_at=(datetime.now(UTC) if self.restart_verified else None),
         )
 
     def cancel_profile(self, profile_id: str) -> None:
