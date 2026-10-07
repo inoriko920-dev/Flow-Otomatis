@@ -87,7 +87,7 @@ class GeminiGenerateContentAgent:
             raise GeminiAgentProviderError(
                 "Gemini AI Agent tidak dapat dijangkau."
             ) from exc
-        except UnicodeDecodeError, json.JSONDecodeError, TypeError as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
             raise GeminiAgentProviderError(
                 "Respons Gemini AI Agent tidak dapat diverifikasi."
             ) from exc
