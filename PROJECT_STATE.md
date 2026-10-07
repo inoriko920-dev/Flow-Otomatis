@@ -6,18 +6,20 @@
 - Factory STEP active: STEP 12 — Integrations & External Services
 - STEP 12 status: IN PROGRESS
 - I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING
-- Last tested implementation SHA: 70dd90b7e08c0f0b9261021a4f02966daf046c60
-- Final I12-01 automated CI run: 37602579445 — SUCCESS
-- Quality job: 112730274502 — SUCCESS
-- UI regression job: 112730670338 — SUCCESS
-- Windows package job: 112730961256 — SUCCESS
-- UI regression artifact ID: 11473523196
-- UI regression artifact digest: sha256:fa5ab49c244259108cd6ae06dcc69ad076bd9cce748a36662e6c3172e9d9f3ff
-- Windows portable artifact ID: 11473218426
-- Windows portable artifact uploaded size: 435450690 bytes
-- Windows portable artifact digest: sha256:21cf2df1f869e31b5632e3cf8320cd08f3fcc50c5ca5088f226f220cdb4c6338
+- I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard: PASS
+- I12-02B — Live Google Flow Playwright Driver: BLOCKED pending I12-01 live manual validation
+- Last tested implementation SHA: 90fafb83821ff7ec82c3253d046293b780220edb
+- I12-02A CI run: 37603714336 — SUCCESS
+- Quality job: 112734004875 — SUCCESS
+- UI regression job: 112734322641 — SUCCESS
+- Windows package job: 112734665287 — SUCCESS
+- UI regression artifact ID: 11473099652
+- UI regression artifact digest: sha256:34de8d0b0ddd910c40017b46c7e66a4fd37a3ac9e6107d720891296eb5253726
+- Windows portable artifact ID: 11473888042
+- Windows portable artifact uploaded size: 435454484 bytes
+- Windows portable artifact digest: sha256:0d5eabc603acba99c0e7d5c09e3adcec51135e7a0bf8c37bdde97ad4ac332c99
 - Live Google login/session persistence against a real account: NOT YET VALIDATED
-- Live Google Flow generation/download and Gemini provider: NOT TESTED
+- Live Google Flow submit/generation/download and Gemini provider: NOT TESTED
 
 ## STEP status
 - STEP 00: PASS
@@ -34,65 +36,77 @@
 - STEP 11: PASS
 - STEP 12: IN PROGRESS
   - I12-01: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING
-  - I12-02: BLOCKED until I12-01 live manual validation is accepted
-  - I12-03: PLANNED after I12-02
+  - I12-02A: PASS
+  - I12-02B: BLOCKED pending I12-01 live manual validation
+  - I12-03: PLANNED after live I12-02
   - I12-04: PLANNED after I12-03
 
-## I12-01 delivered implementation
-- Application-owned `GoogleSessionPort`, credential-free `GoogleSessionProfile`, and explicit states:
-  - READY
-  - NEEDS_LOGIN
-  - UNKNOWN
-  - ERROR
-- `GoogleSessionService` validates user-owned local profile labels and owns application orchestration.
-- Dedicated Playwright Browser Worker owns all real browser/session behavior.
-- Official Google login surface opens at `https://accounts.google.com/`.
-- Session readiness probe navigates to `https://myaccount.google.com/` and maps only sanitized state/detail back to the app.
-- Persistent browser profile data is isolated under the user-scoped Session root:
-  - `%LOCALAPPDATA%/Flow-Otomatis/Sessions/google/<profile-id>/browser-data`
-- Safe local metadata is stored separately in `profile.json`.
-- Metadata contains only:
-  - profile_id
-  - label
-  - state
-  - last_checked_at
-  - detail
-- Passwords, MFA values, cookies, auth tokens, credentials, and browser storage are never copied into project DB, result manifests, logs, planning docs, or handoff manifests.
-- Profil Google UI now renders real local profiles/status instead of only a fixture.
-- Bantuan Login UI now supports:
-  - create named local profile;
-  - open/focus official login session;
-  - manual password/MFA/CAPTCHA handoff;
-  - check one profile;
-  - check all profiles;
-  - Ready / Needs Login / Unknown / Error feedback.
-- Browser contexts are closed on application shutdown.
-- Profile-scoped cancel closes the browser context without deleting the persisted session.
-- Profile delete removes only that app-local session/profile directory.
-- No generation submit, result detection/download, Gemini call, CAPTCHA bypass, MFA bypass, hidden rotation, or credential export was added in I12-01.
+## I12-02A delivered contract/preflight
+I12-02A deliberately adds **no live Google Flow selectors or mutation**. It prepares deterministic semantics so a future live Browser Worker cannot silently duplicate a generation request.
 
-## I12-01 automated evidence
+Delivered:
+- provider exception taxonomy:
+  - GenerationProviderError
+  - GenerationSubmissionAmbiguousError
+  - GenerationAuthenticationRequiredError
+  - GenerationCancelledError
+- new durable generation state:
+  - ATTENTION_REQUIRED
+- SQLite queue behavior now refuses to claim another Scene while a RUNNING or ATTENTION_REQUIRED job exists.
+- LocalGenerationQueueService maps:
+  - ambiguous outcome → ATTENTION_REQUIRED;
+  - auth required → ATTENTION_REQUIRED;
+  - safe cancellation → FAILED with explicit cancelled diagnostic;
+  - confirmed accepted submit with stable remote id → GENERATED;
+  - ordinary safe provider failure → FAILED.
+- Hasil view displays ATTENTION_REQUIRED as “Perlu Perhatian”.
+- results attention metric counts ATTENTION_REQUIRED.
+- `GoogleFlowGenerationProvider` introduced under Browser Worker boundary.
+- `GoogleFlowGenerationDriver` protocol introduced for one-submit browser execution.
+- sanitized driver evidence states:
+  - ACCEPTED
+  - SAFE_FAILURE
+  - AUTH_REQUIRED
+  - CANCELLED
+  - AMBIGUOUS
+- provider performs exactly one driver call; it contains no automatic retry loop.
+- ACCEPTED without a stable remote_result_id is treated as AMBIGUOUS.
+- fixture tests prove ambiguous first submit blocks the second queued Scene and prevents automatic resubmission.
+
+## I12-02A automated evidence
 - Ruff format: PASS.
 - Ruff lint: PASS.
-- mypy strict: PASS — 55 source files.
+- mypy strict: PASS — 56 source files.
 - architecture guard: PASS.
-- pytest: 46 passed.
+- pytest: 53 passed.
 - Frozen UI regression: 30/30 PASS.
 - Visual similarity range: 0.6344–0.9643 at threshold 0.55.
 - Playwright Chromium staging/smoke: PASS.
 - PyInstaller onedir build: PASS.
 - Portable application smoke: PASS.
-- I12-01 Windows artifact: `Flow-Otomatis-step12-i12-01-win-x64`.
-- I12-01 UI evidence artifact: `Flow-Otomatis-step12-i12-01-ui-regression-evidence`.
+- UI evidence artifact: `Flow-Otomatis-step12-i12-02a-contract-ui-regression-evidence`.
+- Windows artifact: `Flow-Otomatis-step12-i12-02a-contract-win-x64`.
+
+## Live boundary remains blocked
+I12-02A does **not** implement or claim:
+- Google Flow selectors;
+- clicking a real Generate/Create button;
+- uploading to live Google Flow;
+- real remote_result_id discovery;
+- live timeout classification;
+- live cancellation;
+- result detection/download;
+- real account/provider recovery.
+
+No selector should be guessed from stale/public screenshots. The live driver must be built against the product owner's successfully authorized session and verified current Flow UI.
 
 ## Architecture/product rules still frozen
 - CPython 3.14.x x64 + PySide6 Qt Widgets.
-- Playwright Chromium belongs to the dedicated Browser Worker/provider boundary.
+- Playwright Chromium belongs to dedicated Browser Worker/provider boundary.
 - Presentation must not import Playwright/workers/infrastructure directly.
 - Modular monolith + ports/adapters.
 - SQLite per-project persistence.
-- Windows Credential Locker/keyring remains canonical for API secrets.
-- Browser session data belongs only to the user-scoped Session root.
+- Browser session data belongs only to user-scoped Session root.
 - PyInstaller onedir portable ZIP.
 - Serial R1 generation queue.
 - Omni Flash 1.1 • 720p • 16:9.
@@ -102,46 +116,22 @@
 - No CAPTCHA/MFA bypass.
 - No credential/session export.
 - No hidden account/key rotation or quota/rate-limit evasion.
+- Never silently retry a mutating generation submit when provider outcome is ambiguous.
 - STEP 09 frozen UI cannot be silently redesigned.
 
-## Known limitations / manual validation required
-I12-01 automated evidence proves architecture, persistence paths, state contracts, fixture transitions, UI binding, packaged Chromium availability, and portable startup. It does **not** prove a real Google account will accept and retain a live session on the user's machine.
+## Required manual I12-01 acceptance before I12-02B
+On the Windows artifact:
+1. open Profil Google;
+2. create a user-owned local profile;
+3. click Buka / Fokuskan Sesi Login;
+4. manually complete Google login/MFA/CAPTCHA;
+5. return and click Cek Ulang Sesi;
+6. confirm status Siap;
+7. close the app fully;
+8. reopen and confirm the same profile remains and can still report Siap if Google kept the session.
 
-Before I12-02 is accepted to start, manually validate the Windows artifact:
-1. launch Flow-Otomatis;
-2. open Profil Google;
-3. create a profile;
-4. choose Buka / Fokuskan Sesi Login;
-5. complete Google password/MFA/CAPTCHA manually;
-6. return to the app and choose Cek Ulang Sesi;
-7. verify status becomes Siap;
-8. close Flow-Otomatis completely;
-9. reopen it and verify the same profile remains available and can still report Siap where Google's session remains valid;
-10. optionally sign out/expire the session and verify it returns to Perlu Login/attention without bypass.
-
-Do not record or share passwords, MFA codes, cookies, browser profile files, or session tokens as validation evidence.
-
-## Remaining STEP 12 order
-1. **I12-01 — Authorized Google Session / Manual Login Lifecycle**
-   - implementation + automated gates: PASS;
-   - live manual validation: PENDING.
-2. **I12-02 — Deterministic Google Flow Generation Adapter**
-   - one Scene first;
-   - Browser Worker boundary;
-   - map existing GenerationRequest to real Flow UI;
-   - timeout/cancel/idempotency;
-   - no duplicate submit after ambiguous outcome.
-3. **I12-03 — Live Result Detection & Download Adapter**
-   - detect completed result;
-   - download to explicit local output;
-   - verify file before marking DOWNLOADED;
-   - preserve Generate/Download separation.
-4. **I12-04 — Gemini AI Agent / Key Integration**
-   - keyring-backed secrets;
-   - masked UI;
-   - bounded context/tool permissions;
-   - no automatic key/account rotation to evade limits.
+Never share password, MFA code, cookies, browser profile/session files, or tokens.
 
 ## Next exact action
-Do not start I12-02 yet.
-The product owner should test the I12-01 Windows artifact with a real user-owned Google account and report the result. After successful manual validation and the next explicit **“lanjutkan”**, mark I12-01 fully PASS and begin I12-02 only.
+Do not implement the live Google Flow driver yet.
+After I12-01 real-account validation succeeds and the product owner explicitly says **“lanjutkan”**, begin I12-02B with one Scene only. The first live driver must retain the I12-02A one-submit/ambiguous-outcome rules and must not mix result downloading or Gemini into the same slice.
