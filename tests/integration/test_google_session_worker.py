@@ -160,12 +160,7 @@ def test_restart_proof_contains_only_sanitized_metadata(tmp_path: Path) -> None:
     profile = worker.create_profile("Akun Aman")
     worker.check_profile(profile.profile_id)
 
-    proof_path = (
-        session_root
-        / "google"
-        / profile.profile_id
-        / "restart-proof.json"
-    )
+    proof_path = session_root / "google" / profile.profile_id / "restart-proof.json"
     payload = json.loads(proof_path.read_text(encoding="utf-8"))
     assert set(payload) == {
         "first_ready_instance_id",
