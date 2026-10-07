@@ -174,7 +174,9 @@ class SystemChromeCdpPool:
             self._browsers[profile_id] = browser
 
         if not browser.contexts:
-            raise FlowOtomatisError("Google Chrome tidak menyediakan context CDP yang dapat dipakai.")
+            raise FlowOtomatisError(
+                "Google Chrome tidak menyediakan context CDP yang dapat dipakai."
+            )
         page = browser.contexts[0].new_page()
         self._pages[profile_id] = page
         return page
@@ -247,9 +249,7 @@ class SystemChromeCdpPool:
         deadline = time.monotonic() + self._startup_timeout_s
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise FlowOtomatisError(
-                    "Google Chrome tertutup sebelum profil login siap."
-                )
+                raise FlowOtomatisError("Google Chrome tertutup sebelum profil login siap.")
             if self._read_reachable_port(user_data_dir) is not None:
                 return
             time.sleep(0.1)
