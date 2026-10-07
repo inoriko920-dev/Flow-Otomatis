@@ -73,9 +73,7 @@ class GeminiGenerateContentAgent:
                 decoded = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code in {400, 401, 403}:
-                raise GeminiAgentProviderError(
-                    "Gemini menolak key atau request AI Agent."
-                ) from exc
+                raise GeminiAgentProviderError("Gemini menolak key atau request AI Agent.") from exc
             if exc.code == 429:
                 raise GeminiAgentProviderError(
                     "Gemini sedang membatasi kuota/rate limit. Key tidak diganti otomatis."
@@ -84,9 +82,7 @@ class GeminiGenerateContentAgent:
                 f"Gemini AI Agent gagal dengan HTTP {exc.code}."
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise GeminiAgentProviderError(
-                "Gemini AI Agent tidak dapat dijangkau."
-            ) from exc
+            raise GeminiAgentProviderError("Gemini AI Agent tidak dapat dijangkau.") from exc
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
             raise GeminiAgentProviderError(
                 "Respons Gemini AI Agent tidak dapat diverifikasi."
