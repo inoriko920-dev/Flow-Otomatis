@@ -30,7 +30,6 @@ from flow_otomatis.presentation.theme import (
 )
 from flow_otomatis.presentation.widgets import muted_label, status_badge
 
-
 _NAV_DEFAULTS = {
     "Beranda": "UI-IMG-001A",
     "Workspace": "UI-IMG-002A",
