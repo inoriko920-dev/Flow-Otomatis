@@ -131,7 +131,7 @@ jobs:
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
 
-      - name: Upload portable STEP 11 artifact
+      - name: Upload portable STEP 12 I12-01 artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flow-Otomatis-step12-i12-01-win-x64
