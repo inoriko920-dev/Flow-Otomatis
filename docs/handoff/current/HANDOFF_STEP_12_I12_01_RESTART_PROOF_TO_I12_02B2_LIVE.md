@@ -10,12 +10,12 @@ I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: **BLOCKED** until th
 ## Tested baseline
 - Repository: `inoriko920-dev/Flow-Otomatis`
 - Branch: `main`
-- Tested implementation SHA: `0e6b8e3755721954a0d2be8d712f0af88e961e4a`
-- CI: `37615288655` — SUCCESS
-- Quality: `112772031746` — SUCCESS
-- UI visual: `112772307027` — SUCCESS
-- Windows package: `112772535490` — SUCCESS
-- pytest: **79 passed**
+- Tested implementation SHA: `5cb889e20a4300b1fa5ae215986239e556b9b553`
+- CI: `37616109456` — SUCCESS
+- Quality: `112774708163` — SUCCESS
+- UI visual: `112774969887` — SUCCESS
+- Windows package: `112775342322` — SUCCESS
+- pytest: **80 passed**
 - mypy: **61 source files**
 - UI regression: **30/30 PASS**
 
@@ -34,14 +34,23 @@ Rules:
 
 The evidence file does not contain passwords, cookies, tokens, credentials, browser-data, or session contents.
 
+## UI visibility
+The real Bantuan Login surface now exposes the restart gate directly:
+- `Restart belum diverifikasi` when the current session is READY but no cross-instance proof exists;
+- `Restart berhasil diverifikasi` when READY was observed again after a real app restart;
+- `Validasi restart: Belum lulus / Lulus` is shown in the safe-status card;
+- the user is instructed to fully close, reopen, then run Cek Ulang Sesi again.
+
+This allows the product owner to report the gate result without inspecting files or sharing session data.
+
 ## Artifacts
 - UI evidence:
-  - ID: `11479174307`
-  - digest: `sha256:5c92598d30204c77723c07ad66faa1673f24d27092eceb040c56768123709245`
+  - ID: `11480590257`
+  - digest: `sha256:7b6c4ce3d7dd4ea8048bdd8ade8deb0a3c079cedbf57d057c867be65f775f0bf`
 - Windows portable:
-  - ID: `11479739543`
-  - size: `435467636` bytes
-  - digest: `sha256:736b3a7b95ece7dd64a0516f0b147934050bf8ba61b6ae2957e9eef073f56107`
+  - ID: `11480900497`
+  - size: `435468948` bytes
+  - digest: `sha256:cfbb320859360b877f3362684915cc32db1e11aa33ce39d8421f5a2e3b631b4a`
 
 ## Still not proven
 CI cannot prove:
@@ -59,7 +68,7 @@ No live Flow mutation was added in this slice.
 4. Use Cek Ulang Sesi until profile state is READY/Siap.
 5. Fully close the application.
 6. Reopen the application.
-7. Check the same profile again and confirm it is still READY/Siap.
+7. Check the same profile again and confirm the UI shows `Restart berhasil diverifikasi` and `Validasi restart: Lulus`.
 
 Do not share password, MFA code, cookies, tokens, browser-data, or session files.
 

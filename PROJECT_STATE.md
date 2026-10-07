@@ -5,13 +5,22 @@
 - Branch: main
 - Factory STEP active: STEP 12 — Integrations & External Services
 - STEP 12 status: IN PROGRESS
-- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING
+- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING
 - I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard: PASS
 - I12-02B1 — Read-Only Google Flow Preflight: PASS
 - I12-02B2-PRECHECK — Pre-Submit Request Guard: PASS
 - I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: BLOCKED pending real-account session validation
-- Last tested implementation SHA: 0e6b8e3755721954a0d2be8d712f0af88e961e4a
-- I12-01-RESTART-PROOF CI run: 37615288655 — SUCCESS
+- Last tested implementation SHA: 5cb889e20a4300b1fa5ae215986239e556b9b553
+- I12-01-RESTART-PROOF-UI CI run: 37616109456 — SUCCESS
+- Quality job: 112774708163 — SUCCESS
+- UI regression job: 112774969887 — SUCCESS
+- Windows package job: 112775342322 — SUCCESS
+- UI evidence artifact ID: 11480590257
+- UI evidence digest: sha256:7b6c4ce3d7dd4ea8048bdd8ade8deb0a3c079cedbf57d057c867be65f775f0bf
+- Windows artifact ID: 11480900497
+- Windows artifact size: 435468948 bytes
+- Windows artifact digest: sha256:cfbb320859360b877f3362684915cc32db1e11aa33ce39d8421f5a2e3b631b4a
+- Previous I12-01-RESTART-PROOF CI run: 37615288655 — SUCCESS
 - Quality job: 112772031746 — SUCCESS
 - UI regression job: 112772307027 — SUCCESS
 - Windows package job: 112772535490 — SUCCESS
@@ -46,13 +55,38 @@
 - STEP 10: PASS
 - STEP 11: PASS
 - STEP 12: IN PROGRESS
-  - I12-01: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING
+  - I12-01: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING
   - I12-02A: PASS
   - I12-02B1: PASS
   - I12-02B2-PRECHECK: PASS
   - I12-02B2-LIVE: BLOCKED pending I12-01 live validation
   - I12-03: PLANNED after live generation submit
   - I12-04: PLANNED after I12-03
+
+## I12-01-RESTART-PROOF UI delivered
+The existing credential-free restart proof is now visible to the product owner on the real Google login surface.
+
+Delivered:
+- Bantuan Login reads `GoogleSessionRestartGate` through the application service;
+- READY + no cross-instance proof shows `Restart belum diverifikasi`;
+- READY + verified restart shows `Restart berhasil diverifikasi`;
+- the safe-status card shows `Validasi restart: Lulus / Belum lulus`;
+- instructions explicitly say to close the app, reopen it, and run Cek Ulang Sesi again;
+- UI tests cover both not-yet-verified and verified states;
+- no Flow generation mutation was added.
+
+Automated evidence:
+- Ruff format/lint: PASS;
+- mypy strict: PASS — 61 source files;
+- architecture guard: PASS;
+- pytest: 80 passed;
+- frozen UI regression: 30/30 PASS;
+- visual similarity: 0.6344–0.9643;
+- Chromium staging/smoke: PASS;
+- PyInstaller onedir build: PASS;
+- portable smoke: PASS.
+
+The live real-account gate remains pending because CI cannot authenticate the product owner's account.
 
 ## I12-01-RESTART-PROOF hardening delivered
 This safe slice strengthens the manual gate without performing any Google Flow mutation.

@@ -16,7 +16,7 @@ Status: PASS.
 Status: IN PROGRESS.
 
 ### I12-01 — Authorized Google Session / Manual Login Lifecycle
-- Status: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING.
+- Status: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING.
 - Real Google account login/restart persistence still requires product-owner validation.
 - Safe restart-proof support is now implemented:
   - first READY records sanitized app-instance/timestamp evidence;
@@ -31,7 +31,18 @@ Status: IN PROGRESS.
 - Windows package: `112772535490` — SUCCESS.
 - pytest: 79 passed.
 - UI artifact: `11479174307`.
-- Windows artifact: `11479739543`.
+- Previous Windows artifact: `11479739543`.
+- Restart-gate UI is now explicit on Bantuan Login:
+  - `Restart belum diverifikasi` + `Validasi restart: Belum lulus`;
+  - `Restart berhasil diverifikasi` + `Validasi restart: Lulus`.
+- Latest tested SHA: `5cb889e20a4300b1fa5ae215986239e556b9b553`.
+- Latest CI: `37616109456` — SUCCESS.
+- Latest quality: `112774708163` — SUCCESS.
+- Latest UI visual: `112774969887` — SUCCESS.
+- Latest Windows package: `112775342322` — SUCCESS.
+- Latest pytest: 80 passed.
+- Latest UI artifact: `11480590257`.
+- Latest Windows artifact: `11480900497`.
 
 ### I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard
 - Status: PASS.
