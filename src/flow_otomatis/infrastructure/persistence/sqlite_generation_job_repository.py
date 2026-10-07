@@ -224,7 +224,5 @@ class SqliteGenerationJobRepository:
             remote_result_id=(
                 str(row["remote_result_id"]) if row["remote_result_id"] is not None else None
             ),
-            error_message=(
-                str(row["error_message"]) if row["error_message"] is not None else None
-            ),
+            error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
         )
