@@ -28,7 +28,7 @@ def application_stylesheet() -> str:
 
     return f"""
     * {{
-        font-family: "Segoe UI Variable", "Segoe UI";
+        font-family: "Segoe UI";
         font-size: 9pt;
         color: {TEXT};
     }}
