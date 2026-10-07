@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from PySide6.QtWidgets import (
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
@@ -172,6 +173,9 @@ def build_workspace_right_panel(
     *,
     scene_id: str,
     on_select_duration: Callable[[int], object],
+    on_agent_message: Callable[[str], object] | None = None,
+    agent_reply_text: str | None = None,
+    agent_busy: bool = False,
 ) -> QWidget | None:
     """Render frozen Scene/Agent dock for the selected persisted Scene."""
 
@@ -215,4 +219,34 @@ def build_workspace_right_panel(
         )
         button.setObjectName("Primary" if is_selected or is_recommended else "")
         button.clicked.connect(lambda _checked=False, value=duration: on_select_duration(value))
+
+    agent_inputs = panel.findChildren(QLineEdit)
+    agent_input = agent_inputs[0] if agent_inputs else None
+    agent_button = next(
+        (button for button in panel.findChildren(QPushButton) if button.text() == "Kirim"),
+        None,
+    )
+    if agent_reply_text:
+        for label in panel.findChildren(QLabel):
+            if label.text().startswith("Saya siap membantu membaca status project"):
+                label.setText(agent_reply_text)
+                label.setWordWrap(True)
+                break
+    if agent_input is not None:
+        agent_input.setEnabled(not agent_busy)
+    if agent_button is not None:
+        agent_button.setEnabled(not agent_busy and on_agent_message is not None)
+        if agent_busy:
+            agent_button.setText("Memproses...")
+        elif on_agent_message is not None and agent_input is not None:
+            agent_button.clicked.connect(
+                lambda: on_agent_message(agent_input.text().strip())
+                if agent_input.text().strip()
+                else None
+            )
+            agent_input.returnPressed.connect(
+                lambda: on_agent_message(agent_input.text().strip())
+                if agent_input.text().strip()
+                else None
+            )
     return panel
