@@ -1,0 +1,69 @@
+name: One-time Flow-Otomatis full backup
+
+on:
+  push:
+    branches:
+      - backup-flow-otomatis-20261007-200912-wib
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main with full history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch all accessible refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' --prune --force
+          git checkout main
+          git reset --hard origin/main
+
+      - name: Create verified Git bundle and source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          TS="2026-10-07_20-09-12_WIB"
+          OUT="$RUNNER_TEMP/flow-backup"
+          mkdir -p "$OUT"
+
+          git bundle create "$OUT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle" --all
+          git bundle verify "$OUT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle"             > "$OUT/GIT_BUNDLE_VERIFY.txt" 2>&1
+
+          git archive --format=zip             --output "$OUT/Flow-Otomatis-SOURCE-main-$TS.zip"             main
+
+          git rev-parse main > "$OUT/MAIN_COMMIT.txt"
+          git for-each-ref --format='%(refname) %(objectname)' refs/heads refs/remotes refs/tags             > "$OUT/ALL_REFS.txt"
+          git for-each-ref --format='%(refname:short) %(objectname)' refs/heads             > "$OUT/BRANCHES.txt"
+          git for-each-ref --format='%(refname:short) %(objectname)' refs/tags             > "$OUT/TAGS.txt"
+          git log --all --date=iso-strict             --pretty=format:'%H%x09%ad%x09%an%x09%s'             > "$OUT/COMMIT_HISTORY.txt"
+
+          {
+            echo "BACKUP_TIMESTAMP_WIB=2026-10-07T20:09:12+07:00"
+            echo "REPOSITORY=https://github.com/inoriko920-dev/Flow-Otomatis"
+            echo "DEFAULT_BRANCH=main"
+            echo "MAIN_COMMIT=$(git rev-parse main)"
+            echo "GIT_BUNDLE_VERIFY=PASS"
+          } > "$OUT/BACKUP_CAPTURE_INFO.txt"
+
+          cd "$OUT"
+          sha256sum * > SHA256SUMS_CAPTURE.txt
+          test -s "Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle"
+          test -s "Flow-Otomatis-SOURCE-main-$TS.zip"
+          unzip -t "Flow-Otomatis-SOURCE-main-$TS.zip"
+
+      - name: Upload verified backup capture
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-git-source-backup-2026-10-07_20-09-12_WIB
+          path: ${{ runner.temp }}/flow-backup/*
+          if-no-files-found: error
+          retention-days: 14
