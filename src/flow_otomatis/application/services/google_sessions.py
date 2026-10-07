@@ -46,8 +46,7 @@ class GoogleSessionService:
         """Refresh every local profile serially and return the latest state."""
 
         return tuple(
-            self._sessions.check_profile(profile.profile_id)
-            for profile in self.list_profiles()
+            self._sessions.check_profile(profile.profile_id) for profile in self.list_profiles()
         )
 
     def cancel_profile(self, profile_id: str) -> None:
