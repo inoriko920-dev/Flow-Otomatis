@@ -5,14 +5,25 @@
 - Branch: main
 - Factory STEP active: STEP 12 — Integrations & External Services
 - STEP 12 status: IN PROGRESS
-- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING
+- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS + SYSTEM CHROME AUTH FIX READY / LIVE REAL-ACCOUNT VALIDATION PENDING
 - I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard: PASS
 - I12-02B1 — Read-Only Google Flow Preflight: PASS
 - I12-02B2-PRECHECK — Pre-Submit Request Guard: PASS
 - I12-02B2-GATE — Restart-Gated Generation Provider Contract: PASS
 - I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: BLOCKED pending real-account session validation
-- Last tested implementation SHA: 6abfbc169a0864c00f1136cfc7dd6a7fe7583b8a
-- I12-02B2-GATE CI run: 37617108389 — SUCCESS
+- Last tested implementation SHA: cbfaa368fd051e0d0a648643bba0fa76484b7d8d
+- I12-01-SYSTEM-CHROME-AUTH CI run: 37633516723 — SUCCESS
+- Quality job: 112833623396 — SUCCESS
+- UI regression job: 112834024070 — SUCCESS
+- Windows package job: 112834514993 — SUCCESS
+- pytest: 90 passed
+- mypy strict: 63 source files
+- UI evidence artifact ID: 11487353178
+- UI evidence digest: sha256:cae786100222df13c8da3dfd0c36ba86390b40ff211ee8b6473b9596f974328d
+- Windows artifact ID: 11486833906
+- Windows artifact size: 435478667 bytes
+- Windows artifact digest: sha256:d99e356615899f2eb9d5f99a3d1b8f37e315e3857cd14990acd432acc3c6baca
+- Previous I12-02B2-GATE CI run: 37617108389 — SUCCESS
 - Quality job: 112778002338 — SUCCESS
 - UI regression job: 112778281237 — SUCCESS
 - Windows package job: 112778575235 — SUCCESS
@@ -67,7 +78,7 @@
 - STEP 10: PASS
 - STEP 11: PASS
 - STEP 12: IN PROGRESS
-  - I12-01: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING
+  - I12-01: AUTOMATED PASS + SYSTEM CHROME AUTH FIX READY / LIVE REAL-ACCOUNT VALIDATION PENDING
   - I12-02A: PASS
   - I12-02B1: PASS
   - I12-02B2-PRECHECK: PASS
@@ -75,6 +86,36 @@
   - I12-02B2-LIVE: BLOCKED pending I12-01 live validation
   - I12-03: PLANNED after live generation submit
   - I12-04: PLANNED after I12-03
+
+## I12-01-SYSTEM-CHROME-AUTH fix delivered
+The previous login path opened Google sign-in inside Playwright-controlled Chromium and produced Google's "This browser or app may not be secure" rejection on the product owner's Windows machine.
+
+Replacement architecture:
+- manual Google sign-in opens the installed Google Chrome executable, not bundled Playwright Chromium;
+- manual sign-in uses the app-owned isolated `browser-data` directory;
+- manual sign-in has no Playwright attachment, no CDP endpoint, and no automation/stealth flags;
+- the user completes password/MFA/CAPTCHA manually and then closes the login Chrome window;
+- only after login is finished does `Cek Ulang Sesi` relaunch the same isolated profile with a random localhost CDP endpoint;
+- Playwright attaches through `connect_over_cdp` only after authentication for authorization checks and later Flow work;
+- passwords, MFA values, cookies, tokens, and browser profile contents are never exported through the application contract;
+- there is no stealth driver, CAPTCHA bypass, or anti-detection patch.
+
+Automated evidence:
+- Ruff format/lint: PASS;
+- mypy strict: PASS — 63 source files;
+- architecture guard: PASS;
+- pytest: 90 passed;
+- frozen UI regression: 30/30 PASS;
+- visual similarity: 0.6344–0.9643;
+- staged Chromium smoke: PASS;
+- PyInstaller onedir build: PASS;
+- portable smoke: PASS.
+
+Important boundary:
+- CI proves the implementation/build contract only;
+- CI cannot authenticate the product owner's real Google account;
+- the Windows build must still be tested locally to confirm Google accepts the normal-Chrome login and retains the session;
+- I12-02B2-LIVE remains blocked until local READY-after-restart validation passes.
 
 ## I12-02B2-GATE delivered
 This safe slice adds an application-layer `RestartGatedGenerationProvider` that must sit in front of any future live generation provider.
@@ -237,14 +278,16 @@ Do not label Google Flow generation as operational until live validation succeed
 - STEP 09 UI cannot be silently redesigned.
 
 ## Required manual validation before I12-02B2-LIVE
-Using the Windows artifact:
+Using the latest Windows artifact:
 1. open Profil Google;
 2. create/open a user-owned profile;
-3. manually complete Google login;
-4. Cek Ulang Sesi must report Siap;
-5. fully close the app;
-6. reopen the app;
-7. same profile must remain available and Cek Ulang Sesi must report Siap where Google retained the session.
+3. choose Buka / Fokuskan Sesi Login;
+4. complete Google login manually in the normal installed Google Chrome window;
+5. after login succeeds, fully close that Chrome login window;
+6. return to Flow-Otomatis and choose Cek Ulang Sesi; it must report Siap;
+7. fully close Flow-Otomatis;
+8. reopen Flow-Otomatis;
+9. check the same profile again and confirm Validasi restart: Lulus.
 
 Do not share passwords, MFA codes, cookies, browser-data, or tokens.
 

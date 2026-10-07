@@ -16,7 +16,7 @@ Status: PASS.
 Status: IN PROGRESS.
 
 ### I12-01 — Authorized Google Session / Manual Login Lifecycle
-- Status: AUTOMATED PASS + RESTART-PROOF UI VISIBLE / LIVE REAL-ACCOUNT VALIDATION PENDING.
+- Status: AUTOMATED PASS + SYSTEM CHROME AUTH FIX READY / LIVE REAL-ACCOUNT VALIDATION PENDING.
 - Real Google account login/restart persistence still requires product-owner validation.
 - Safe restart-proof support is now implemented:
   - first READY records sanitized app-instance/timestamp evidence;
@@ -42,7 +42,23 @@ Status: IN PROGRESS.
 - Latest Windows package: `112775342322` — SUCCESS.
 - Latest pytest: 80 passed.
 - Latest UI artifact: `11480590257`.
-- Latest Windows artifact: `11480900497`.
+- Previous Windows artifact: `11480900497`.
+- System-Chrome auth fix:
+  - manual authentication now opens installed Google Chrome in normal mode;
+  - no Playwright/CDP is attached during Google sign-in;
+  - after successful login the user closes the login Chrome window;
+  - Cek Ulang Sesi then relaunches the same isolated profile with localhost CDP and attaches Playwright;
+  - no stealth/bypass/session export.
+- Latest tested SHA: `cbfaa368fd051e0d0a648643bba0fa76484b7d8d`.
+- Latest CI: `37633516723` — SUCCESS.
+- Latest quality: `112833623396` — SUCCESS.
+- Latest UI visual: `112834024070` — SUCCESS.
+- Latest Windows package: `112834514993` — SUCCESS.
+- Latest pytest: 90 passed.
+- Latest mypy: 63 source files.
+- Latest UI artifact: `11487353178`.
+- Latest Windows artifact: `11486833906`.
+- Real-account acceptance and restart persistence remain PENDING local validation.
 
 ### I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard
 - Status: PASS.
