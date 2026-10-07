@@ -143,9 +143,7 @@ def test_prepare_queue_is_idempotent(tmp_path: Path) -> None:
     second = service.list_jobs("EP300_QUEUE")
 
     assert len(second) == 2
-    assert [job.request_fingerprint for job in second] == [
-        job.request_fingerprint for job in first
-    ]
+    assert [job.request_fingerprint for job in second] == [job.request_fingerprint for job in first]
 
 
 class AmbiguousGenerationProvider:
@@ -203,9 +201,7 @@ def test_edit_after_enqueue_blocks_provider_until_explicit_reprepare(tmp_path: P
         workspace.scenes[0],
         motion_prompt="Changed after enqueue.",
     )
-    workspace_repo.update(
-        replace(workspace, scenes=(changed_first, workspace.scenes[1]))
-    )
+    workspace_repo.update(replace(workspace, scenes=(changed_first, workspace.scenes[1])))
 
     blocked = service.run_next("EP300_QUEUE")
     assert blocked is not None
@@ -236,9 +232,7 @@ def test_image_missing_after_enqueue_blocks_provider_without_mixing_revision(
         image_exists=False,
         readiness=SceneReadiness.MISSING_IMAGE,
     )
-    workspace_repo.update(
-        replace(workspace, scenes=(missing_first, workspace.scenes[1]))
-    )
+    workspace_repo.update(replace(workspace, scenes=(missing_first, workspace.scenes[1])))
 
     blocked = service.run_next("EP300_QUEUE")
 

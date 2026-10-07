@@ -135,8 +135,6 @@ def test_download_success_requires_generated_job(tmp_path: Path) -> None:
     with pytest.raises(InternalInvariantError):
         service.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
 
-
-
 def test_migration_preserves_generated_result_and_existing_download(tmp_path: Path) -> None:
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)

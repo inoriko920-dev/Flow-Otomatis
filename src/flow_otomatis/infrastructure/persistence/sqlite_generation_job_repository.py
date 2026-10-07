@@ -630,29 +630,19 @@ class SqliteGenerationJobRepository:
             created_at=datetime.fromisoformat(str(row["created_at"])),
             updated_at=datetime.fromisoformat(str(row["updated_at"])),
             image_file=str(row["image_file"]) if row["image_file"] is not None else None,
-            motion_prompt=(
-                str(row["motion_prompt"]) if row["motion_prompt"] is not None else None
-            ),
+            motion_prompt=(str(row["motion_prompt"]) if row["motion_prompt"] is not None else None),
             model=str(row["model"]) if row["model"] is not None else None,
             resolution=str(row["resolution"]) if row["resolution"] is not None else None,
-            aspect_ratio=(
-                str(row["aspect_ratio"]) if row["aspect_ratio"] is not None else None
-            ),
+            aspect_ratio=(str(row["aspect_ratio"]) if row["aspect_ratio"] is not None else None),
             request_fingerprint=(
-                str(row["request_fingerprint"])
-                if row["request_fingerprint"] is not None
-                else None
+                str(row["request_fingerprint"]) if row["request_fingerprint"] is not None else None
             ),
             remote_result_id=(
                 str(row["remote_result_id"]) if row["remote_result_id"] is not None else None
             ),
-            error_message=(
-                str(row["error_message"]) if row["error_message"] is not None else None
-            ),
+            error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
             attention_code=(
-                GenerationAttentionCode(str(attention_raw))
-                if attention_raw is not None
-                else None
+                GenerationAttentionCode(str(attention_raw)) if attention_raw is not None else None
             ),
             owner_id=str(row["owner_id"]) if row["owner_id"] is not None else None,
             lease_expires_at=(
