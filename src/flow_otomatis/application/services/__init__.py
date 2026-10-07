@@ -1,6 +1,7 @@
 """Application services."""
 
 from flow_otomatis.application.services.episode_import import EpisodeImportService
+from flow_otomatis.application.services.google_flow_preflight import GoogleFlowPreflightService
 from flow_otomatis.application.services.google_sessions import GoogleSessionService
 from flow_otomatis.application.services.local_generation_queue import LocalGenerationQueueService
 from flow_otomatis.application.services.local_results import LocalResultsService
@@ -9,6 +10,7 @@ from flow_otomatis.application.services.scene_planning import ScenePlanningServi
 
 __all__ = [
     "EpisodeImportService",
+    "GoogleFlowPreflightService",
     "GoogleSessionService",
     "LocalGenerationQueueService",
     "LocalResultsService",

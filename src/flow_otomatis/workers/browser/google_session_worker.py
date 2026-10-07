@@ -8,7 +8,6 @@ projects, logs, diagnostics, or handoff manifests.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -18,7 +17,6 @@ from typing import Protocol
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from playwright.sync_api import BrowserContext, Page, Playwright, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
@@ -28,6 +26,9 @@ from flow_otomatis.application.ports.google_session import (
     GoogleSessionState,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
+from flow_otomatis.workers.browser.browser_context_pool import (
+    PlaywrightPersistentContextPool,
+)
 
 _PROFILE_ID = re.compile(r"^profile-[0-9a-f]{12}$")
 _METADATA_NAME = "profile.json"
@@ -74,10 +75,15 @@ class GoogleSessionBrowserDriver(Protocol):
 class PlaywrightGoogleSessionDriver:
     """Real Playwright implementation; no generation mutation is performed here."""
 
-    def __init__(self, browser_runtime_root: Path) -> None:
-        self._browser_runtime_root = browser_runtime_root
-        self._playwright: Playwright | None = None
-        self._contexts: dict[str, BrowserContext] = {}
+    def __init__(
+        self,
+        browser_runtime_root: Path,
+        *,
+        context_pool: PlaywrightPersistentContextPool | None = None,
+    ) -> None:
+        self._context_pool = context_pool or PlaywrightPersistentContextPool(
+            browser_runtime_root
+        )
 
     def open_login(
         self,
@@ -86,7 +92,7 @@ class PlaywrightGoogleSessionDriver:
         *,
         timeout_ms: int,
     ) -> BrowserSessionProbe:
-        page = self._page(profile_id, user_data_dir)
+        page = self._context_pool.page(profile_id, user_data_dir)
         try:
             page.goto(_GOOGLE_LOGIN_URL, wait_until="domcontentloaded", timeout=timeout_ms)
             page.bring_to_front()
@@ -112,7 +118,7 @@ class PlaywrightGoogleSessionDriver:
         *,
         timeout_ms: int,
     ) -> BrowserSessionProbe:
-        page = self._page(profile_id, user_data_dir)
+        page = self._context_pool.page(profile_id, user_data_dir)
         try:
             page.goto(_GOOGLE_ACCOUNT_URL, wait_until="domcontentloaded", timeout=timeout_ms)
             page.bring_to_front()
@@ -144,36 +150,10 @@ class PlaywrightGoogleSessionDriver:
         )
 
     def close(self, profile_id: str) -> None:
-        context = self._contexts.pop(profile_id, None)
-        if context is not None:
-            context.close()
+        self._context_pool.close(profile_id)
 
     def shutdown(self) -> None:
-        for profile_id in tuple(self._contexts):
-            self.close(profile_id)
-        if self._playwright is not None:
-            self._playwright.stop()
-            self._playwright = None
-
-    def _page(self, profile_id: str, user_data_dir: Path) -> Page:
-        context = self._contexts.get(profile_id)
-        if context is None:
-            context = self._launch_context(user_data_dir)
-            self._contexts[profile_id] = context
-        return context.pages[0] if context.pages else context.new_page()
-
-    def _launch_context(self, user_data_dir: Path) -> BrowserContext:
-        user_data_dir.mkdir(parents=True, exist_ok=True)
-        if self._browser_runtime_root.exists():
-            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(self._browser_runtime_root.resolve())
-        playwright = self._playwright
-        if playwright is None:
-            playwright = sync_playwright().start()
-            self._playwright = playwright
-        return playwright.chromium.launch_persistent_context(
-            user_data_dir=str(user_data_dir),
-            headless=False,
-        )
+        self._context_pool.shutdown()
 
 
 class GoogleSessionWorker(GoogleSessionPort):
