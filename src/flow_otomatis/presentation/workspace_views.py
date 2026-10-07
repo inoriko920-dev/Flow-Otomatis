@@ -240,13 +240,17 @@ def build_workspace_right_panel(
             agent_button.setText("Memproses...")
         elif on_agent_message is not None and agent_input is not None:
             agent_button.clicked.connect(
-                lambda: on_agent_message(agent_input.text().strip())
-                if agent_input.text().strip()
-                else None
+                lambda: (
+                    on_agent_message(agent_input.text().strip())
+                    if agent_input.text().strip()
+                    else None
+                )
             )
             agent_input.returnPressed.connect(
-                lambda: on_agent_message(agent_input.text().strip())
-                if agent_input.text().strip()
-                else None
+                lambda: (
+                    on_agent_message(agent_input.text().strip())
+                    if agent_input.text().strip()
+                    else None
+                )
             )
     return panel

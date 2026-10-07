@@ -130,7 +130,7 @@ class GeminiGenerateContentAgent:
             raise GeminiAgentProviderError(
                 f"Gemini AI Agent gagal dengan HTTP {exc.code}."
             ) from exc
-        except urllib.error.URLError, TimeoutError, OSError as exc:
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise GeminiAgentProviderError(
                 "Gemini AI Agent tidak dapat dijangkau. Coba lagi setelah koneksi stabil."
             ) from exc

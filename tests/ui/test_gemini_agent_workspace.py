@@ -87,9 +87,7 @@ def test_slow_agent_keeps_qt_heartbeat_and_only_displays_proposal(qtbot) -> None
 
     service.release.set()
     qtbot.waitUntil(
-        lambda: any(
-            "Scene sudah siap" in label.text() for label in window.findChildren(QLabel)
-        ),
+        lambda: any("Scene sudah siap" in label.text() for label in window.findChildren(QLabel)),
         timeout=1500,
     )
     visible = " ".join(label.text() for label in window.findChildren(QLabel))
