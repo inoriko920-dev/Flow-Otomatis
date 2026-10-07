@@ -89,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step12-i12-02b1-readonly-preflight-ui-evidence
+          name: Flow-Otomatis-step12-i12-02b2-precheck-ui-evidence
           path: |
             artifacts/ui_actual
             artifacts/ui_reference
@@ -131,10 +131,10 @@ jobs:
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
 
-      - name: Upload portable STEP 12 I12-02B1 preflight artifact
+      - name: Upload portable STEP 12 I12-02B2 precheck artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step12-i12-02b1-readonly-preflight-win-x64
+          name: Flow-Otomatis-step12-i12-02b2-precheck-win-x64
           path: |
             dist/Flow-Otomatis-portable-win-x64.zip
             dist/SHA256SUMS.txt

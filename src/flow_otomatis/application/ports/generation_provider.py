@@ -22,6 +22,10 @@ class GenerationCancelledError(GenerationProviderError):
     """The request was cancelled before any accepted submit was confirmed."""
 
 
+class GenerationRequestValidationError(GenerationProviderError):
+    """The request is invalid and must fail before any browser mutation occurs."""
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
     """Provider-neutral request built from persisted Scene planning."""

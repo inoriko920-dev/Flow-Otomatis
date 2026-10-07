@@ -19,6 +19,9 @@ from flow_otomatis.application.ports.generation_provider import (
     GenerationRequest,
     GenerationSubmissionAmbiguousError,
 )
+from flow_otomatis.workers.browser.google_flow_request_plan import (
+    prepare_google_flow_request,
+)
 
 
 class GoogleFlowSubmitState(StrEnum):
@@ -72,6 +75,7 @@ class GoogleFlowGenerationProvider:
     def generate(self, request: GenerationRequest) -> GenerationProviderResult:
         """Perform exactly one driver attempt; never auto-retry a mutation."""
 
+        prepare_google_flow_request(request)
         evidence = self._driver.submit_one(
             self._profile_id,
             request,

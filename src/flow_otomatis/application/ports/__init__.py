@@ -14,6 +14,7 @@ from flow_otomatis.application.ports.generation_provider import (
     GenerationProviderPort,
     GenerationProviderResult,
     GenerationRequest,
+    GenerationRequestValidationError,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.ports.google_flow_preflight import (
@@ -39,6 +40,7 @@ __all__ = [
     "GenerationProviderPort",
     "GenerationProviderResult",
     "GenerationRequest",
+    "GenerationRequestValidationError",
     "GenerationSubmissionAmbiguousError",
     "GoogleFlowAccessProbe",
     "GoogleFlowAccessState",

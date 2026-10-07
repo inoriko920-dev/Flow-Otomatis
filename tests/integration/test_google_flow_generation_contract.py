@@ -7,6 +7,7 @@ from flow_otomatis.application.ports import (
     GenerationCancelledError,
     GenerationProviderError,
     GenerationRequest,
+    GenerationRequestValidationError,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.workers.browser import (
@@ -99,3 +100,51 @@ def test_accepted_without_stable_remote_id_is_ambiguous() -> None:
         provider.generate(_request())
 
     assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("changes", "message_fragment"),
+    [
+        ({"episode_id": "   "}, "episode_id"),
+        ({"scene_id": ""}, "scene_id"),
+        ({"image_file": " "}, "File gambar"),
+        ({"motion_prompt": "   "}, "Motion prompt"),
+        ({"target_duration_s": 0.0}, "lebih besar dari 0"),
+        ({"flow_duration_s": 5}, "4, 6, 8, atau 10"),
+        ({"target_duration_s": 7.0, "flow_duration_s": 6}, "sama atau lebih panjang"),
+        ({"model": "Other model"}, "Model harus Omni Flash 1.1"),
+        ({"resolution": "1080p"}, "Resolusi harus 720p"),
+        ({"aspect_ratio": "9:16"}, "Aspect ratio harus 16:9"),
+    ],
+)
+def test_invalid_request_fails_before_driver_mutation(
+    changes: dict[str, object],
+    message_fragment: str,
+) -> None:
+    base = _request()
+    payload = {
+        "episode_id": base.episode_id,
+        "scene_id": base.scene_id,
+        "image_file": base.image_file,
+        "motion_prompt": base.motion_prompt,
+        "target_duration_s": base.target_duration_s,
+        "flow_duration_s": base.flow_duration_s,
+        "model": base.model,
+        "resolution": base.resolution,
+        "aspect_ratio": base.aspect_ratio,
+    }
+    payload.update(changes)
+    request = GenerationRequest(**payload)  # type: ignore[arg-type]
+    driver = FixtureFlowDriver(
+        GoogleFlowSubmitEvidence(
+            state=GoogleFlowSubmitState.ACCEPTED,
+            detail="This must never be reached.",
+            remote_result_id="should-not-exist",
+        )
+    )
+    provider = GoogleFlowGenerationProvider("profile-0123456789ab", driver)
+
+    with pytest.raises(GenerationRequestValidationError, match=message_fragment):
+        provider.generate(request)
+
+    assert driver.calls == []

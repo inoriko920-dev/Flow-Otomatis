@@ -14,6 +14,10 @@ from flow_otomatis.workers.browser.google_flow_preflight import (
     GoogleFlowPreflightWorker,
     PlaywrightGoogleFlowPreflightDriver,
 )
+from flow_otomatis.workers.browser.google_flow_request_plan import (
+    PreparedGoogleFlowRequest,
+    prepare_google_flow_request,
+)
 from flow_otomatis.workers.browser.google_session_worker import (
     BrowserSessionProbe,
     GoogleSessionBrowserDriver,
@@ -30,8 +34,10 @@ __all__ = [
     "GoogleFlowSubmitEvidence",
     "GoogleFlowSubmitState",
     "GoogleSessionBrowserDriver",
+    "PreparedGoogleFlowRequest",
     "PlaywrightGoogleFlowPreflightDriver",
     "PlaywrightPersistentContextPool",
     "GoogleSessionWorker",
     "PlaywrightGoogleSessionDriver",
+    "prepare_google_flow_request",
 ]
