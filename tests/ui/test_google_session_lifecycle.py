@@ -159,8 +159,7 @@ def test_slow_session_probe_keeps_qt_heartbeat_responsive(qtbot) -> None:
     port.release.set()
     qtbot.waitUntil(
         lambda: (
-            "Sesi berhasil diverifikasi"
-            in [label.text() for label in window.findChildren(QLabel)]
+            "Sesi berhasil diverifikasi" in [label.text() for label in window.findChildren(QLabel)]
         ),
         timeout=1500,
     )

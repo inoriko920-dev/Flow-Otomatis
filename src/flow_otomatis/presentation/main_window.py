@@ -82,6 +82,7 @@ _NAV_GLYPHS = {
     "Pengaturan": "⚙",
 }
 
+
 class _GoogleSessionSignals(QObject):
     """Marshal sanitized Browser Worker outcomes back onto the Qt thread."""
 
