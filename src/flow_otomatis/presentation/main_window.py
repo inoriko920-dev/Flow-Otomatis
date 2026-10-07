@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
 from flow_otomatis.application.ports import GoogleSessionProfile
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GeminiAgentReply,
+    GeminiAgentService,
     GeminiKeyService,
     GoogleSessionService,
     LocalResultsService,
@@ -84,6 +86,45 @@ _NAV_GLYPHS = {
     "Diagnostik": "≡",
     "Pengaturan": "⚙",
 }
+
+
+class _GeminiAgentSignals(QObject):
+    """Return one read-only AI Agent answer to the Qt thread."""
+
+    answered = Signal(object)
+    failed = Signal(str)
+
+
+class _GeminiAgentTask(QRunnable):
+    """Run one Gemini Agent request away from the Qt event loop."""
+
+    def __init__(
+        self,
+        service: GeminiAgentService,
+        workspace: WorkspaceState,
+        scene_id: str,
+        question: str,
+        signals: _GeminiAgentSignals,
+    ) -> None:
+        super().__init__()
+        self._service = service
+        self._workspace = workspace
+        self._scene_id = scene_id
+        self._question = question
+        self._signals = signals
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            reply = self._service.ask(self._workspace, self._scene_id, self._question)
+        except FlowOtomatisError as exc:
+            self._signals.failed.emit(str(exc))
+        except Exception:
+            self._signals.failed.emit(
+                "AI Agent gagal tanpa mengekspos secret atau detail provider."
+            )
+        else:
+            self._signals.answered.emit(reply)
 
 
 class _GeminiHealthSignals(QObject):
@@ -150,6 +191,7 @@ class MainWindow(QMainWindow):
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
         gemini_key_service: GeminiKeyService | None = None,
+        gemini_agent_service: GeminiAgentService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -166,6 +208,9 @@ class MainWindow(QMainWindow):
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
         self._gemini_key_service = gemini_key_service
+        self._gemini_agent_service = gemini_agent_service
+        self._agent_answer: str | None = None
+        self._agent_busy = False
         self._active_google_profile_id: str | None = None
         self._last_result_manifest_path: Path | None = None
         self._pending_workspace: WorkspaceState | None = None
@@ -178,6 +223,9 @@ class MainWindow(QMainWindow):
         self._gemini_health_signals = _GeminiHealthSignals(self)
         self._gemini_health_signals.checked.connect(self._on_gemini_health_checked)
         self._gemini_health_signals.failed.connect(self._show_gemini_health_error)
+        self._gemini_agent_signals = _GeminiAgentSignals(self)
+        self._gemini_agent_signals.answered.connect(self._on_gemini_agent_answered)
+        self._gemini_agent_signals.failed.connect(self._on_gemini_agent_failed)
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -818,6 +866,8 @@ class MainWindow(QMainWindow):
         """Select a real Scene row and refresh only the Scene Inspector."""
 
         self._selected_scene_id = scene_id
+        self._agent_answer = None
+        self._agent_busy = False
         self._render_workspace_right_panel()
 
     def select_scene_duration(self, duration_s: int) -> WorkspaceState:
@@ -850,6 +900,39 @@ class MainWindow(QMainWindow):
         self.show_workspace_state(workspace)
         return workspace
 
+    def _ask_gemini_agent(self, question: str) -> None:
+        if self._gemini_agent_service is None:
+            self._agent_answer = (
+                "AI Agent belum dikonfigurasi. Tambahkan dan health-check Gemini key terlebih dahulu."
+            )
+            self._render_workspace_right_panel()
+            return
+        if self._current_workspace is None or self._selected_scene_id is None:
+            return
+        if self._agent_busy:
+            return
+        self._agent_busy = True
+        self._agent_answer = None
+        self._render_workspace_right_panel()
+        task = _GeminiAgentTask(
+            self._gemini_agent_service,
+            self._current_workspace,
+            self._selected_scene_id,
+            question,
+            self._gemini_agent_signals,
+        )
+        QThreadPool.globalInstance().start(task)
+
+    def _on_gemini_agent_answered(self, reply: GeminiAgentReply) -> None:
+        self._agent_busy = False
+        self._agent_answer = reply.text
+        self._render_workspace_right_panel()
+
+    def _on_gemini_agent_failed(self, message: str) -> None:
+        self._agent_busy = False
+        self._agent_answer = f"AI Agent belum bisa menjawab: {message}"
+        self._render_workspace_right_panel()
+
     def _render_workspace_right_panel(self) -> None:
         if self._current_workspace is None or not self._current_workspace.scenes:
             self._replace_layout_widget(self._right_layout, None)
@@ -860,6 +943,9 @@ class MainWindow(QMainWindow):
             self._current_workspace,
             scene_id=scene_id,
             on_select_duration=self.select_scene_duration,
+            on_agent_question=self._ask_gemini_agent,
+            agent_answer=self._agent_answer,
+            agent_busy=self._agent_busy,
         )
         self._replace_layout_widget(self._right_layout, right_panel)
         self._right_host.setVisible(right_panel is not None)
