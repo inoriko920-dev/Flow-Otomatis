@@ -175,10 +175,7 @@ def info_banner(title: str, detail: str, kind: str = "info") -> QFrame:
     background, foreground = colors.get(kind, colors["info"])
     frame = QFrame()
     frame.setStyleSheet(
-        "QFrame {"
-        f"background: {background}; border: 1px solid {foreground};"
-        "border-radius: 7px;"
-        "}"
+        f"QFrame {{background: {background}; border: 1px solid {foreground};border-radius: 7px;}}"
     )
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(12, 9, 12, 9)
@@ -217,9 +214,7 @@ def table_widget(
     for row_index, row in enumerate(rows):
         for column_index, value in enumerate(row):
             item = QTableWidgetItem(value)
-            item.setTextAlignment(
-                int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-            )
+            item.setTextAlignment(int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft))
             table.setItem(row_index, column_index, item)
 
     header = table.horizontalHeader()
