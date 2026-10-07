@@ -437,6 +437,7 @@ class MainWindow(QMainWindow):
         right_panel = build_right_panel(fixture)
         self._replace_layout_widget(self._right_layout, right_panel)
         self._right_host.setVisible(right_panel is not None)
+        self._wire_import_button(screen)
 
     def _ask_gemini_agent(self, user_message: str) -> None:
         if self._gemini_agent_service is None:
@@ -501,7 +502,6 @@ class MainWindow(QMainWindow):
         if self._selected_scene_id == scene_id and self._current_workspace is not None:
             self._render_workspace_right_panel()
         QMessageBox.warning(self, "AI Agent", message)
-        self._wire_import_button(screen)
 
     def show_project_hub(self) -> None:
         """Render real local recent projects using the frozen Project Hub."""
