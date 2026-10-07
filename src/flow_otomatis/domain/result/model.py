@@ -58,9 +58,7 @@ class ProjectResults:
 
     @property
     def generated_count(self) -> int:
-        return sum(
-            scene.generate_state is GenerationJobState.GENERATED for scene in self.scenes
-        )
+        return sum(scene.generate_state is GenerationJobState.GENERATED for scene in self.scenes)
 
     @property
     def downloaded_count(self) -> int:
