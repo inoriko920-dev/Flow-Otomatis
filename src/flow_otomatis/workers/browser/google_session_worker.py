@@ -365,5 +365,7 @@ class GoogleSessionWorker(GoogleSessionPort):
             encoding="utf-8",
         )
         temp_path.replace(metadata_path)
+
+
 # Backward-compatible import name for older handoff/tests.
 PlaywrightGoogleSessionDriver = SystemChromeGoogleSessionDriver
