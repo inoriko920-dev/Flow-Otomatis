@@ -102,7 +102,9 @@ def _setup(tmp_path: Path, driver: FakeDownloadDriver):
     jobs = SqliteGenerationJobRepository(projects_root)
     jobs.prepare_jobs([_generated_job("EP500_DOWNLOAD", "SCENE_001")])
     # prepare_jobs never overwrites a confirmed terminal GENERATED job, so insert it directly
-    with __import__("sqlite3").connect(projects_root / "EP500_DOWNLOAD" / "project.sqlite3") as connection:
+    with __import__("sqlite3").connect(
+        projects_root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ) as connection:
         connection.execute(
             """
             UPDATE generation_jobs
@@ -193,13 +195,7 @@ def test_controlled_download_failure_records_failure_without_retry(
 def test_download_provider_rejects_untracked_existing_final_file(tmp_path: Path) -> None:
     driver = FakeDownloadDriver()
     _root, _jobs, _downloads, service = _setup(tmp_path, driver)
-    destination = (
-        tmp_path
-        / "projects"
-        / "EP500_DOWNLOAD"
-        / "downloads"
-        / "SCENE_001__take_01.mp4"
-    )
+    destination = tmp_path / "projects" / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(b"do-not-overwrite")
 

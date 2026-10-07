@@ -55,10 +55,7 @@ class GeneratedMediaDownloadService:
             if existing_path.is_file() and existing_path.stat().st_size > 0:
                 return existing
 
-        jobs = {
-            job.scene_id: job
-            for job in self._job_repository.list_for_episode(episode_id)
-        }
+        jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
         job = jobs.get(scene_id)
         if job is None:
             raise InternalInvariantError(f"Generation job not found: {episode_id}/{scene_id}")
@@ -104,7 +101,9 @@ class GeneratedMediaDownloadService:
         if output != destination.resolve():
             raise InternalInvariantError("Download provider returned an unexpected output path.")
         if not output.is_file() or output.stat().st_size <= 0:
-            raise InternalInvariantError("Download provider did not produce a non-empty local file.")
+            raise InternalInvariantError(
+                "Download provider did not produce a non-empty local file."
+            )
 
         record = DownloadRecord(
             episode_id=episode_id,
@@ -119,10 +118,7 @@ class GeneratedMediaDownloadService:
 
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
         return (
-            self._projects_root
-            / episode_id
-            / "downloads"
-            / f"{scene_id}__take_{take:02d}.mp4"
+            self._projects_root / episode_id / "downloads" / f"{scene_id}__take_{take:02d}.mp4"
         ).resolve()
 
     @staticmethod
