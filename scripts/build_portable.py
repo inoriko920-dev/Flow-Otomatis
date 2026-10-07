@@ -13,6 +13,8 @@ import zipfile
 from importlib import metadata
 from pathlib import Path
 
+from flow_otomatis import __version__
+
 PACKAGE_NAMES = ("PySide6", "playwright", "pydantic", "keyring", "PyInstaller")
 
 
@@ -30,7 +32,7 @@ def _git_head(repo_root: Path) -> str:
 def _write_manifest(bundle_root: Path, repo_root: Path) -> None:
     manifest = {
         "app": "Flow-Otomatis",
-        "foundation_version": "0.0.0",
+        "app_version": __version__,
         "git_sha": os.environ.get("GITHUB_SHA") or _git_head(repo_root),
         "python": sys.version,
         "dependencies": {name: metadata.version(name) for name in PACKAGE_NAMES},
