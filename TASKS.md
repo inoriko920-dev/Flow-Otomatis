@@ -19,12 +19,64 @@ Status: PASS.
 - Last tested implementation SHA: 539ffb8e25a2f52492a6fbf3de4df805ca670742.
 - Successful CI run: 37583870436.
 - Artifact: Flow-Otomatis-foundation-win-x64, ID 11465692132.
-- Portable ZIP: 387634259 bytes.
-- SHA-256: c8c000c59fe0beb4d4df961d7b348096fa3b15402b87ab5a43c20b79c22c1e1b.
-- Outer downloaded artifact ZIP integrity: PASS.
 - Live Google Flow: NOT TESTED.
 
-## NEXT — STEP 09
-App Shell/UI Implementation + screenshot ACTUAL vs frozen REFERENCE.
+## STEP 09 — App Shell/UI Implementation
+Status: PASS.
 
-Do not implement STEP 09 until the product owner says "lanjutkan".
+### S09-T01 — Production App Shell + 30 Frozen States
+- Status: PASS.
+- Production shell and shared presentation components implemented.
+- 30/30 frozen STEP 04 UI states implemented.
+- Frozen production profile remains Omni Flash 1.1 • 720p • 16:9.
+- Presentation architecture boundary preserved.
+
+### S09-T02 — Semantic / Interaction UI Verification
+- Status: PASS.
+- Ruff format/lint: PASS.
+- mypy strict: PASS.
+- architecture guard: PASS.
+- unit/contract/smoke/UI semantic tests: PASS.
+- Mouse navigation, keyboard focus, Escape modal close, and 1366×768 resize smoke: PASS.
+
+### S09-T03 — ACTUAL vs REFERENCE Visual Gate
+- Status: PASS.
+- 30/30 ACTUAL screenshots captured at 1920×1080.
+- 30/30 comparison PASS.
+- Threshold: 0.550.
+- Similarity range: 0.6344–0.9643.
+- Evidence artifact ID: 11467640780.
+- Evidence artifact digest: dc68142e82638c7bbe200c4efbf7009307bfcb330a55fc7e79d32be1337822c5.
+
+### S09-T04 — Windows Portable UI Build
+- Status: PASS.
+- Last tested implementation SHA: ee90740ba6e620af1107d73b19b6753395aa26bd.
+- Successful CI run: 37587748975.
+- Artifact: Flow-Otomatis-step09-ui-win-x64, ID 11467562919.
+- Outer artifact size: 387245835 bytes.
+- Outer artifact SHA-256: 4ec31ef23ddeda873177f6f359704543624c19005b83e45fd6834eb398653f90.
+- Inner portable ZIP size: 387667735 bytes.
+- Inner portable ZIP SHA-256: 14006921da4d119c0de2d713e32ab8a2a58d0e534ccdb3f5f025914253e166d6.
+- Downloaded artifact checksum verification: PASS.
+- Portable EXE smoke: PASS.
+- Live Google Flow: NOT TESTED.
+
+## NEXT — STEP 10
+**SLC-001 — Import / Validate Episode Package → Create Real Workspace State**
+
+Scope:
+- real package selection/import;
+- FLOW_OTOMATIS_IMPORT.json validation;
+- real Scene/image/prompt/Target/duration readiness;
+- minimal persisted project/workspace state;
+- frozen Import/Validation/Workspace UI connected to real state;
+- one happy-path integration proof;
+- one representative failure-path proof.
+
+Out of scope for STEP 10:
+- live Google login;
+- live Google Flow generation;
+- live video download;
+- silent redesign of the frozen STEP 09 UI.
+
+Do not implement STEP 10 until the product owner says "lanjutkan".
