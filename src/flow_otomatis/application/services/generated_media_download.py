@@ -74,7 +74,8 @@ class GeneratedMediaDownloadService:
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             raise InternalInvariantError(
-                f"Download destination already exists and will not be overwritten: {destination.name}"
+                "Download destination already exists and will not be overwritten: "
+                f"{destination.name}"
             )
 
         request = GeneratedMediaDownloadRequest(
