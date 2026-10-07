@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
 from flow_otomatis.domain.errors import FlowOtomatisError, InternalInvariantError
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
@@ -72,13 +72,14 @@ _DIALOG_BACKGROUNDS = {
 
 
 class MainWindow(QMainWindow):
-    """Frozen shell plus real-state wiring introduced by STEP 10."""
+    """Frozen shell plus real-state wiring introduced by STEP 10/11."""
 
     def __init__(
         self,
         fixture_code: str = DEFAULT_FIXTURE_CODE,
         *,
         episode_import_service: EpisodeImportService | None = None,
+        scene_planning_service: ScenePlanningService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -90,8 +91,10 @@ class MainWindow(QMainWindow):
         self._fixture_code = fixture_code
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
+        self._scene_planning_service = scene_planning_service
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
+        self._selected_scene_id: str | None = None
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -334,17 +337,78 @@ class MainWindow(QMainWindow):
         workspace = self._episode_import_service.create_workspace(self._pending_workspace)
         self._pending_workspace = None
         self._current_workspace = workspace
+        self._selected_scene_id = workspace.scenes[0].scene_id if workspace.scenes else None
         self.show_workspace_state(workspace)
         return workspace
 
     def show_workspace_state(self, workspace: WorkspaceState) -> None:
-        """Render the frozen Workspace composition from persisted real state."""
+        """Render frozen Workspace/Scene Inspector from persisted real state."""
 
         self._fixture_code = "REAL_WORKSPACE"
         self._current_workspace = workspace
+        if workspace.scenes and self._selected_scene_id not in {
+            scene.scene_id for scene in workspace.scenes
+        }:
+            self._selected_scene_id = workspace.scenes[0].scene_id
+
         self._set_navigation("Workspace")
         self._set_project_chrome(workspace, "Workspace")
-        self._replace_layout_widget(self._content_layout, build_workspace_view(workspace))
-        right_panel = build_workspace_right_panel(workspace)
+        view = build_workspace_view(
+            workspace,
+            on_rescan_images=self.rescan_workspace_images,
+            on_scene_selected=self.select_workspace_scene,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._render_workspace_right_panel()
+
+    def select_workspace_scene(self, scene_id: str) -> None:
+        """Select a real Scene row and refresh only the Scene Inspector."""
+
+        self._selected_scene_id = scene_id
+        self._render_workspace_right_panel()
+
+    def select_scene_duration(self, duration_s: int) -> WorkspaceState:
+        """Persist a valid Flow duration selection for the active Scene."""
+
+        if self._scene_planning_service is None:
+            raise InternalInvariantError("Scene planning service is not configured")
+        if self._current_workspace is None or self._selected_scene_id is None:
+            raise InternalInvariantError("No active workspace Scene")
+        try:
+            workspace = self._scene_planning_service.select_flow_duration(
+                self._current_workspace.episode_id,
+                self._selected_scene_id,
+                duration_s,
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Durasi Flow Tidak Valid", str(exc))
+            raise
+        self.show_workspace_state(workspace)
+        return workspace
+
+    def rescan_workspace_images(self) -> WorkspaceState:
+        """Rescan approved images through the application service and refresh UI."""
+
+        if self._scene_planning_service is None:
+            raise InternalInvariantError("Scene planning service is not configured")
+        if self._current_workspace is None:
+            raise InternalInvariantError("No active workspace")
+        workspace = self._scene_planning_service.rescan_images(
+            self._current_workspace.episode_id
+        )
+        self.show_workspace_state(workspace)
+        return workspace
+
+    def _render_workspace_right_panel(self) -> None:
+        if self._current_workspace is None or not self._current_workspace.scenes:
+            self._replace_layout_widget(self._right_layout, None)
+            self._right_host.setVisible(False)
+            return
+        scene_id = self._selected_scene_id or self._current_workspace.scenes[0].scene_id
+        right_panel = build_workspace_right_panel(
+            self._current_workspace,
+            scene_id=scene_id,
+            on_select_duration=self.select_scene_duration,
+        )
         self._replace_layout_widget(self._right_layout, right_panel)
         self._right_host.setVisible(right_panel is not None)

@@ -1,4 +1,4 @@
-"""Bind real STEP 10 workspace state to the frozen STEP 09 presentation."""
+"""Bind real workspace state to the frozen STEP 09 presentation."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from flow_otomatis.domain.project import WorkspaceState
-from flow_otomatis.domain.scene import SceneReadiness
+from flow_otomatis.domain.scene import FLOW_DURATIONS, SceneReadiness, WorkspaceScene
 from flow_otomatis.presentation.fixtures import get_fixture
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 
@@ -99,7 +99,12 @@ def build_validation_view(
     return root
 
 
-def build_workspace_view(workspace: WorkspaceState) -> QWidget:
+def build_workspace_view(
+    workspace: WorkspaceState,
+    *,
+    on_rescan_images: Callable[[], object],
+    on_scene_selected: Callable[[str], object],
+) -> QWidget:
     """Render persisted real scene rows in the frozen ready-workspace screen."""
 
     root = build_screen(get_fixture("UI-IMG-002A"))
@@ -130,6 +135,13 @@ def build_workspace_view(workspace: WorkspaceState) -> QWidget:
     if workspace.scenes:
         table.setCurrentCell(0, 0)
 
+    def notify_selected(row: int, _column: int) -> None:
+        if 0 <= row < len(workspace.scenes):
+            on_scene_selected(workspace.scenes[row].scene_id)
+
+    table.cellClicked.connect(notify_selected)
+    _button(root, "Scan Ulang Gambar").clicked.connect(on_rescan_images)
+
     for label in root.findChildren(QLabel):
         text = label.text()
         if text.startswith("Paket biography tersinkron"):
@@ -148,18 +160,36 @@ def build_workspace_view(workspace: WorkspaceState) -> QWidget:
     return root
 
 
-def build_workspace_right_panel(workspace: WorkspaceState) -> QWidget | None:
-    """Render the frozen Scene/Agent dock with the first real scene selected."""
+def _scene_by_id(workspace: WorkspaceState, scene_id: str) -> WorkspaceScene:
+    for scene in workspace.scenes:
+        if scene.scene_id == scene_id:
+            return scene
+    return workspace.scenes[0]
+
+
+def build_workspace_right_panel(
+    workspace: WorkspaceState,
+    *,
+    scene_id: str,
+    on_select_duration: Callable[[int], object],
+) -> QWidget | None:
+    """Render frozen Scene/Agent dock for the selected persisted Scene."""
 
     panel = build_right_panel(get_fixture("UI-IMG-002A"))
     if panel is None or not workspace.scenes:
         return panel
 
-    scene = workspace.scenes[0]
+    scene = _scene_by_id(workspace, scene_id)
     replacements = {
         "S016": _display_scene_id(scene.scene_id),
         "7.32s": f"{scene.target_duration_s:.2f}s",
         "8s": f"{scene.recommended_flow_duration_s}s",
+        "APPROVED IMAGE\nSCENE_016": (
+            f"APPROVED IMAGE\n{scene.scene_id}" if scene.image_exists else f"MISSING IMAGE\n{scene.scene_id}"
+        ),
+        "Auto-mapped • Approved": (
+            "Auto-mapped • Approved" if scene.image_exists else "Gambar Hilang"
+        ),
     }
     for label in panel.findChildren(QLabel):
         if label.text() in replacements:
@@ -168,4 +198,21 @@ def build_workspace_right_panel(workspace: WorkspaceState) -> QWidget | None:
     prompts = panel.findChildren(QPlainTextEdit)
     if prompts:
         prompts[0].setPlainText(scene.motion_prompt)
+
+    for button in panel.findChildren(QPushButton):
+        raw = button.text().removesuffix("s")
+        if not raw.isdigit():
+            continue
+        duration = int(raw)
+        if duration not in FLOW_DURATIONS:
+            continue
+        button.setEnabled(duration + 1e-9 >= scene.target_duration_s)
+        is_selected = scene.selected_flow_duration_s == duration
+        is_recommended = scene.selected_flow_duration_s is None and (
+            scene.recommended_flow_duration_s == duration
+        )
+        button.setObjectName("Primary" if is_selected or is_recommended else "")
+        button.clicked.connect(
+            lambda _checked=False, value=duration: on_select_duration(value)
+        )
     return panel

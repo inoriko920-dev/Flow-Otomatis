@@ -15,6 +15,10 @@ class InvalidDurationError(FlowOtomatisError):
     """Target/selected duration violates the frozen Flow duration contract."""
 
 
+class SceneNotFoundError(FlowOtomatisError):
+    """Requested Scene ID is not present in the persisted workspace."""
+
+
 class PackageValidationError(FlowOtomatisError):
     """Episode package or import manifest does not satisfy the contract."""
 

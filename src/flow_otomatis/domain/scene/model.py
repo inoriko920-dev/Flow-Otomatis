@@ -33,6 +33,21 @@ def recommend_flow_duration(target_duration_s: float) -> int:
     raise InvalidDurationError("No supported Flow duration covers the target")
 
 
+def validate_selected_flow_duration(
+    target_duration_s: float,
+    selected_flow_duration_s: int,
+) -> None:
+    """Reject a user selection that cannot safely cover the exact Target."""
+
+    recommend_flow_duration(target_duration_s)
+    if selected_flow_duration_s not in FLOW_DURATIONS:
+        raise InvalidDurationError("Flow duration must be one of 4, 6, 8, or 10 seconds")
+    if selected_flow_duration_s + 1e-9 < target_duration_s:
+        raise InvalidDurationError(
+            "Selected Flow duration cannot be shorter than the authoritative Target"
+        )
+
+
 def derive_scene_readiness(
     *,
     target_duration_s: float,
@@ -53,9 +68,9 @@ def derive_scene_readiness(
         return SceneReadiness.MISSING_PROMPT
     if selected_flow_duration_s is None:
         return SceneReadiness.NEEDS_DURATION_SELECTION
-    if selected_flow_duration_s not in FLOW_DURATIONS:
-        return SceneReadiness.INVALID_DURATION
-    if selected_flow_duration_s + 1e-9 < target_duration_s:
+    try:
+        validate_selected_flow_duration(target_duration_s, selected_flow_duration_s)
+    except InvalidDurationError:
         return SceneReadiness.INVALID_DURATION
     return SceneReadiness.READY
 
