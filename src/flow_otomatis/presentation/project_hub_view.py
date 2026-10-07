@@ -95,9 +95,7 @@ def build_project_hub_view(
     for label in root.findChildren(QLabel):
         if label.text() == "Project dapat dipulihkan":
             if issues:
-                label.setText(
-                    f"{len(workspaces)} project siap • {len(issues)} project bermasalah"
-                )
+                label.setText(f"{len(workspaces)} project siap • {len(issues)} project bermasalah")
             else:
                 label.setText(f"{len(workspaces)} project lokal siap dibuka kembali")
         elif label.text().startswith("Snapshot lokal EP001"):

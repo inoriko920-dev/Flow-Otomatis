@@ -85,9 +85,7 @@ def test_corrupt_project_is_isolated_and_read_does_not_mutate_source(tmp_path: P
     scan = service.scan_recent()
 
     assert [item.episode_id for item in scan.workspaces] == ["EP102_HEALTHY"]
-    assert [(item.episode_id, item.kind) for item in scan.issues] == [
-        ("EP103_CORRUPT", "CORRUPT")
-    ]
+    assert [(item.episode_id, item.kind) for item in scan.issues] == [("EP103_CORRUPT", "CORRUPT")]
     assert [item.episode_id for item in service.list_recent()] == ["EP102_HEALTHY"]
     assert service.open_project("EP102_HEALTHY") == healthy
     with pytest.raises(WorkspaceCorruptError):
@@ -124,7 +122,5 @@ def test_invalid_persisted_types_raise_typed_corruption_without_repair(
 
     scan = repository.scan_recent()
     assert scan.workspaces == ()
-    assert [(item.episode_id, item.kind) for item in scan.issues] == [
-        (episode_id, "CORRUPT")
-    ]
+    assert [(item.episode_id, item.kind) for item in scan.issues] == [(episode_id, "CORRUPT")]
     assert _sha256(db_path) == before

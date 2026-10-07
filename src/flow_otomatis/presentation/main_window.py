@@ -377,10 +377,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Project Tidak Tersedia",
-                (
-                    f"Project {episode_id} sementara tidak dapat dibaca. "
-                    "File project tidak diubah."
-                ),
+                (f"Project {episode_id} sementara tidak dapat dibaca. File project tidak diubah."),
             )
         except FlowOtomatisError:
             QMessageBox.warning(
