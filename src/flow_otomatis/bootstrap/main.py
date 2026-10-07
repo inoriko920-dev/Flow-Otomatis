@@ -10,16 +10,25 @@ from typing import cast
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-from flow_otomatis.infrastructure.filesystem import PathService
+from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.infrastructure.filesystem import EpisodePackageReader, PathService
+from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
 from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
 from flow_otomatis.presentation.main_window import MainWindow
 
 
 def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
-    """Create the production shell after resolving portable paths."""
+    """Create the production shell with STEP 10 import/persistence adapters."""
 
-    PathService.discover()
-    return MainWindow(fixture_code=fixture_code)
+    paths = PathService.discover()
+    import_service = EpisodeImportService(
+        EpisodePackageReader(),
+        SqliteWorkspaceRepository(paths.projects_root),
+    )
+    return MainWindow(
+        fixture_code=fixture_code,
+        episode_import_service=import_service,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

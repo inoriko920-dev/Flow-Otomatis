@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 from functools import partial
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeyEvent
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.domain.errors import FlowOtomatisError, InternalInvariantError
+from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -29,6 +35,11 @@ from flow_otomatis.presentation.theme import (
     application_stylesheet,
 )
 from flow_otomatis.presentation.widgets import muted_label, status_badge
+from flow_otomatis.presentation.workspace_views import (
+    build_validation_view,
+    build_workspace_right_panel,
+    build_workspace_view,
+)
 
 _NAV_DEFAULTS = {
     "Beranda": "UI-IMG-001A",
@@ -61,9 +72,14 @@ _DIALOG_BACKGROUNDS = {
 
 
 class MainWindow(QMainWindow):
-    """Frozen Windows desktop shell used by production and visual fixtures."""
+    """Frozen shell plus real-state wiring introduced by STEP 10."""
 
-    def __init__(self, fixture_code: str = DEFAULT_FIXTURE_CODE) -> None:
+    def __init__(
+        self,
+        fixture_code: str = DEFAULT_FIXTURE_CODE,
+        *,
+        episode_import_service: EpisodeImportService | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
         self.setObjectName("FlowOtomatisMainWindow")
@@ -73,6 +89,9 @@ class MainWindow(QMainWindow):
 
         self._fixture_code = fixture_code
         self._nav_buttons: dict[str, QPushButton] = {}
+        self._episode_import_service = episode_import_service
+        self._pending_workspace: WorkspaceState | None = None
+        self._current_workspace: WorkspaceState | None = None
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -117,9 +136,15 @@ class MainWindow(QMainWindow):
 
     @property
     def fixture_code(self) -> str:
-        """Return the currently rendered frozen fixture code."""
+        """Return the currently rendered frozen/dynamic route code."""
 
         return self._fixture_code
+
+    @property
+    def current_workspace(self) -> WorkspaceState | None:
+        """Return the real persisted workspace currently shown, if any."""
+
+        return self._current_workspace
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -193,16 +218,24 @@ class MainWindow(QMainWindow):
         return statusbar
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        """Close a frozen modal state with Escape and restore its background."""
+        """Close frozen/dynamic modal states with Escape."""
 
-        if event.key() == Qt.Key.Key_Escape and self._fixture_code in _DIALOG_BACKGROUNDS:
-            self.show_fixture(_DIALOG_BACKGROUNDS[self._fixture_code])
-            event.accept()
-            return
+        if event.key() == Qt.Key.Key_Escape:
+            if self._fixture_code in _DIALOG_BACKGROUNDS:
+                self.show_fixture(_DIALOG_BACKGROUNDS[self._fixture_code])
+                event.accept()
+                return
+            if self._fixture_code == "REAL_VALIDATION":
+                self.show_fixture("UI-IMG-001A")
+                event.accept()
+                return
         super().keyPressEvent(event)
 
     def _open_navigation_item(self, item: str, checked: bool = False) -> None:
         del checked
+        if item == "Workspace" and self._current_workspace is not None:
+            self.show_workspace_state(self._current_workspace)
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -217,14 +250,23 @@ class MainWindow(QMainWindow):
         if widget is not None:
             layout.addWidget(widget)
 
+    def _set_navigation(self, item: str) -> None:
+        for name, button in self._nav_buttons.items():
+            button.setChecked(name == item)
+
+    def _set_project_chrome(self, workspace: WorkspaceState, surface: str) -> None:
+        self._project_label.setText(f"{workspace.episode_id} • {workspace.project_name}")
+        self._project_state_label.setText(surface)
+        self._status_project.setText(
+            f"{workspace.episode_id} • {len(workspace.scenes)} scene"
+        )
+
     def show_fixture(self, code: str) -> None:
         """Render one approved visual state inside the production shell."""
 
         fixture = get_fixture(code)
         self._fixture_code = fixture.code
-
-        for name, button in self._nav_buttons.items():
-            button.setChecked(name == fixture.nav_item)
+        self._set_navigation(fixture.nav_item)
 
         self._project_state_label.setText(fixture.surface)
         if fixture.code.startswith("UI-IMG-001"):
@@ -234,7 +276,77 @@ class MainWindow(QMainWindow):
             self._project_label.setText("EP001 • Steve Jobs")
             self._status_project.setText("EP001 • 60 scene")
 
-        self._replace_layout_widget(self._content_layout, build_screen(fixture))
+        screen = build_screen(fixture)
+        self._replace_layout_widget(self._content_layout, screen)
         right_panel = build_right_panel(fixture)
+        self._replace_layout_widget(self._right_layout, right_panel)
+        self._right_host.setVisible(right_panel is not None)
+        self._wire_import_button(screen)
+
+    def _wire_import_button(self, screen: QWidget) -> None:
+        if self._episode_import_service is None:
+            return
+        for button in screen.findChildren(QPushButton):
+            if button.text() == "Impor Paket Episode":
+                button.clicked.connect(self._choose_episode_package)
+                return
+
+    def _choose_episode_package(self, checked: bool = False) -> None:
+        del checked
+        filename, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Impor Paket Episode",
+            "",
+            "Episode Package (*.zip);;Flow Manifest (FLOW_OTOMATIS_IMPORT.json *.json)",
+        )
+        if not filename:
+            return
+        try:
+            self.import_episode_package(Path(filename))
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Paket Episode Tidak Valid", str(exc))
+
+    def import_episode_package(self, source_path: Path) -> WorkspaceState:
+        """Validate a selected package and render real validation state."""
+
+        if self._episode_import_service is None:
+            raise InternalInvariantError("Episode import service is not configured")
+        workspace = self._episode_import_service.validate(source_path)
+        self._pending_workspace = workspace
+        self._fixture_code = "REAL_VALIDATION"
+        self._set_navigation("Workspace")
+        self._set_project_chrome(workspace, "Validasi Paket Episode")
+        view = build_validation_view(
+            workspace,
+            on_create=self.create_pending_workspace,
+            on_cancel=lambda: self.show_fixture("UI-IMG-001A"),
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+        return workspace
+
+    def create_pending_workspace(self) -> WorkspaceState:
+        """Persist the currently validated package and render real workspace rows."""
+
+        if self._episode_import_service is None:
+            raise InternalInvariantError("Episode import service is not configured")
+        if self._pending_workspace is None:
+            raise InternalInvariantError("No validated package is waiting to be created")
+        workspace = self._episode_import_service.create_workspace(self._pending_workspace)
+        self._pending_workspace = None
+        self._current_workspace = workspace
+        self.show_workspace_state(workspace)
+        return workspace
+
+    def show_workspace_state(self, workspace: WorkspaceState) -> None:
+        """Render the frozen Workspace composition from persisted real state."""
+
+        self._fixture_code = "REAL_WORKSPACE"
+        self._current_workspace = workspace
+        self._set_navigation("Workspace")
+        self._set_project_chrome(workspace, "Workspace")
+        self._replace_layout_widget(self._content_layout, build_workspace_view(workspace))
+        right_panel = build_workspace_right_panel(workspace)
         self._replace_layout_widget(self._right_layout, right_panel)
         self._right_host.setVisible(right_panel is not None)
