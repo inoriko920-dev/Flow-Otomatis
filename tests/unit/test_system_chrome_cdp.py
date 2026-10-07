@@ -87,7 +87,7 @@ def test_find_google_chrome_prefers_known_windows_install_location(tmp_path: Pat
 
 def test_read_devtools_active_port_validates_profile_file(tmp_path: Path) -> None:
     (tmp_path / "DevToolsActivePort").write_text(
-        "43127\\n/devtools/browser/test\\n", encoding="utf-8"
+        "43127\n/devtools/browser/test\n", encoding="utf-8"
     )
     assert read_devtools_active_port(tmp_path) == 43127
 
