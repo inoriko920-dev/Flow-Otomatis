@@ -12,11 +12,13 @@ from PySide6.QtWidgets import QApplication
 
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GeminiKeyService,
     GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
     ScenePlanningService,
 )
+from flow_otomatis.infrastructure.external import GeminiModelsHealthChecker
 from flow_otomatis.infrastructure.filesystem import (
     EpisodePackageReader,
     PathService,
@@ -24,9 +26,11 @@ from flow_otomatis.infrastructure.filesystem import (
 )
 from flow_otomatis.infrastructure.persistence import (
     SqliteDownloadResultRepository,
+    SqliteGeminiKeyRepository,
     SqliteGenerationJobRepository,
     SqliteWorkspaceRepository,
 )
+from flow_otomatis.infrastructure.secrets import KeyringSecretStore
 from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
 from flow_otomatis.presentation.main_window import MainWindow
 from flow_otomatis.workers.browser import (
@@ -63,6 +67,11 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         google_session_worker,
         commands=ThreadedGoogleSessionCommands(google_session_worker),
     )
+    gemini_key_service = GeminiKeyService(
+        SqliteGeminiKeyRepository(paths.settings_root / "gemini_keys.sqlite3"),
+        KeyringSecretStore(),
+        GeminiModelsHealthChecker(),
+    )
     return MainWindow(
         fixture_code=fixture_code,
         episode_import_service=import_service,
@@ -70,6 +79,7 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         project_library_service=library_service,
         local_results_service=results_service,
         google_session_service=google_session_service,
+        gemini_key_service=gemini_key_service,
     )
 
 

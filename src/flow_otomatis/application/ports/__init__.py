@@ -15,6 +15,12 @@ from flow_otomatis.application.ports.generated_media_download import (
     MediaDownloadCancelledError,
     MediaDownloadProviderError,
 )
+from flow_otomatis.application.ports.gemini_keys import (
+    GeminiKeyHealthEvidence,
+    GeminiKeyHealthPort,
+    GeminiKeyRepositoryPort,
+    SecretStorePort,
+)
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
@@ -47,6 +53,9 @@ __all__ = [
     "GeneratedMediaDownloadProviderPort",
     "GeneratedMediaDownloadRequest",
     "GeneratedMediaDownloadResult",
+    "GeminiKeyHealthEvidence",
+    "GeminiKeyHealthPort",
+    "GeminiKeyRepositoryPort",
     "GenerationAuthenticationRequiredError",
     "GenerationCancelledError",
     "GenerationJobRepositoryPort",
@@ -71,5 +80,6 @@ __all__ = [
     "PackageSceneEvidence",
     "PackageSnapshot",
     "ResultManifestWriterPort",
+    "SecretStorePort",
     "WorkspaceRepositoryPort",
 ]
