@@ -6,10 +6,11 @@ from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QKeyEvent
+from PySide6.QtGui import QCloseEvent, QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -18,8 +19,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from flow_otomatis.application.ports import GoogleSessionProfile
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
     ScenePlanningService,
@@ -30,6 +33,10 @@ from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
     get_fixture,
+)
+from flow_otomatis.presentation.google_profiles_view import (
+    build_google_login_view,
+    build_google_profiles_view,
 )
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.results_view import build_results_view
@@ -89,6 +96,7 @@ class MainWindow(QMainWindow):
         scene_planning_service: ScenePlanningService | None = None,
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
+        google_session_service: GoogleSessionService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -103,6 +111,8 @@ class MainWindow(QMainWindow):
         self._scene_planning_service = scene_planning_service
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
+        self._google_session_service = google_session_service
+        self._active_google_profile_id: str | None = None
         self._last_result_manifest_path: Path | None = None
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
@@ -267,6 +277,9 @@ class MainWindow(QMainWindow):
         ):
             self.show_results_state()
             return
+        if item == "Profil Google" and self._google_session_service is not None:
+            self.show_google_profiles()
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -373,6 +386,120 @@ class MainWindow(QMainWindow):
         path = self._local_results_service.export_manifest(self._current_workspace.episode_id)
         self._last_result_manifest_path = path
         return path
+
+    def show_google_profiles(self) -> None:
+        """Render real credential-free Google profile/session state."""
+
+        if self._google_session_service is None:
+            self.show_fixture("UI-IMG-004A")
+            return
+        profiles = self._google_session_service.list_profiles()
+        self._fixture_code = "REAL_GOOGLE_PROFILES"
+        self._active_google_profile_id = None
+        self._set_navigation("Profil Google")
+        self._project_label.setText("Session Google terotorisasi")
+        self._project_state_label.setText("Profil Google")
+        self._status_project.setText(f"{len(profiles)} profil")
+        view = build_google_profiles_view(
+            profiles,
+            on_add=self._add_google_profile,
+            on_check_all=self._check_all_google_profiles,
+            on_open_login=self._open_google_login,
+            on_check=self._check_google_profile,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def show_google_login(self, profile: GoogleSessionProfile) -> None:
+        """Render real manual-login help for one authorized profile context."""
+
+        self._fixture_code = "REAL_GOOGLE_LOGIN"
+        self._active_google_profile_id = profile.profile_id
+        self._set_navigation("Profil Google")
+        self._project_label.setText(profile.label)
+        self._project_state_label.setText("Bantuan Login")
+        self._status_project.setText("Sesi user-owned")
+        view = build_google_login_view(
+            profile,
+            on_open_login=self._reopen_active_google_login,
+            on_recheck=self._recheck_active_google_login,
+            on_back=self.show_google_profiles,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def _add_google_profile(self) -> None:
+        if self._google_session_service is None:
+            return
+        label, accepted = QInputDialog.getText(
+            self,
+            "Tambah Profil Google",
+            "Nama profil lokal:",
+        )
+        if not accepted:
+            return
+        try:
+            profile = self._google_session_service.create_profile(label)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Profil Google", str(exc))
+            return
+        self.show_google_login(profile)
+
+    def _open_google_login(self, profile_id: str) -> None:
+        if self._google_session_service is None:
+            return
+        try:
+            profile = self._google_session_service.open_login(profile_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Bantuan Login", str(exc))
+            return
+        self.show_google_login(profile)
+
+    def _reopen_active_google_login(self) -> None:
+        if self._active_google_profile_id is None:
+            self.show_google_profiles()
+            return
+        self._open_google_login(self._active_google_profile_id)
+
+    def _recheck_active_google_login(self) -> None:
+        if self._google_session_service is None or self._active_google_profile_id is None:
+            self.show_google_profiles()
+            return
+        try:
+            profile = self._google_session_service.check_profile(self._active_google_profile_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Bantuan Login", str(exc))
+            return
+        self.show_google_login(profile)
+
+    def _check_google_profile(self, profile_id: str) -> None:
+        if self._google_session_service is None:
+            return
+        try:
+            self._google_session_service.check_profile(profile_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Profil Google", str(exc))
+            return
+        self.show_google_profiles()
+
+    def _check_all_google_profiles(self) -> None:
+        if self._google_session_service is None:
+            return
+        try:
+            self._google_session_service.check_all()
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Profil Google", str(exc))
+            return
+        self.show_google_profiles()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Close Browser Worker resources before the Qt shell exits."""
+
+        if self._google_session_service is not None:
+            self._google_session_service.shutdown()
+        super().closeEvent(event)
 
     def _wire_import_button(self, screen: QWidget) -> None:
         if self._episode_import_service is None:

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
     ScenePlanningService,
@@ -28,6 +29,7 @@ from flow_otomatis.infrastructure.persistence import (
 )
 from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
 from flow_otomatis.presentation.main_window import MainWindow
+from flow_otomatis.workers.browser import GoogleSessionWorker
 
 
 def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
@@ -47,12 +49,16 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         download_repository,
         ResultManifestWriter(paths.projects_root),
     )
+    google_session_service = GoogleSessionService(
+        GoogleSessionWorker(paths.session_root, paths.browser_runtime_root)
+    )
     return MainWindow(
         fixture_code=fixture_code,
         episode_import_service=import_service,
         scene_planning_service=planning_service,
         project_library_service=library_service,
         local_results_service=results_service,
+        google_session_service=google_session_service,
     )
 
 

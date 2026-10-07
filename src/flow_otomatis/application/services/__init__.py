@@ -1,6 +1,7 @@
 """Application services."""
 
 from flow_otomatis.application.services.episode_import import EpisodeImportService
+from flow_otomatis.application.services.google_sessions import GoogleSessionService
 from flow_otomatis.application.services.local_generation_queue import LocalGenerationQueueService
 from flow_otomatis.application.services.local_results import LocalResultsService
 from flow_otomatis.application.services.project_library import ProjectLibraryService
@@ -8,6 +9,7 @@ from flow_otomatis.application.services.scene_planning import ScenePlanningServi
 
 __all__ = [
     "EpisodeImportService",
+    "GoogleSessionService",
     "LocalGenerationQueueService",
     "LocalResultsService",
     "ProjectLibraryService",

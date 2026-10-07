@@ -89,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step11-ui-regression-evidence
+          name: Flow-Otomatis-step12-i12-01-ui-regression-evidence
           path: |
             artifacts/ui_actual
             artifacts/ui_reference
@@ -134,7 +134,7 @@ jobs:
       - name: Upload portable STEP 11 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step11-feature-waves-win-x64
+          name: Flow-Otomatis-step12-i12-01-win-x64
           path: |
             dist/Flow-Otomatis-portable-win-x64.zip
             dist/SHA256SUMS.txt

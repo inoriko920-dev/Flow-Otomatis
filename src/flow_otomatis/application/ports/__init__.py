@@ -12,6 +12,11 @@ from flow_otomatis.application.ports.generation_provider import (
     GenerationProviderResult,
     GenerationRequest,
 )
+from flow_otomatis.application.ports.google_session import (
+    GoogleSessionPort,
+    GoogleSessionProfile,
+    GoogleSessionState,
+)
 from flow_otomatis.application.ports.result_manifest import ResultManifestWriterPort
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 
@@ -22,6 +27,9 @@ __all__ = [
     "GenerationProviderPort",
     "GenerationProviderResult",
     "GenerationRequest",
+    "GoogleSessionPort",
+    "GoogleSessionProfile",
+    "GoogleSessionState",
     "PackageSceneEvidence",
     "PackageSnapshot",
     "ResultManifestWriterPort",
