@@ -91,7 +91,11 @@ def _project_screen(fixture: UiFixture) -> QWidget:
     )
     layout.addWidget(hero)
 
-    layout.addWidget(section_header("Project terbaru", "0 project" if fixture.code == "UI-IMG-001A" else "1 project"))
+    layout.addWidget(
+        section_header(
+            "Project terbaru", "0 project" if fixture.code == "UI-IMG-001A" else "1 project"
+        )
+    )
     if fixture.code == "UI-IMG-001A":
         empty, empty_layout = card(7)
         empty_layout.addWidget(QLabel("Belum ada project."))
@@ -104,7 +108,15 @@ def _project_screen(fixture: UiFixture) -> QWidget:
     else:
         recent = table_widget(
             ["Project", "Episode", "Scene", "Status", "Terakhir dibuka"],
-            [["EP001 Steve Jobs", "100 Famous People", "60", "Recovery tersedia", "Hari ini • 10:24"]],
+            [
+                [
+                    "EP001 Steve Jobs",
+                    "100 Famous People",
+                    "60",
+                    "Recovery tersedia",
+                    "Hari ini • 10:24",
+                ]
+            ],
             stretch_column=0,
         )
         layout.addWidget(recent, 1)
@@ -113,14 +125,94 @@ def _project_screen(fixture: UiFixture) -> QWidget:
 
 def _scene_rows(code: str) -> list[list[str]]:
     base = [
-        ["S016", "Auto • Approved", "Camera pushes slowly toward...", "7.32s", "8s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S017", "Auto • Approved", "Subtle parallax across the...", "5.42s", "6s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S018", "Auto • Approved", "Slow controlled dolly left...", "9.27s", "10s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S019", "Auto • Approved", "Gentle cinematic push in...", "3.81s", "4s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S020", "Auto • Approved", "Character remains stable...", "7.90s", "8s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S021", "Auto • Approved", "Soft handheld movement...", "6.00s", "6s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S022", "Auto • Approved", "Controlled rack focus...", "8.20s", "10s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
-        ["S023", "Auto • Approved", "Slow pan reveals the room...", "4.55s", "6s", "Akun Produksi 01", "Siap", "Belum", "Siap"],
+        [
+            "S016",
+            "Auto • Approved",
+            "Camera pushes slowly toward...",
+            "7.32s",
+            "8s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S017",
+            "Auto • Approved",
+            "Subtle parallax across the...",
+            "5.42s",
+            "6s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S018",
+            "Auto • Approved",
+            "Slow controlled dolly left...",
+            "9.27s",
+            "10s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S019",
+            "Auto • Approved",
+            "Gentle cinematic push in...",
+            "3.81s",
+            "4s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S020",
+            "Auto • Approved",
+            "Character remains stable...",
+            "7.90s",
+            "8s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S021",
+            "Auto • Approved",
+            "Soft handheld movement...",
+            "6.00s",
+            "6s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S022",
+            "Auto • Approved",
+            "Controlled rack focus...",
+            "8.20s",
+            "10s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
+        [
+            "S023",
+            "Auto • Approved",
+            "Slow pan reveals the room...",
+            "4.55s",
+            "6s",
+            "Akun Produksi 01",
+            "Siap",
+            "Belum",
+            "Siap",
+        ],
     ]
     if code == "UI-IMG-002B":
         base[0][6:] = ["Sedang", "Belum", "Sedang Diproses"]
@@ -205,7 +297,13 @@ def _workspace_screen(fixture: UiFixture) -> QWidget:
     footer = QWidget()
     footer_row = QHBoxLayout(footer)
     footer_row.setContentsMargins(0, 0, 0, 0)
-    footer_row.addWidget(muted_label("60 scene • 57 Siap • 3 perlu diperiksa" if fixture.code == "UI-IMG-002D" else "60 scene • 60 siap"))
+    footer_row.addWidget(
+        muted_label(
+            "60 scene • 57 Siap • 3 perlu diperiksa"
+            if fixture.code == "UI-IMG-002D"
+            else "60 scene • 60 siap"
+        )
+    )
     footer_row.addStretch(1)
     footer_row.addWidget(status_badge("Omni Flash 1.1 • 720p • 16:9", "info"))
     layout.addWidget(footer)
@@ -260,9 +358,15 @@ def _results_screen(fixture: UiFixture) -> QWidget:
                 "success",
             )
         )
-        layout.addWidget(_button_row([("Tandai Siap untuk Editing", "primary"), ("Buka Folder Output", "secondary")]))
+        layout.addWidget(
+            _button_row(
+                [("Tandai Siap untuk Editing", "primary"), ("Buka Folder Output", "secondary")]
+            )
+        )
     elif fixture.code == "UI-IMG-003B":
-        layout.addWidget(_button_row([("Retry Download Terpilih", "primary"), ("Buka Diagnostik", "secondary")]))
+        layout.addWidget(
+            _button_row([("Retry Download Terpilih", "primary"), ("Buka Diagnostik", "secondary")])
+        )
     return root
 
 
@@ -274,16 +378,28 @@ def _profiles_screen(fixture: UiFixture) -> QWidget:
         ["Akun Produksi 02", "Siap", "Tersedia", "10:21", "Sesi tervalidasi"],
         ["Akun Produksi 03", "Perlu Login", "Tidak tersedia", "09:48", "Login manual diperlukan"],
     ]
-    table = table_widget(["Profil", "Status", "Ketersediaan", "Cek terakhir", "Catatan"], rows, stretch_column=4)
+    table = table_widget(
+        ["Profil", "Status", "Ketersediaan", "Cek terakhir", "Catatan"], rows, stretch_column=4
+    )
     table.setCurrentCell(0 if fixture.code == "UI-IMG-004B" else 2, 0)
     layout.addWidget(table, 1)
     if fixture.code == "UI-IMG-004B":
         detail, detail_layout = card(6)
-        detail_layout.addWidget(section_header("Akun Produksi 01", "Profil internal milik pengguna"))
+        detail_layout.addWidget(
+            section_header("Akun Produksi 01", "Profil internal milik pengguna")
+        )
         detail_layout.addWidget(labeled_value("Status", "Siap", strong=True))
         detail_layout.addWidget(labeled_value("Session", "Authorized persistent context"))
         detail_layout.addWidget(labeled_value("Terakhir dicek", "Hari ini • 10:22"))
-        detail_layout.addWidget(_button_row([("Buka Sesi", "secondary"), ("Nonaktifkan", "secondary"), ("Hapus Profil", "danger")]))
+        detail_layout.addWidget(
+            _button_row(
+                [
+                    ("Buka Sesi", "secondary"),
+                    ("Nonaktifkan", "secondary"),
+                    ("Hapus Profil", "danger"),
+                ]
+            )
+        )
         layout.addWidget(detail)
     return root
 
@@ -291,7 +407,9 @@ def _profiles_screen(fixture: UiFixture) -> QWidget:
 def _login_screen(fixture: UiFixture) -> QWidget:
     root, layout = _page_root(fixture)
     kind = "success" if fixture.code == "UI-IMG-005B" else "warning"
-    title = "Sesi berhasil diverifikasi" if fixture.code == "UI-IMG-005B" else "Login manual diperlukan"
+    title = (
+        "Sesi berhasil diverifikasi" if fixture.code == "UI-IMG-005B" else "Login manual diperlukan"
+    )
     detail = (
         "Akun Produksi 03 sekarang siap digunakan."
         if fixture.code == "UI-IMG-005B"
@@ -303,7 +421,9 @@ def _login_screen(fixture: UiFixture) -> QWidget:
     steps_layout.addWidget(labeled_value("1", "Buka / fokuskan sesi login resmi Google"))
     steps_layout.addWidget(labeled_value("2", "Selesaikan login, MFA, atau CAPTCHA secara manual"))
     steps_layout.addWidget(labeled_value("3", "Kembali ke Flow-Otomatis lalu pilih Cek Ulang Sesi"))
-    steps_layout.addWidget(_button_row([("Buka / Fokuskan Sesi Login", "primary"), ("Cek Ulang Sesi", "secondary")]))
+    steps_layout.addWidget(
+        _button_row([("Buka / Fokuskan Sesi Login", "primary"), ("Cek Ulang Sesi", "secondary")])
+    )
     layout.addWidget(steps)
     layout.addStretch(1)
     return root
@@ -331,7 +451,12 @@ def _keys_screen(fixture: UiFixture) -> QWidget:
             ["Baris 2", "••••••••••9PQM", "Duplikat", "Sudah ada", "Lewati"],
             ["Baris 3", "••••••••••4ZXT", "Valid", "Baru", "Akan disimpan"],
         ]
-    layout.addWidget(table_widget(["Label", "Key", "Status", "Cek terakhir", "Penggunaan"], rows, stretch_column=0), 1)
+    layout.addWidget(
+        table_widget(
+            ["Label", "Key", "Status", "Cek terakhir", "Penggunaan"], rows, stretch_column=0
+        ),
+        1,
+    )
     return root
 
 
@@ -362,7 +487,9 @@ def _settings_screen(fixture: UiFixture) -> QWidget:
 
 def _diagnostics_screen(fixture: UiFixture) -> QWidget:
     root, layout = _page_root(fixture)
-    layout.addWidget(_button_row([("Export Diagnostik Tersamarkan", "secondary"), ("Refresh", "primary")]))
+    layout.addWidget(
+        _button_row([("Export Diagnostik Tersamarkan", "secondary"), ("Refresh", "primary")])
+    )
     events = [
         ["10:24:12", "S016", "Download selesai", "Download", "Sukses"],
         ["10:23:58", "S017", "Generation selesai", "Generate", "Sukses"],
@@ -377,7 +504,9 @@ def _diagnostics_screen(fixture: UiFixture) -> QWidget:
         detail, detail_layout = card(5)
         detail_layout.addWidget(section_header("Detail teknis • S017"))
         detail_layout.addWidget(labeled_value("Event", "IMAGE_SOURCE_VALIDATED"))
-        detail_layout.addWidget(labeled_value("Source", "…/ApprovedImages/EP001_STEVE_JOBS__IMAGE__SCENE_017__v1.0.png"))
+        detail_layout.addWidget(
+            labeled_value("Source", "…/ApprovedImages/EP001_STEVE_JOBS__IMAGE__SCENE_017__v1.0.png")
+        )
         detail_layout.addWidget(labeled_value("Profile ID", "profile_•••03"))
         detail_layout.addWidget(labeled_value("Credential", "Tidak disertakan"))
         layout.addWidget(detail)
@@ -407,7 +536,9 @@ def _recovery_screen(fixture: UiFixture) -> QWidget:
         recovery_layout.addWidget(labeled_value("State lokal", "SUBMITTING sebelum shutdown"))
         recovery_layout.addWidget(labeled_value("External evidence", "Belum cukup"))
         recovery_layout.addWidget(labeled_value("Tindakan aman", "Verifikasi Status"))
-        recovery_layout.addWidget(_button_row([("Verifikasi Status", "primary"), ("Lewati Sementara", "secondary")]))
+        recovery_layout.addWidget(
+            _button_row([("Verifikasi Status", "primary"), ("Lewati Sementara", "secondary")])
+        )
         layout.addWidget(recovery)
     else:
         layout.addWidget(
@@ -423,7 +554,9 @@ def _recovery_screen(fixture: UiFixture) -> QWidget:
         recovery_layout.addWidget(labeled_value("Progress", "17/60 tersimpan"))
         recovery_layout.addWidget(labeled_value("Snapshot", "Hari ini • 10:23"))
         recovery_layout.addWidget(progress(28))
-        recovery_layout.addWidget(_button_row([("Pulihkan Project", "primary"), ("Buang Snapshot", "secondary")]))
+        recovery_layout.addWidget(
+            _button_row([("Pulihkan Project", "primary"), ("Buang Snapshot", "secondary")])
+        )
         layout.addWidget(recovery)
     layout.addStretch(1)
     return root
@@ -442,7 +575,11 @@ def _dialog_screen(fixture: UiFixture) -> QWidget:
         modal_layout.addWidget(labeled_value("Paket", "EP001_STEVE_JOBS_FLOW_OTOMATIS.zip"))
         modal_layout.addWidget(labeled_value("Scene", "60"))
         modal_layout.addWidget(labeled_value("Manifest", "FLOW_OTOMATIS_IMPORT.json • ditemukan"))
-        modal_layout.addWidget(info_banner("Siap divalidasi", "Credential tidak pernah diimpor dari paket episode.", "success"))
+        modal_layout.addWidget(
+            info_banner(
+                "Siap divalidasi", "Credential tidak pernah diimpor dari paket episode.", "success"
+            )
+        )
         modal_layout.addWidget(_button_row([("Validasi Paket", "primary"), ("Batal", "secondary")]))
     elif fixture.code == "UI-IMG-012A":
         editor = QPlainTextEdit()
@@ -453,7 +590,13 @@ def _dialog_screen(fixture: UiFixture) -> QWidget:
         )
         editor.setMinimumHeight(170)
         modal_layout.addWidget(editor)
-        modal_layout.addWidget(info_banner("3 scene terbaca", "Bulk TXT adalah fallback. Episode package tetap jalur utama biography.", "info"))
+        modal_layout.addWidget(
+            info_banner(
+                "3 scene terbaca",
+                "Bulk TXT adalah fallback. Episode package tetap jalur utama biography.",
+                "info",
+            )
+        )
         modal_layout.addWidget(_button_row([("Preview Import", "primary"), ("Batal", "secondary")]))
     elif fixture.code == "UI-IMG-012B":
         modal_layout.addWidget(
@@ -467,20 +610,46 @@ def _dialog_screen(fixture: UiFixture) -> QWidget:
                 stretch_column=2,
             )
         )
-        modal_layout.addWidget(info_banner("60/60 scene valid", "Durasi rekomendasi bukan pilihan final sampai dikonfirmasi operator.", "success"))
+        modal_layout.addWidget(
+            info_banner(
+                "60/60 scene valid",
+                "Durasi rekomendasi bukan pilihan final sampai dikonfirmasi operator.",
+                "success",
+            )
+        )
         modal_layout.addWidget(_button_row([("Buat Workspace", "primary"), ("Batal", "secondary")]))
     elif fixture.code == "UI-IMG-013A":
-        modal_layout.addWidget(info_banner("Tindakan ini hanya menghapus data lokal aplikasi", "Akun Google tidak akan dihapus.", "warning"))
+        modal_layout.addWidget(
+            info_banner(
+                "Tindakan ini hanya menghapus data lokal aplikasi",
+                "Akun Google tidak akan dihapus.",
+                "warning",
+            )
+        )
         modal_layout.addWidget(labeled_value("Profil", "Akun Produksi 03"))
         modal_layout.addWidget(labeled_value("Yang dihapus", "Hubungan profil + session lokal"))
         modal_layout.addWidget(_button_row([("Hapus Profil", "danger"), ("Batal", "secondary")]))
     elif fixture.code == "UI-IMG-014A":
-        modal_layout.addWidget(info_banner("1 scene sedang diproses", "Flow-Otomatis tidak menjanjikan batch tetap berjalan setelah aplikasi ditutup.", "warning"))
+        modal_layout.addWidget(
+            info_banner(
+                "1 scene sedang diproses",
+                "Flow-Otomatis tidak menjanjikan batch tetap berjalan setelah aplikasi ditutup.",
+                "warning",
+            )
+        )
         modal_layout.addWidget(labeled_value("Scene aktif", "S016"))
         modal_layout.addWidget(labeled_value("Aksi aman", "Jeda penjadwalan lalu keluar"))
-        modal_layout.addWidget(_button_row([("Jeda & Keluar", "primary"), ("Tetap Buka", "secondary")]))
+        modal_layout.addWidget(
+            _button_row([("Jeda & Keluar", "primary"), ("Tetap Buka", "secondary")])
+        )
     else:
-        modal_layout.addWidget(info_banner("Provider berbayar masih nonaktif", "Aktivasi dapat menimbulkan biaya. Tidak ada janji kredit gratis.", "warning"))
+        modal_layout.addWidget(
+            info_banner(
+                "Provider berbayar masih nonaktif",
+                "Aktivasi dapat menimbulkan biaya. Tidak ada janji kredit gratis.",
+                "warning",
+            )
+        )
         modal_layout.addWidget(labeled_value("Model", "Omni Flash 1.1"))
         modal_layout.addWidget(labeled_value("Mode", "Provider API berbayar • opsional"))
         consent = QCheckBox("Saya memahami kemungkinan biaya dan ingin mengaktifkan provider ini.")
@@ -527,9 +696,13 @@ def _scene_panel(fixture: UiFixture) -> QWidget:
     thumb = QLabel("APPROVED IMAGE\\nSCENE_016")
     thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
     thumb.setMinimumHeight(160)
-    thumb.setStyleSheet("background:#E5E7EB; border:1px solid #CBD5E1; border-radius:7px; color:#64748B;")
+    thumb.setStyleSheet(
+        "background:#E5E7EB; border:1px solid #CBD5E1; border-radius:7px; color:#64748B;"
+    )
     layout.addWidget(thumb)
-    layout.addWidget(status_badge("Auto-mapped • Approved", "success"), alignment=Qt.AlignmentFlag.AlignLeft)
+    layout.addWidget(
+        status_badge("Auto-mapped • Approved", "success"), alignment=Qt.AlignmentFlag.AlignLeft
+    )
     layout.addWidget(labeled_value("Target", "7.32s", strong=True))
     layout.addWidget(labeled_value("Rekomendasi", "8s"))
     layout.addWidget(section_header("Durasi Flow"))
@@ -548,7 +721,9 @@ def _scene_panel(fixture: UiFixture) -> QWidget:
     layout.addWidget(labeled_value("Resolusi", "720p"))
     layout.addWidget(labeled_value("Rasio", "16:9"))
     prompt = QPlainTextEdit()
-    prompt.setPlainText("Camera pushes slowly toward the subject with subtle parallax and stable character continuity.")
+    prompt.setPlainText(
+        "Camera pushes slowly toward the subject with subtle parallax and stable character continuity."
+    )
     prompt.setMinimumHeight(95)
     layout.addWidget(prompt)
     layout.addStretch(1)
@@ -566,22 +741,34 @@ def _agent_panel(fixture: UiFixture) -> QWidget:
         preview, preview_layout = card(5)
         preview_layout.addWidget(labeled_value("Aksi", "Retry download S017"))
         preview_layout.addWidget(labeled_value("Scope", "1 scene"))
-        preview_layout.addWidget(labeled_value("Alasan", "Generate sukses, file lokal belum tersimpan"))
+        preview_layout.addWidget(
+            labeled_value("Alasan", "Generate sukses, file lokal belum tersimpan")
+        )
         preview_layout.addWidget(labeled_value("Risiko", "Rendah • tidak membuat generation baru"))
         preview_layout.addWidget(_button_row([("Terapkan", "primary"), ("Batal", "secondary")]))
         layout.addWidget(preview)
     elif fixture.right_panel == "agent_partial":
-        layout.addWidget(info_banner("Selesai sebagian", "2 langkah berhasil, 1 langkah memerlukan perhatian.", "warning"))
+        layout.addWidget(
+            info_banner(
+                "Selesai sebagian", "2 langkah berhasil, 1 langkah memerlukan perhatian.", "warning"
+            )
+        )
         layout.addWidget(labeled_value("✓", "S016 download berhasil"))
         layout.addWidget(labeled_value("✓", "S017 status diverifikasi"))
         layout.addWidget(labeled_value("!", "S018 sesi profil perlu login"))
         layout.addWidget(_button_row([("Buka Bantuan Login", "primary")]))
     else:
         bubble, bubble_layout = card(6)
-        bubble_layout.addWidget(QLabel("Saya siap membantu membaca status project dan mengusulkan tindakan yang aman."))
-        bubble_layout.addWidget(muted_label("Aksi material akan selalu ditampilkan untuk ditinjau sebelum dijalankan."))
+        bubble_layout.addWidget(
+            QLabel("Saya siap membantu membaca status project dan mengusulkan tindakan yang aman.")
+        )
+        bubble_layout.addWidget(
+            muted_label("Aksi material akan selalu ditampilkan untuk ditinjau sebelum dijalankan.")
+        )
         layout.addWidget(bubble)
-        layout.addWidget(status_badge("Tidak ada aksi otomatis", "info"), alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(
+            status_badge("Tidak ada aksi otomatis", "info"), alignment=Qt.AlignmentFlag.AlignLeft
+        )
     layout.addStretch(1)
     input_box = QLineEdit()
     input_box.setPlaceholderText("Tanyakan status project atau minta usulan tindakan...")

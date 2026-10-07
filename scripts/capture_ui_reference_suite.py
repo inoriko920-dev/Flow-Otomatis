@@ -34,9 +34,7 @@ def capture(output_dir: Path) -> list[Path]:
         QTest.qWait(40)
         image = window.grab()
         if image.width() != 1920 or image.height() != 1080:
-            raise RuntimeError(
-                f"{code}: expected 1920x1080, got {image.width()}x{image.height()}"
-            )
+            raise RuntimeError(f"{code}: expected 1920x1080, got {image.width()}x{image.height()}")
         path = output_dir / f"{code}.png"
         if not image.save(str(path), "PNG"):
             raise RuntimeError(f"Could not save screenshot: {path}")

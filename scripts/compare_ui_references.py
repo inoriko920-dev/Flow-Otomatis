@@ -131,8 +131,7 @@ def main() -> int:
         "--reference-docx",
         type=Path,
         default=Path(
-            "docs/ui/04_STEP_04_FINAL_UI_REFERENCE_"
-            "FLOW_OTOMATIS_BIOGRAPHY_SYNC_V1_2.docx"
+            "docs/ui/04_STEP_04_FINAL_UI_REFERENCE_FLOW_OTOMATIS_BIOGRAPHY_SYNC_V1_2.docx"
         ),
     )
     parser.add_argument(
