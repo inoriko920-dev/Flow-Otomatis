@@ -30,6 +30,7 @@ class PathService:
         home: Path | None = None,
     ) -> PathService:
         """Resolve roots without depending on the current working directory."""
+
         env = environ if environ is not None else os.environ
         exe = executable if executable is not None else Path(sys.executable)
         app_root = exe.resolve().parent if getattr(sys, "frozen", False) else _source_app_root()
@@ -47,23 +48,33 @@ class PathService:
         )
 
     @property
+    def projects_root(self) -> Path:
+        """Per-project durable state root."""
+
+        return self.user_data_root / "Projects"
+
+    @property
     def session_root(self) -> Path:
         """Sensitive browser-session root; never part of a project export."""
+
         return self.user_data_root / "Sessions"
 
     @property
     def log_root(self) -> Path:
         """Structured local log root."""
+
         return self.user_data_root / "Logs"
 
     @property
     def cache_root(self) -> Path:
         """Disposable app cache root."""
+
         return self.user_data_root / "Cache"
 
     @property
     def browser_runtime_root(self) -> Path:
         """Bundled Playwright browser runtime shipped beside the executable."""
+
         return self.app_root / "runtime" / "browsers"
 
 
