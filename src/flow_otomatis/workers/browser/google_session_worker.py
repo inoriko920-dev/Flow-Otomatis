@@ -18,14 +18,9 @@ from typing import Protocol
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from playwright.sync_api import (
-    BrowserContext,
-    Error as PlaywrightError,
-    Page,
-    Playwright,
-    TimeoutError as PlaywrightTimeoutError,
-    sync_playwright,
-)
+from playwright.sync_api import BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionPort,
