@@ -23,6 +23,10 @@ class GenerationJobRepositoryPort(Protocol):
         """Persist successful Generate completion."""
         ...
 
+    def mark_attention(self, job_id: str, error_message: str) -> GenerationJob:
+        """Persist an ambiguous/auth outcome that blocks automatic resubmission."""
+        ...
+
     def mark_failed(self, job_id: str, error_message: str) -> GenerationJob:
         """Persist terminal local/provider failure."""
         ...

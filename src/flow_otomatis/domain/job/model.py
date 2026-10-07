@@ -13,6 +13,7 @@ class GenerationJobState(StrEnum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
     GENERATED = "GENERATED"
+    ATTENTION_REQUIRED = "ATTENTION_REQUIRED"
     FAILED = "FAILED"
 
 

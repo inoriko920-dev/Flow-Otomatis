@@ -89,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step12-i12-01-ui-regression-evidence
+          name: Flow-Otomatis-step12-i12-02a-contract-ui-regression-evidence
           path: |
             artifacts/ui_actual
             artifacts/ui_reference
@@ -131,10 +131,10 @@ jobs:
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
 
-      - name: Upload portable STEP 12 I12-01 artifact
+      - name: Upload portable STEP 12 I12-02A contract artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-step12-i12-01-win-x64
+          name: Flow-Otomatis-step12-i12-02a-contract-win-x64
           path: |
             dist/Flow-Otomatis-portable-win-x64.zip
             dist/SHA256SUMS.txt

@@ -3,7 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flow_otomatis.application.ports import GenerationProviderResult, GenerationRequest
+from flow_otomatis.application.ports import (
+    GenerationProviderResult,
+    GenerationRequest,
+    GenerationSubmissionAmbiguousError,
+)
 from flow_otomatis.application.services import LocalGenerationQueueService
 from flow_otomatis.domain.job import GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
@@ -112,3 +116,36 @@ def test_prepare_queue_is_idempotent(tmp_path: Path) -> None:
     service.prepare_queue("EP300_QUEUE")
 
     assert len(service.list_jobs("EP300_QUEUE")) == 2
+
+
+class AmbiguousGenerationProvider:
+    """Fixture that simulates a timeout after a possibly accepted submit."""
+
+    def __init__(self) -> None:
+        self.calls: list[GenerationRequest] = []
+
+    def generate(self, request: GenerationRequest) -> GenerationProviderResult:
+        self.calls.append(request)
+        raise GenerationSubmissionAmbiguousError(
+            "Timeout after submit; provider acceptance cannot be proven."
+        )
+
+
+def test_ambiguous_submit_blocks_queue_and_prevents_automatic_resubmit(tmp_path: Path) -> None:
+    projects_root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(projects_root)
+    workspace_repo.save(_workspace())
+    job_repo = SqliteGenerationJobRepository(projects_root)
+    provider = AmbiguousGenerationProvider()
+    service = LocalGenerationQueueService(workspace_repo, job_repo, provider)
+
+    service.prepare_queue("EP300_QUEUE")
+    jobs = service.run_until_idle("EP300_QUEUE")
+
+    assert [request.scene_id for request in provider.calls] == ["SCENE_001"]
+    assert [job.state for job in jobs] == [
+        GenerationJobState.ATTENTION_REQUIRED,
+        GenerationJobState.QUEUED,
+    ]
+    assert "Timeout after submit" in (jobs[0].error_message or "")
+    assert job_repo.claim_next("EP300_QUEUE") is None

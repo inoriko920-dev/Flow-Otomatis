@@ -67,7 +67,8 @@ class ProjectResults:
     @property
     def attention_count(self) -> int:
         return sum(
-            scene.generate_state is GenerationJobState.FAILED
+            scene.generate_state
+            in {GenerationJobState.FAILED, GenerationJobState.ATTENTION_REQUIRED}
             or scene.download_state == DownloadState.FAILED
             for scene in self.scenes
         )

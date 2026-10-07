@@ -23,6 +23,7 @@ def _generate_text(state: GenerationJobState | None) -> str:
         GenerationJobState.QUEUED: "Menunggu",
         GenerationJobState.RUNNING: "Sedang Diproses",
         GenerationJobState.GENERATED: "Selesai",
+        GenerationJobState.ATTENTION_REQUIRED: "Perlu Perhatian",
         GenerationJobState.FAILED: "Gagal",
     }[state]
 

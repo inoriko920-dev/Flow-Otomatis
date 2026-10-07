@@ -6,8 +6,11 @@ from datetime import UTC, datetime
 
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.generation_provider import (
+    GenerationAuthenticationRequiredError,
+    GenerationCancelledError,
     GenerationProviderPort,
     GenerationRequest,
+    GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 from flow_otomatis.domain.errors import InternalInvariantError
@@ -82,6 +85,12 @@ class LocalGenerationQueueService:
                 aspect_ratio=scene.aspect_ratio,
             )
             result = self._provider.generate(request)
+        except GenerationSubmissionAmbiguousError as exc:
+            return self._job_repository.mark_attention(job.job_id, str(exc)[:500])
+        except GenerationAuthenticationRequiredError as exc:
+            return self._job_repository.mark_attention(job.job_id, str(exc)[:500])
+        except GenerationCancelledError as exc:
+            return self._job_repository.mark_failed(job.job_id, f"Cancelled: {str(exc)[:480]}")
         except Exception as exc:
             return self._job_repository.mark_failed(job.job_id, str(exc)[:500])
 

@@ -62,15 +62,19 @@ class SqliteGenerationJobRepository:
                 connection.row_factory = sqlite3.Row
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                running = connection.execute(
+                blocking = connection.execute(
                     """
                     SELECT job_id FROM generation_jobs
-                    WHERE episode_id = ? AND state = ?
+                    WHERE episode_id = ? AND state IN (?, ?)
                     LIMIT 1
                     """,
-                    (episode_id, GenerationJobState.RUNNING.value),
+                    (
+                        episode_id,
+                        GenerationJobState.RUNNING.value,
+                        GenerationJobState.ATTENTION_REQUIRED.value,
+                    ),
                 ).fetchone()
-                if running is not None:
+                if blocking is not None:
                     connection.commit()
                     return None
 
@@ -107,6 +111,14 @@ class SqliteGenerationJobRepository:
             state=GenerationJobState.GENERATED,
             remote_result_id=remote_result_id,
             error_message=None,
+        )
+
+    def mark_attention(self, job_id: str, error_message: str) -> GenerationJob:
+        return self._finish(
+            job_id,
+            state=GenerationJobState.ATTENTION_REQUIRED,
+            remote_result_id=None,
+            error_message=error_message,
         )
 
     def mark_failed(self, job_id: str, error_message: str) -> GenerationJob:

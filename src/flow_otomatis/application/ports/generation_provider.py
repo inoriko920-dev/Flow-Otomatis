@@ -6,6 +6,22 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+class GenerationProviderError(RuntimeError):
+    """Base error for a provider outcome that is safe to surface to the queue."""
+
+
+class GenerationSubmissionAmbiguousError(GenerationProviderError):
+    """The provider may have accepted a mutating submit; automatic retry is forbidden."""
+
+
+class GenerationAuthenticationRequiredError(GenerationProviderError):
+    """The selected authorized profile is no longer ready for generation."""
+
+
+class GenerationCancelledError(GenerationProviderError):
+    """The request was cancelled before any accepted submit was confirmed."""
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
     """Provider-neutral request built from persisted Scene planning."""
@@ -29,7 +45,7 @@ class GenerationProviderResult:
 
 
 class GenerationProviderPort(Protocol):
-    """Generate one Scene. Real external adapters belong to STEP 12."""
+    """Generate one Scene through an adapter with explicit submit semantics."""
 
     def generate(self, request: GenerationRequest) -> GenerationProviderResult:
         """Submit/complete one generation according to adapter semantics."""

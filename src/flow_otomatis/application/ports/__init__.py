@@ -8,9 +8,13 @@ from flow_otomatis.application.ports.episode_package import (
 )
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.generation_provider import (
+    GenerationAuthenticationRequiredError,
+    GenerationCancelledError,
+    GenerationProviderError,
     GenerationProviderPort,
     GenerationProviderResult,
     GenerationRequest,
+    GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionPort,
@@ -23,10 +27,14 @@ from flow_otomatis.application.ports.workspace_repository import WorkspaceReposi
 __all__ = [
     "DownloadResultRepositoryPort",
     "EpisodePackagePort",
+    "GenerationAuthenticationRequiredError",
+    "GenerationCancelledError",
     "GenerationJobRepositoryPort",
+    "GenerationProviderError",
     "GenerationProviderPort",
     "GenerationProviderResult",
     "GenerationRequest",
+    "GenerationSubmissionAmbiguousError",
     "GoogleSessionPort",
     "GoogleSessionProfile",
     "GoogleSessionState",
