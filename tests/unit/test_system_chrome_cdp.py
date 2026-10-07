@@ -10,7 +10,8 @@ from flow_otomatis.workers.browser.google_session_worker import (
     SystemChromeGoogleSessionDriver,
 )
 from flow_otomatis.workers.browser.system_chrome_cdp import (
-    build_system_chrome_command,
+    build_debug_chrome_command,
+    build_manual_chrome_command,
     find_google_chrome_executable,
     read_devtools_active_port,
 )
@@ -36,12 +37,27 @@ class FixtureChromePool:
         pass
 
 
-def test_system_chrome_command_uses_dedicated_profile_without_stealth_flags(tmp_path: Path) -> None:
+def test_manual_chrome_command_has_no_remote_debugging_or_automation_flags(tmp_path: Path) -> None:
     chrome = tmp_path / "chrome.exe"
     profile = tmp_path / "profile"
-    command = build_system_chrome_command(chrome, profile, "https://accounts.google.com/")
+    command = build_manual_chrome_command(chrome, profile, "https://accounts.google.com/")
 
     assert command[0] == str(chrome)
+    assert f"--user-data-dir={profile}" in command
+    serialized = " ".join(command).casefold()
+    assert "remote-debugging" not in serialized
+    assert "--enable-automation" not in serialized
+    assert "automationcontrolled" not in serialized
+    assert "undetected" not in serialized
+
+
+def test_post_login_debug_command_uses_random_localhost_cdp_without_stealth(
+    tmp_path: Path,
+) -> None:
+    chrome = tmp_path / "chrome.exe"
+    profile = tmp_path / "profile"
+    command = build_debug_chrome_command(chrome, profile)
+
     assert f"--user-data-dir={profile}" in command
     assert "--remote-debugging-address=127.0.0.1" in command
     assert "--remote-debugging-port=0" in command
@@ -62,7 +78,7 @@ def test_manual_login_does_not_attach_playwright(tmp_path: Path) -> None:
     )
 
     assert probe.state is GoogleSessionState.NEEDS_LOGIN
-    assert "Google Chrome asli" in probe.detail
+    assert "Google Chrome normal" in probe.detail
     assert len(pool.manual_calls) == 1
     assert pool.page_calls == 0
 

@@ -2,7 +2,8 @@
 
 from flow_otomatis.workers.browser.system_chrome_cdp import (
     SystemChromeCdpPool,
-    build_system_chrome_command,
+    build_debug_chrome_command,
+    build_manual_chrome_command,
     find_google_chrome_executable,
     read_devtools_active_port,
 )
@@ -44,7 +45,8 @@ __all__ = [
     "GoogleSessionWorker",
     "PlaywrightGoogleSessionDriver",
     "SystemChromeGoogleSessionDriver",
-    "build_system_chrome_command",
+    "build_debug_chrome_command",
+    "build_manual_chrome_command",
     "find_google_chrome_executable",
     "read_devtools_active_port",
     "prepare_google_flow_request",

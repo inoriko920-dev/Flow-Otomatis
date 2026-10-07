@@ -93,7 +93,8 @@ class SystemChromeGoogleSessionDriver:
         self._context_pool.open_manual_page(profile_id, user_data_dir, _GOOGLE_LOGIN_URL)
         return BrowserSessionProbe(
             GoogleSessionState.NEEDS_LOGIN,
-            "Google Chrome asli dibuka. Selesaikan login, MFA, atau CAPTCHA secara manual di sana.",
+            "Google Chrome normal dibuka tanpa automation. Selesaikan login manual, "
+            "lalu tutup jendela Chrome sebelum Cek Ulang Sesi.",
         )
 
     def check(

@@ -194,12 +194,15 @@ def build_google_login_view(
             strong=restart_gate.ready_after_restart,
         )
     )
-    steps_layout.addWidget(labeled_value("1", "Buka / fokuskan sesi login resmi Google"))
+    steps_layout.addWidget(labeled_value("1", "Buka sesi login di Google Chrome normal"))
     steps_layout.addWidget(labeled_value("2", "Selesaikan login, MFA, atau CAPTCHA secara manual"))
-    steps_layout.addWidget(labeled_value("3", "Kembali ke Flow-Otomatis lalu pilih Cek Ulang Sesi"))
+    steps_layout.addWidget(
+        labeled_value("3", "Setelah login berhasil, tutup jendela Google Chrome login")
+    )
+    steps_layout.addWidget(labeled_value("4", "Kembali lalu pilih Cek Ulang Sesi"))
     steps_layout.addWidget(
         labeled_value(
-            "4",
+            "5",
             "Setelah status Siap, tutup aplikasi, buka kembali, lalu Cek Ulang Sesi lagi.",
         )
     )
