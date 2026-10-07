@@ -10,8 +10,12 @@ from flow_otomatis.domain.project import WorkspaceState
 class WorkspaceRepositoryPort(Protocol):
     """Persist/reload minimal project workspace state."""
 
-    def save(self, workspace: WorkspaceState) -> None:
-        """Store one workspace transactionally."""
+    def create(self, workspace: WorkspaceState) -> None:
+        """Create a new workspace atomically; reject duplicate identity."""
+        ...
+
+    def update(self, workspace: WorkspaceState) -> None:
+        """Update an already-persisted workspace transactionally."""
         ...
 
     def load(self, episode_id: str) -> WorkspaceState | None:

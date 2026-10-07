@@ -65,6 +65,7 @@ class EpisodePackageReader:
                             name_set,
                             manifest_name,
                             scene.motion_prompt,
+                            scene.scene_id,
                         ),
                     )
                     for scene in manifest.scenes
@@ -112,6 +113,7 @@ class EpisodePackageReader:
                 root,
                 manifest_file.parent,
                 scene.motion_prompt,
+                scene.scene_id,
             )
             evidence.append(
                 PackageSceneEvidence(
@@ -174,6 +176,7 @@ class EpisodePackageReader:
         names: set[str],
         manifest_name: str,
         value: str,
+        scene_id: str,
     ) -> str:
         stripped = value.strip()
         if not stripped:
@@ -184,7 +187,10 @@ class EpisodePackageReader:
             return stripped
         member = self._resolve_member(manifest_name, stripped)
         if member not in names:
-            return stripped
+            raise PackageValidationError(
+                f"Scene {scene_id}: file prompt tidak ditemukan: {stripped}",
+                code="PROMPT_FILE_MISSING",
+            )
         try:
             return archive.read(member).decode("utf-8-sig").strip()
         except UnicodeDecodeError as exc:
@@ -205,7 +211,13 @@ class EpisodePackageReader:
             raise PackageSecurityError(f"Package reference escapes root: {reference}")
         return candidate
 
-    def _resolve_disk_prompt(self, root: Path, base: Path, value: str) -> str:
+    def _resolve_disk_prompt(
+        self,
+        root: Path,
+        base: Path,
+        value: str,
+        scene_id: str,
+    ) -> str:
         stripped = value.strip()
         if not stripped or "\n" in stripped or "\r" in stripped:
             return stripped
@@ -213,7 +225,10 @@ class EpisodePackageReader:
             return stripped
         candidate = self._resolve_disk_ref(root, base, stripped)
         if not candidate.is_file():
-            return stripped
+            raise PackageValidationError(
+                f"Scene {scene_id}: file prompt tidak ditemukan: {stripped}",
+                code="PROMPT_FILE_MISSING",
+            )
         try:
             return candidate.read_text(encoding="utf-8-sig").strip()
         except (OSError, UnicodeDecodeError) as exc:

@@ -27,7 +27,11 @@ from flow_otomatis.application.services import (
     ProjectLibraryService,
     ScenePlanningService,
 )
-from flow_otomatis.domain.errors import FlowOtomatisError, InternalInvariantError
+from flow_otomatis.domain.errors import (
+    FlowOtomatisError,
+    InternalInvariantError,
+    WorkspaceAlreadyExistsError,
+)
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
@@ -540,13 +544,30 @@ class MainWindow(QMainWindow):
         self._set_project_chrome(workspace, "Validasi Paket Episode")
         view = build_validation_view(
             workspace,
-            on_create=self.create_pending_workspace,
+            on_create=self._create_pending_workspace_from_ui,
             on_cancel=self.show_project_hub,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
         return workspace
+
+    def _create_pending_workspace_from_ui(self) -> None:
+        """Create from the Qt button and translate typed persistence errors safely."""
+
+        try:
+            self.create_pending_workspace()
+        except WorkspaceAlreadyExistsError as exc:
+            QMessageBox.warning(
+                self,
+                "Project Sudah Ada",
+                (
+                    f"Episode {exc.episode_id} sudah pernah diimpor. "
+                    "Buka project yang sudah ada dari Beranda."
+                ),
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Workspace Tidak Dapat Dibuat", str(exc))
 
     def create_pending_workspace(self) -> WorkspaceState:
         """Persist the currently validated package and render real workspace rows."""

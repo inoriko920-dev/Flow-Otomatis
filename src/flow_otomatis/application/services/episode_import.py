@@ -76,7 +76,7 @@ class EpisodeImportService:
     def create_workspace(self, workspace: WorkspaceState) -> WorkspaceState:
         """Persist a validated draft and reload it as the canonical saved state."""
 
-        self._workspace_repository.save(workspace)
+        self._workspace_repository.create(workspace)
         persisted = self._workspace_repository.load(workspace.episode_id)
         if persisted is None:
             raise InternalInvariantError("Workspace save completed but reload returned no project")
