@@ -3,13 +3,10 @@
 ## Current verified baseline
 - Repository: inoriko920-dev/Flow-Otomatis
 - Branch: main
-- Initial repository state before STEP 08: greenfield/empty.
-- Initial documentation guard commit: 164ef0073115d1e0178a1c6eb920443e761cd35e
-- Latest verified HEAD before this update: 4fe73753e29f699c000136eac916aa002889d2d1
-- Root tree verified: governance files + docs/ are present; src/ is absent.
-- Current Factory STEP: STEP 08 — Repository Foundation
-- Current task: S08-T01 Documentation Source-of-Truth Bootstrap
-- Production source code status: FORBIDDEN / NOT STARTED
+- Factory STEP: STEP 08 — Repository Foundation
+- Current task after this commit: S08-T02 Repository Skeleton + Quality Tooling
+- S08-T01 documentation source-of-truth: PASS after binary verification
+- Production feature implementation: NOT STARTED
 
 ## STEP status
 - STEP 00: PASS
@@ -20,31 +17,19 @@
 - STEP 05: PASS_WITH_PROVISIONAL
 - STEP 06: PASS_WITH_PROVISIONAL
 - STEP 07: PASS_WITH_PROVISIONAL
-- STEP 08: BLOCKED — S08-T01 binary source-of-truth incomplete
+- STEP 08: IN PROGRESS
 
-## Verified work completed in S08-T01
-- README.md documentation guard.
-- AGENTS.md AI working protocol.
-- PROJECT_STATE.md / PLAN.md / TASKS.md.
-- .gitignore / .gitattributes / .editorconfig.
-- docs/architecture/ architecture, code constitution, module ownership, dependency rules, AI change protocol, ADR register.
-- docs/handoff/current/ STEP07→08 handoff and explicit binary-upload blocker.
-- docs/planning/SOURCE_OF_TRUTH_MANIFEST.md with canonical binary paths, sizes and SHA-256.
-- docs/ui/UI_REFERENCE_MANIFEST.md with 30 final UI PNG hashes.
-- docs/ui/IMPLEMENTATION_OVERRIDES.md.
-- Repo-ready binary upload pack prepared: 47 entries, 83847809 bytes, SHA-256 7f14ee5a877d041daa08a486628f8541d62fe1ecffdd20cd8b2230a28b56f107, integrity PASS.
-- GitHub root verification confirms no src/ production source exists.
+## Repository source-of-truth now contains
+- Complete Software Factory V2 TXT guidance.
+- STEP 00–07 planning/reference DOCX files.
+- Active STEP 04 Biography Sync prompt DOCX.
+- STEP 04 Final UI Reference DOCX containing all 30 approved UI compositions.
+- Superseded STEP 04 planning DOCX files archived under docs/planning/archive.
+- Flow-Otomatis biography synchronization revision spec.
+- Code Constitution, architecture, module ownership, dependency rules, AI change protocol and ADR register.
+- Current handoff/governance files.
 
-## Why coding is still blocked
-The connected GitHub writer available in this session supports UTF-8 text creation/update but does not expose direct binary DOCX/PNG upload. The product-owner rule requires all planning DOCX and Final UI Reference assets to be physically present in the repo before coding.
-
-Required binaries are enumerated in:
-- docs/planning/SOURCE_OF_TRUTH_MANIFEST.md
-- docs/ui/UI_REFERENCE_MANIFEST.md
-
-Until every PENDING binary is present and hash-verified, S08-T01 is not PASS and S08-T02 must not start.
-
-## Frozen technical/product decisions
+## Frozen decisions
 - CPython 3.14.x x64 + PySide6 Qt Widgets.
 - Playwright Chromium in dedicated Browser Worker process.
 - Modular monolith + ports/adapters.
@@ -52,22 +37,12 @@ Until every PENDING binary is present and hash-verified, S08-T01 is not PASS and
 - Windows Credential Locker/keyring for API secrets.
 - PyInstaller onedir portable ZIP.
 - Serial R1 generation queue.
-- Omni Flash 1.1 • 720p • 16:9 for biography workflow.
+- Omni Flash 1.1 • 720p • 16:9.
 - Audio/SRT Target remains authoritative.
-- Flow duration 4/6/8/10: app recommends, user confirms valid value.
+- Flow duration 4/6/8/10: app recommends, user confirms valid selection.
 - Approved image auto-mapped by SCENE_###.
 - Generate and Download are separate.
 - No CAPTCHA/MFA bypass, credential export, or quota/rate-limit evasion.
 
-## Active blocker
-B08-DOCBIN-001 — Mandatory DOCX/PNG source-of-truth binaries are not yet uploaded through the available GitHub connector.
-
-## Work/evidence status
-- Text governance/source-of-truth: VERIFIED IN GITHUB.
-- Binary source-of-truth: PACKAGED / NOT PRESENT IN REPO / NOT VERIFIED.
-- Production code: NOT STARTED.
-- CI/build/package: NOT STARTED.
-- Live Google Flow: NOT TESTED.
-
 ## Next exact action
-Place the 47 prepared binary source-of-truth files at their canonical repo paths, verify hashes, then set S08-T01 PASS. Only after that may S08-T02 create src/ and dependency tooling.
+Run S08-T02: create only the minimal canonical Python repository skeleton, locked dependency/tooling configuration and architecture checker. Do not implement product features yet.
