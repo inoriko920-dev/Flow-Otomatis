@@ -27,9 +27,15 @@ def generate(destination: Path) -> None:
     for package in PACKAGES:
         info = metadata.metadata(package)
         version = metadata.version(package)
-        license_value = info.get("License-Expression") or info.get("License") or "See upstream metadata"
+        license_value = (
+            info.get("License-Expression") or info.get("License") or "See upstream metadata"
+        )
         project_url = info.get("Home-page") or next(
-            (value.split(",", 1)[-1].strip() for value in info.get_all("Project-URL", []) if "," in value),
+            (
+                value.split(",", 1)[-1].strip()
+                for value in info.get_all("Project-URL", [])
+                if "," in value
+            ),
             "See PyPI metadata",
         )
         lines.extend(
