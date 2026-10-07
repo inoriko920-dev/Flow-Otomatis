@@ -152,3 +152,35 @@ Evidence:
 - `A03_REQUEST_REVISION_LEASE_RECOVERY_EVIDENCE_2026-10-07.md`
 
 Next package is A04 only for F05 under ADR-017. Live Generate remains blocked by its independent validation gate.
+
+## Current A04 state
+A04: **PASS**.
+
+Closed:
+- F05 — Google session browser probing no longer executes synchronously on the Qt UI event path.
+
+Implementation:
+- merge SHA: `837106d5e83839150706dfdf3857734308258184`;
+- final PR #4 head: `cdbbc8cf21ed9480b6c8d977a9597df0b3bbf066`;
+- dedicated single-thread Browser Worker command owner;
+- asynchronous session command port;
+- sanitized Future → Qt Signal result boundary;
+- deterministic same-profile busy rejection;
+- bounded startup/connect/probe/shutdown policy;
+- installed normal-Chrome manual-auth lifecycle preserved.
+
+Official main evidence:
+- CI `37654708047` — SUCCESS;
+- quality `112906749552`: 110 tests PASS;
+- mypy: 64 source files, no issues;
+- architecture guard: PASS;
+- UI `112907117114`: 30/30 PASS, similarity 0.6344–0.9643;
+- UI artifact `11497423543`, SHA-256 `8e23610a8d36008c8d25aadd54b8baccf747dc3edfed7ac64e0997bc69084a35`;
+- Windows `112907455169`: Chromium + portable smoke PASS;
+- Windows artifact `11497868670`, 435501661 bytes, SHA-256 `0bea14b02d2a4faf85fb02b0dfe0d7d560d220c0aa0a3885e554c8ee31783267`.
+
+Evidence:
+- `A04_BROWSER_WORKER_UI_RESPONSIVENESS_EVIDENCE_2026-10-07.md`
+
+All six audit findings F01–F06 are now locally closed. Next package is A05 only: fresh combined verification/build/handoff. A05 does not authorize live Flow.
+

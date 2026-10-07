@@ -1,6 +1,6 @@
 # ADR-017 — Browser Worker Ownership and Non-Blocking UI Command Boundary
 
-Status: ACCEPTED FOR A04
+Status: IMPLEMENTED + VERIFIED IN A04
 Date: 7 October 2026
 Scope: STEP 12 audit remediation A04 (F05)
 

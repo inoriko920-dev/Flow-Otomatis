@@ -167,8 +167,14 @@ Evidence:
   - durable owner/lease recovery blocks blind resubmit;
   - versioned migration preserves confirmed results/download linkage;
   - main CI `37651619177`: 106 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
-- A04 — F05 Browser Worker/UI responsiveness: READY, not started.
-- A05 — combined verification/build/handoff: PENDING after A04.
+- A04 — F05 Browser Worker/UI responsiveness: PASS.
+  - merge SHA: `837106d5e83839150706dfdf3857734308258184`;
+  - browser-touching session work now runs through one dedicated single-thread Browser Worker command owner;
+  - Qt uses async Future → Qt Signal delivery and receives sanitized DTO/status/error values only;
+  - duplicate same-profile operations are blocked while busy and shutdown waits are bounded;
+  - slow-probe Qt heartbeat regression PASS;
+  - official main CI `37654708047`: 110 tests PASS, mypy 64 source files, architecture PASS, UI 30/30 PASS, Chromium/portable smoke PASS.
+- A05 — combined verification/build/handoff: READY, not started.
 
 Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by the existing real-account restart validation.
 

@@ -436,3 +436,48 @@ After the product owner says `lanjutkan`, execute only A03 for F03 and F06 under
 
 ### Audit next exact action
 After the product owner says `lanjutkan`, execute only A04 under ADR-017: dedicated Browser Worker ownership and non-blocking Qt command boundary, then stop before A05.
+
+## STEP 12 audit remediation track — A04
+- A04 status: PASS.
+- Finding closed: F05.
+- Implementation merge SHA: `837106d5e83839150706dfdf3857734308258184`.
+- PR: #4 — `A04: move browser session work off Qt thread`.
+- Final PR head: `cdbbc8cf21ed9480b6c8d977a9597df0b3bbf066`.
+- Official main CI run: `37654708047` — SUCCESS.
+- Quality job: `112906749552` — SUCCESS.
+- UI visual job: `112907117114` — SUCCESS.
+- Windows package job: `112907455169` — SUCCESS.
+- Ruff format: PASS — 133 files already formatted.
+- Ruff lint: PASS.
+- mypy: PASS — 64 source files.
+- architecture guard: PASS.
+- pytest: PASS — 110 passed, 1904 warnings.
+- frozen UI regression: PASS — 30/30 fixtures, similarity 0.6344–0.9643.
+- UI evidence artifact: `11497423543`, 3316911 bytes, SHA-256 `8e23610a8d36008c8d25aadd54b8baccf747dc3edfed7ac64e0997bc69084a35`.
+- Playwright Chromium smoke: PASS.
+- portable application smoke: PASS.
+- Windows artifact: `11497868670`, 435501661 bytes, SHA-256 `0bea14b02d2a4faf85fb02b0dfe0d7d560d220c0aa0a3885e554c8ee31783267`.
+
+### A04 delivered
+- production Google session browser work is dispatched through one dedicated single-thread Browser Worker command owner;
+- Qt session callbacks use asynchronous futures and Qt signals and receive only sanitized `GoogleSessionProfile` DTO/status/error data;
+- Playwright/CDP page/browser/context objects remain below the Browser Worker boundary;
+- repeated same-profile browser commands while busy are rejected deterministically rather than starting a competing owner;
+- Chrome startup, CDP connect, navigation/probe, and UI shutdown waits are explicitly bounded;
+- application close waits only 1.5 seconds for Browser Worker cleanup and does not transfer browser ownership to Qt;
+- manual Google authentication still opens installed normal Chrome with no Playwright/CDP attachment during password/MFA/CAPTCHA entry;
+- regression tests prove a slow session probe does not stop the Qt heartbeat and prove Browser Worker operations stay on one owner thread.
+
+### Audit finding status after A04
+- F01: CLOSED.
+- F02: CLOSED.
+- F03: CLOSED.
+- F04: CLOSED.
+- F05: CLOSED.
+- F06: CLOSED.
+
+I12-02B2-LIVE remains BLOCKED by the independent real-account restart validation gate. Automated/fake-driver success does not prove a real Google account session or live Flow mutation.
+
+### Audit next exact action
+After the product owner says `lanjutkan`, execute only A05: run the audit's combined acceptance matrix and fresh official quality/regression/visual/Windows portable gates, record all closed/open risks and fresh evidence, then finalize the audit handoff. A05 PASS verifies the local remediation track only; it must not declare Flow live ready.
+
