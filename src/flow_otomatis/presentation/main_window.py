@@ -370,9 +370,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Local results service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        path = self._local_results_service.export_manifest(
-            self._current_workspace.episode_id
-        )
+        path = self._local_results_service.export_manifest(self._current_workspace.episode_id)
         self._last_result_manifest_path = path
         return path
 
