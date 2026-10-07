@@ -46,9 +46,7 @@ class EpisodePackageReader:
             with zipfile.ZipFile(source) as archive:
                 names = [name for name in archive.namelist() if not name.endswith("/")]
                 self._validate_archive_names(names)
-                manifests = [
-                    name for name in names if PurePosixPath(name).name == _MANIFEST_NAME
-                ]
+                manifests = [name for name in names if PurePosixPath(name).name == _MANIFEST_NAME]
                 if len(manifests) != 1:
                     raise PackageValidationError(
                         f"Expected exactly one {_MANIFEST_NAME}, found {len(manifests)}",

@@ -100,12 +100,7 @@ def test_happy_path_validates_recomputes_and_persists_workspace(tmp_path: Path) 
     assert persisted == reloaded
     assert reloaded is not None
     assert reloaded.scenes[0].target_duration_s == 7.32
-    assert (
-        tmp_path
-        / "projects"
-        / "EP001_STEVE_JOBS"
-        / "project.sqlite3"
-    ).is_file()
+    assert (tmp_path / "projects" / "EP001_STEVE_JOBS" / "project.sqlite3").is_file()
 
 
 def test_target_over_ten_seconds_is_rejected_before_persistence(tmp_path: Path) -> None:

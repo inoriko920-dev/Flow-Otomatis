@@ -96,8 +96,6 @@ def test_real_package_validation_and_workspace_render_without_redesign(
         assert "Real prompt loaded from package." in workspace_text
         assert "8s • rekom." in workspace_text
         assert "Pilih Durasi" in workspace_text
-        assert (
-            tmp_path / "projects" / "EP010_TEST" / "project.sqlite3"
-        ).is_file()
+        assert (tmp_path / "projects" / "EP010_TEST" / "project.sqlite3").is_file()
     finally:
         window.close()

@@ -257,9 +257,7 @@ class MainWindow(QMainWindow):
     def _set_project_chrome(self, workspace: WorkspaceState, surface: str) -> None:
         self._project_label.setText(f"{workspace.episode_id} • {workspace.project_name}")
         self._project_state_label.setText(surface)
-        self._status_project.setText(
-            f"{workspace.episode_id} • {len(workspace.scenes)} scene"
-        )
+        self._status_project.setText(f"{workspace.episode_id} • {len(workspace.scenes)} scene")
 
     def show_fixture(self, code: str) -> None:
         """Render one approved visual state inside the production shell."""
