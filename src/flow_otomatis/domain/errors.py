@@ -31,5 +31,13 @@ class PackageSecurityError(FlowOtomatisError):
     """Episode package contains an unsafe path/archive structure."""
 
 
+class WorkspaceAlreadyExistsError(FlowOtomatisError):
+    """A new import tried to reuse an existing episode/project identity."""
+
+    def __init__(self, episode_id: str) -> None:
+        self.episode_id = episode_id
+        super().__init__(f"Workspace already exists: {episode_id}")
+
+
 class StorageError(FlowOtomatisError):
     """Local project persistence failed."""

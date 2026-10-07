@@ -100,7 +100,7 @@ class ScenePlanningService:
         return self._save_and_reload(replace(workspace, scenes=scenes))
 
     def _save_and_reload(self, workspace: WorkspaceState) -> WorkspaceState:
-        self._workspace_repository.save(workspace)
+        self._workspace_repository.update(workspace)
         persisted = self._workspace_repository.load(workspace.episode_id)
         if persisted is None:
             raise InternalInvariantError("Workspace update saved but reload returned no project")

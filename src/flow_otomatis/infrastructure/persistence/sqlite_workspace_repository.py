@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from flow_otomatis.domain.errors import StorageError
+from flow_otomatis.domain.errors import StorageError, WorkspaceAlreadyExistsError
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 
@@ -16,6 +16,79 @@ class SqliteWorkspaceRepository:
 
     def __init__(self, projects_root: Path) -> None:
         self._projects_root = projects_root
+
+    def create(self, workspace: WorkspaceState) -> None:
+        """Create a workspace atomically; never replace an existing episode."""
+
+        db_path = self._db_path(workspace.episode_id)
+        try:
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(db_path, timeout=10.0) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._create_schema(connection)
+                existing = connection.execute(
+                    "SELECT episode_id FROM project WHERE singleton = 1"
+                ).fetchone()
+                if existing is not None:
+                    raise WorkspaceAlreadyExistsError(workspace.episode_id)
+                connection.execute(
+                    """
+                    INSERT INTO project (
+                        singleton, schema_version, episode_id, project_name,
+                        source_package_path, created_at, imported_at,
+                        model, resolution, aspect_ratio
+                    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        workspace.schema_version,
+                        workspace.episode_id,
+                        workspace.project_name,
+                        workspace.source_package_path,
+                        workspace.created_at.isoformat(),
+                        workspace.imported_at.isoformat(),
+                        workspace.model,
+                        workspace.resolution,
+                        workspace.aspect_ratio,
+                    ),
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO scenes (
+                        scene_order, scene_id, image_file, image_exists,
+                        motion_prompt, target_duration_s,
+                        recommended_flow_duration_s, selected_flow_duration_s,
+                        readiness, trim_target_s, model, resolution, aspect_ratio
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            index,
+                            scene.scene_id,
+                            scene.image_file,
+                            int(scene.image_exists),
+                            scene.motion_prompt,
+                            scene.target_duration_s,
+                            scene.recommended_flow_duration_s,
+                            scene.selected_flow_duration_s,
+                            scene.readiness.value,
+                            scene.trim_target_s,
+                            scene.model,
+                            scene.resolution,
+                            scene.aspect_ratio,
+                        )
+                        for index, scene in enumerate(workspace.scenes)
+                    ],
+                )
+                connection.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"Could not create workspace: {exc}") from exc
+
+    def update(self, workspace: WorkspaceState) -> None:
+        """Update an existing workspace without creating a missing project."""
+
+        if self.load(workspace.episode_id) is None:
+            raise StorageError(f"Workspace not found for update: {workspace.episode_id}")
+        self.save(workspace)
 
     def save(self, workspace: WorkspaceState) -> None:
         db_path = self._db_path(workspace.episode_id)
