@@ -131,11 +131,51 @@ Evidence:
 - Ambiguous outcome → ATTENTION_REQUIRED.
 - No result download in this slice.
 
-### I12-03 — Live Result Detection & Download Adapter
-- Status: PLANNED after I12-02B2-LIVE.
+### I12-03A — Safe Generated-Media Download Foundation
+- Status: PASS / PRE-LIVE FOUNDATION COMPLETE.
+- Main implementation: `d71ddc73de8444a0811d8bfdd3066e72e704565f`.
+- Provider-neutral Download contract is separate from Generate.
+- Download requires confirmed `GENERATED` state + stable `remote_result_id`.
+- Canonical project output uses `.part` then atomic publish.
+- Existing files are never overwritten silently.
+- AUTH_REQUIRED / CANCELLED / AMBIGUOUS / SAFE_FAILURE are typed; no silent retry.
+- Synthetic regression proves success, idempotence, collision protection, and failure persistence.
+- Live Flow result discovery/download selectors remain intentionally unimplemented until authorized live UI is inspected.
 
-### I12-04 — Gemini AI Agent / Key Integration
-- Status: PLANNED after I12-03.
+### I12-03-LIVE — Live Result Detection & Download Driver
+- Status: BLOCKED behind I12-02B2-LIVE.
+- Start only after one-Scene live Generate is accepted and a stable remote result identity is proven.
+- Reuse I12-03A service/provider contracts; do not redesign Download lifecycle.
+- No guessed selectors and no silent retry.
+
+### I12-04A — Secure Gemini Key Integration
+- Status: PASS / PRE-LIVE FOUNDATION COMPLETE.
+- Main implementation: `997b93384188648a848560b249cd35e410c07bf2`.
+- Up to 100 user-owned keys may be imported; duplicates are fingerprinted/skipped.
+- Raw keys are stored in OS keyring, never project SQLite/export/UI.
+- SQLite stores only masked/fingerprinted metadata and explicit active selection.
+- Health check uses the official Gemini models endpoint with `x-goog-api-key`.
+- Key selection is manual; health/rate-limit events never rotate keys automatically.
+- Real-key health validation is user-owned input and can be tested locally from the final build.
+
+### I12-04B — Read-Only Gemini AI Agent
+- Status: PASS.
+- Main implementation: `8246d194a56cfdbf3c2818a570dc637a37633891`.
+- Agent reads bounded project/Scene context and returns text guidance only.
+- Default model: `gemini-3.8-flash`.
+- No tools/function calling; no Generate/Download/login/retry/key-switch action can be executed by the Agent.
+- API key is sent only via `x-goog-api-key`; it is not embedded in URL/prompt/body.
+- Rate-limit failure performs exactly one request and never auto-switches key/model.
+- Qt Agent call runs off the UI thread; heartbeat regression PASS.
+- Official main CI `37664172842`: 128 tests PASS, mypy 80 source files, architecture PASS, frozen UI 30/30 PASS, Chromium/portable smoke PASS.
+- Latest Windows artifact: `11502048305`, 435713508 bytes, SHA-256 `631ab49ed5f7a3f7c99f9df496fd8109625efa25288bf5e7bc66c2865c6c69ed`.
+
+### STEP 12 current product gate
+- PRE-LIVE READY.
+- All safe/offline foundations that do not require the product owner's real Google/Flow session are complete.
+- Required manual gate before live mutation: I12-01 real-account login + READY-after-restart validation.
+- After that: I12-02B2-LIVE one Scene only → I12-03-LIVE result detection/download.
+
 
 ## STEP 12 safety boundary
 - No CAPTCHA/MFA bypass.

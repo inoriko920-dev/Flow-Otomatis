@@ -518,3 +518,42 @@ No password, MFA code, cookie, token, or browser-data should be shared.
 
 A05 does not authorize live Generate. I12-02B2-LIVE remains BLOCKED until the real-account restart validation passes and the product owner explicitly continues.
 
+## STEP 12 PRE-LIVE READY — 8 October 2026
+Current production-code baseline:
+- main implementation SHA: `8246d194a56cfdbf3c2818a570dc637a37633891`;
+- official main CI: `37664172842` — SUCCESS;
+- quality `112939012288`: Ruff PASS, mypy 80 source files PASS, architecture PASS, pytest 128 passed;
+- frozen UI `112939602875`: 30/30 PASS, similarity 0.6344–0.9643;
+- UI artifact `11502067509`, SHA-256 `bc8f4f5689a7fd366e40a26581619a7d05cc73e3a46e9169af9255b4a5ae8536`;
+- Windows `112940003453`: Playwright Chromium smoke PASS, portable build PASS, portable smoke PASS;
+- Windows artifact `11502048305`, 435713508 bytes, SHA-256 `631ab49ed5f7a3f7c99f9df496fd8109625efa25288bf5e7bc66c2865c6c69ed`.
+
+Pre-live product foundations now completed:
+- I12-01 automated session lifecycle + normal installed-Chrome manual-auth architecture: PASS, real-account validation still pending;
+- I12-02A submit/ambiguity contract: PASS;
+- I12-02B1 read-only Flow preflight: PASS;
+- I12-02B2-PRECHECK: PASS;
+- I12-02B2-GATE: PASS;
+- I12-03A safe generated-media Download foundation: PASS;
+- I12-04A secure Gemini Keys/keyring/health foundation: PASS;
+- I12-04B read-only Gemini AI Agent: PASS.
+
+### Why work stops at this boundary
+The remaining Flow work cannot be implemented honestly from CI or guessed HTML:
+1. real Google login must be completed manually in installed normal Chrome;
+2. the same profile must report READY;
+3. the application must be fully restarted;
+4. the same profile must report `Validasi restart: Lulus`;
+5. only then may the current authorized Flow UI be inspected to lock real selectors;
+6. I12-02B2-LIVE is exactly one mutating Scene submit, no silent retry;
+7. after a stable result identity is observed, I12-03-LIVE implements result detection/download using the already-tested I12-03A contracts.
+
+No CAPTCHA/MFA bypass, password/cookie/token export, automatic account/key rotation, guessed selector, or ambiguous-submit retry is allowed.
+
+### Gemini status
+Gemini does not depend on the Google Flow login gate:
+- keys can be imported locally in Gemini Keys;
+- raw keys stay in the OS credential store;
+- Cek Health must pass before the active key is used;
+- AI Agent is read-only and cannot perform material application actions.
+
