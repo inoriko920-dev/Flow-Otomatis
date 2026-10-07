@@ -91,9 +91,7 @@ class LocalResultsService:
     ) -> DownloadRecord:
         """Record a real/local file outcome after Generate has completed."""
 
-        jobs = {
-            job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)
-        }
+        jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
         job = jobs.get(scene_id)
         if job is None or job.state is not GenerationJobState.GENERATED:
             raise InternalInvariantError(
