@@ -1,21 +1,45 @@
-"""Foundation application entry point.
-
-STEP 08 initializes the chosen Qt runtime and portable paths but deliberately
-does not implement product screens. Frozen UI implementation starts later.
-"""
+"""Application entry point for Flow-Otomatis."""
 
 from __future__ import annotations
 
+import argparse
+import sys
+from collections.abc import Sequence
+from typing import cast
+
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from flow_otomatis.infrastructure.filesystem import PathService
+from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
+from flow_otomatis.presentation.main_window import MainWindow
 
 
-def main() -> int:
-    """Initialize the foundation runtime and exit successfully."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    app.setApplicationName("Flow-Otomatis")
+def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
+    """Create the production shell after resolving portable paths."""
+
     PathService.discover()
-    return 0
+    return MainWindow(fixture_code=fixture_code)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the desktop application."""
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--fixture", default=DEFAULT_FIXTURE_CODE)
+    parser.add_argument("--smoke-exit-ms", type=int)
+    args, _unknown = parser.parse_known_args(list(argv) if argv is not None else sys.argv[1:])
+
+    app = cast(QApplication | None, QApplication.instance())
+    if app is None:
+        app = QApplication([sys.argv[0]])
+    app.setApplicationName("Flow-Otomatis")
+    app.setOrganizationName("Flow-Otomatis")
+
+    window = build_main_window(args.fixture)
+    window.show()
+
+    if args.smoke_exit_ms is not None:
+        QTimer.singleShot(max(args.smoke_exit_ms, 0), app.quit)
+
+    return app.exec()
