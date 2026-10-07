@@ -1,7 +1,10 @@
 """Browser Worker boundary. Playwright runtime and authorized sessions live here."""
 
-from flow_otomatis.workers.browser.browser_context_pool import (
-    PlaywrightPersistentContextPool,
+from flow_otomatis.workers.browser.system_chrome_cdp import (
+    SystemChromeCdpPool,
+    build_system_chrome_command,
+    find_google_chrome_executable,
+    read_devtools_active_port,
 )
 from flow_otomatis.workers.browser.google_flow_generation import (
     GoogleFlowGenerationDriver,
@@ -23,6 +26,7 @@ from flow_otomatis.workers.browser.google_session_worker import (
     GoogleSessionBrowserDriver,
     GoogleSessionWorker,
     PlaywrightGoogleSessionDriver,
+    SystemChromeGoogleSessionDriver,
 )
 
 __all__ = [
@@ -36,8 +40,12 @@ __all__ = [
     "GoogleSessionBrowserDriver",
     "PreparedGoogleFlowRequest",
     "PlaywrightGoogleFlowPreflightDriver",
-    "PlaywrightPersistentContextPool",
+    "SystemChromeCdpPool",
     "GoogleSessionWorker",
     "PlaywrightGoogleSessionDriver",
+    "SystemChromeGoogleSessionDriver",
+    "build_system_chrome_command",
+    "find_google_chrome_executable",
+    "read_devtools_active_port",
     "prepare_google_flow_request",
 ]

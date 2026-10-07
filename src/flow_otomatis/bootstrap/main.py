@@ -29,7 +29,11 @@ from flow_otomatis.infrastructure.persistence import (
 )
 from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
 from flow_otomatis.presentation.main_window import MainWindow
-from flow_otomatis.workers.browser import GoogleSessionWorker
+from flow_otomatis.workers.browser import (
+    GoogleSessionWorker,
+    SystemChromeCdpPool,
+    SystemChromeGoogleSessionDriver,
+)
 
 
 def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
@@ -49,8 +53,12 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         download_repository,
         ResultManifestWriter(paths.projects_root),
     )
+    chrome_pool = SystemChromeCdpPool()
     google_session_service = GoogleSessionService(
-        GoogleSessionWorker(paths.session_root, paths.browser_runtime_root)
+        GoogleSessionWorker(
+            paths.session_root,
+            driver=SystemChromeGoogleSessionDriver(context_pool=chrome_pool),
+        )
     )
     return MainWindow(
         fixture_code=fixture_code,

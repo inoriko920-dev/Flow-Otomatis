@@ -22,9 +22,7 @@ from flow_otomatis.application.ports.google_flow_preflight import (
     GoogleFlowPreflightPort,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
-from flow_otomatis.workers.browser.browser_context_pool import (
-    PlaywrightPersistentContextPool,
-)
+from flow_otomatis.workers.browser.system_chrome_cdp import SystemChromeCdpPool
 
 _PROFILE_ID = re.compile(r"^profile-[0-9a-f]{12}$")
 _GOOGLE_FLOW_URL = "https://labs.google/fx/tools/flow"
@@ -52,7 +50,7 @@ class GoogleFlowPreflightDriver(Protocol):
 class PlaywrightGoogleFlowPreflightDriver:
     """Read-only Playwright preflight using a shared persistent context pool."""
 
-    def __init__(self, context_pool: PlaywrightPersistentContextPool) -> None:
+    def __init__(self, context_pool: SystemChromeCdpPool) -> None:
         self._context_pool = context_pool
 
     def check(
@@ -116,14 +114,15 @@ class GoogleFlowPreflightWorker(GoogleFlowPreflightPort):
     def __init__(
         self,
         session_root: Path,
-        browser_runtime_root: Path,
+        browser_runtime_root: Path | None = None,
         *,
-        context_pool: PlaywrightPersistentContextPool | None = None,
+        context_pool: SystemChromeCdpPool | None = None,
         driver: GoogleFlowPreflightDriver | None = None,
         timeout_ms: int = 20_000,
     ) -> None:
         self._root = session_root / "google"
-        pool = context_pool or PlaywrightPersistentContextPool(browser_runtime_root)
+        del browser_runtime_root
+        pool = context_pool or SystemChromeCdpPool()
         self._driver = driver or PlaywrightGoogleFlowPreflightDriver(pool)
         self._timeout_ms = timeout_ms
 

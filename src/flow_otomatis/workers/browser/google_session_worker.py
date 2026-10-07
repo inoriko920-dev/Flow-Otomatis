@@ -27,9 +27,7 @@ from flow_otomatis.application.ports.google_session import (
     GoogleSessionState,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
-from flow_otomatis.workers.browser.browser_context_pool import (
-    PlaywrightPersistentContextPool,
-)
+from flow_otomatis.workers.browser.system_chrome_cdp import SystemChromeCdpPool
 
 _PROFILE_ID = re.compile(r"^profile-[0-9a-f]{12}$")
 _METADATA_NAME = "profile.json"
@@ -74,16 +72,15 @@ class GoogleSessionBrowserDriver(Protocol):
         """Close all owned browser resources."""
 
 
-class PlaywrightGoogleSessionDriver:
-    """Real Playwright implementation; no generation mutation is performed here."""
+class SystemChromeGoogleSessionDriver:
+    """Real-Chrome manual login followed by Playwright CDP session checks."""
 
     def __init__(
         self,
-        browser_runtime_root: Path,
         *,
-        context_pool: PlaywrightPersistentContextPool | None = None,
+        context_pool: SystemChromeCdpPool | None = None,
     ) -> None:
-        self._context_pool = context_pool or PlaywrightPersistentContextPool(browser_runtime_root)
+        self._context_pool = context_pool or SystemChromeCdpPool()
 
     def open_login(
         self,
@@ -92,23 +89,11 @@ class PlaywrightGoogleSessionDriver:
         *,
         timeout_ms: int,
     ) -> BrowserSessionProbe:
-        page = self._context_pool.page(profile_id, user_data_dir)
-        try:
-            page.goto(_GOOGLE_LOGIN_URL, wait_until="domcontentloaded", timeout=timeout_ms)
-            page.bring_to_front()
-        except PlaywrightTimeoutError:
-            return BrowserSessionProbe(
-                GoogleSessionState.UNKNOWN,
-                "Halaman login resmi belum selesai dimuat sebelum timeout.",
-            )
-        except PlaywrightError:
-            return BrowserSessionProbe(
-                GoogleSessionState.ERROR,
-                "Browser tidak dapat membuka halaman login resmi.",
-            )
+        del timeout_ms
+        self._context_pool.open_manual_page(profile_id, user_data_dir, _GOOGLE_LOGIN_URL)
         return BrowserSessionProbe(
             GoogleSessionState.NEEDS_LOGIN,
-            "Selesaikan login, MFA, atau CAPTCHA secara manual pada halaman resmi Google.",
+            "Google Chrome asli dibuka. Selesaikan login, MFA, atau CAPTCHA secara manual di sana.",
         )
 
     def check(
@@ -162,14 +147,15 @@ class GoogleSessionWorker(GoogleSessionPort):
     def __init__(
         self,
         session_root: Path,
-        browser_runtime_root: Path,
+        browser_runtime_root: Path | None = None,
         *,
         driver: GoogleSessionBrowserDriver | None = None,
         timeout_ms: int = 20_000,
         instance_id: str | None = None,
     ) -> None:
         self._root = session_root / "google"
-        self._driver = driver or PlaywrightGoogleSessionDriver(browser_runtime_root)
+        del browser_runtime_root
+        self._driver = driver or SystemChromeGoogleSessionDriver()
         self._timeout_ms = timeout_ms
         self._instance_id = instance_id or uuid4().hex
 
@@ -379,3 +365,6 @@ class GoogleSessionWorker(GoogleSessionPort):
             encoding="utf-8",
         )
         temp_path.replace(metadata_path)
+
+# Backward-compatible import name for older handoff/tests.
+PlaywrightGoogleSessionDriver = SystemChromeGoogleSessionDriver
