@@ -46,11 +46,15 @@ def prepare_google_flow_request(request: GenerationRequest) -> PreparedGoogleFlo
     if not scene_id:
         raise GenerationRequestValidationError("scene_id wajib tersedia sebelum submit Flow.")
     if not image_file:
-        raise GenerationRequestValidationError("File gambar Scene wajib tersedia sebelum submit Flow.")
+        raise GenerationRequestValidationError(
+            "File gambar Scene wajib tersedia sebelum submit Flow."
+        )
     if not motion_prompt:
         raise GenerationRequestValidationError("Motion prompt wajib tersedia sebelum submit Flow.")
     if request.target_duration_s <= 0:
-        raise GenerationRequestValidationError("Target durasi Scene harus lebih besar dari 0 detik.")
+        raise GenerationRequestValidationError(
+            "Target durasi Scene harus lebih besar dari 0 detik."
+        )
     if request.flow_duration_s not in _ALLOWED_FLOW_DURATIONS:
         raise GenerationRequestValidationError("Durasi Flow hanya boleh 4, 6, 8, atau 10 detik.")
     if request.target_duration_s > request.flow_duration_s:
