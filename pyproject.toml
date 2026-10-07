@@ -1,6 +1,6 @@
 [project]
 name = "flow-otomatis"
-version = "0.0.0"
+version = "0.1.0"
 description = "Windows desktop foundation for deterministic Google Flow scene orchestration."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
