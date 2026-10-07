@@ -123,7 +123,7 @@ def _registry_chrome_candidates() -> tuple[Path, ...]:
     for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
         try:
             with winreg.OpenKey(hive, key_path) as key:
-                value, _kind = winreg.QueryValueEx(key, None)
+                value, _kind = winreg.QueryValueEx(key, "")
         except OSError:
             continue
         if value:
