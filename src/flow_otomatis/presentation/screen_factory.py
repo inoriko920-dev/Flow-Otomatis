@@ -101,7 +101,8 @@ def _project_screen(fixture: UiFixture) -> QWidget:
         empty_layout.addWidget(QLabel("Belum ada project."))
         empty_layout.addWidget(
             muted_label(
-                "Impor paket episode, buat project baru, atau buka project yang sudah ada untuk memulai."
+                "Impor paket episode, buat project baru, atau buka project "
+                "yang sudah ada untuk memulai."
             )
         )
         layout.addWidget(empty, 1)
@@ -246,7 +247,8 @@ def _workspace_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "Sesi profil perlu login ulang",
-                "Batch dijeda dengan aman. Selesaikan login secara manual lalu pilih Cek Ulang Sesi.",
+                "Batch dijeda dengan aman. Selesaikan login secara manual "
+                "lalu pilih Cek Ulang Sesi.",
                 "warning",
             )
         )
@@ -262,7 +264,8 @@ def _workspace_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "Paket biography tersinkron",
-                "60 scene • approved image auto-mapped • Target dari SRT • Omni Flash 1.1 • 720p • 16:9",
+                "60 scene • approved image auto-mapped • Target dari SRT • "
+                "Omni Flash 1.1 • 720p • 16:9",
                 "success",
             )
         )
@@ -354,7 +357,8 @@ def _results_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "Handoff siap",
-                "60/60 video generated • 60/60 video downloaded • FLOW_OTOMATIS_RESULT.json diperbarui.",
+                "60/60 video generated • 60/60 video downloaded • "
+                "FLOW_OTOMATIS_RESULT.json diperbarui.",
                 "success",
             )
         )
@@ -413,7 +417,10 @@ def _login_screen(fixture: UiFixture) -> QWidget:
     detail = (
         "Akun Produksi 03 sekarang siap digunakan."
         if fixture.code == "UI-IMG-005B"
-        else "Aplikasi tidak mengisi password, MFA, atau CAPTCHA. Selesaikan sendiri pada halaman resmi."
+        else (
+            "Aplikasi tidak mengisi password, MFA, atau CAPTCHA. "
+            "Selesaikan sendiri pada halaman resmi."
+        )
     )
     layout.addWidget(info_banner(title, detail, kind))
     steps, steps_layout = card(8)
@@ -469,7 +476,8 @@ def _settings_screen(fixture: UiFixture) -> QWidget:
     production_layout.addWidget(labeled_value("Rasio Aspek", "16:9", strong=True))
     production_layout.addWidget(
         muted_label(
-            "Jika model tidak tersedia atau berubah, workflow masuk HOLD untuk review formal. Tidak ada switch diam-diam."
+            "Jika model tidak tersedia atau berubah, workflow masuk HOLD "
+            "untuk review formal. Tidak ada switch diam-diam."
         )
     )
     layout.addWidget(production)
@@ -514,7 +522,8 @@ def _diagnostics_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "AI Agent tidak melakukan retry otomatis",
-                "Agent dapat mengusulkan retry. Tindakan material selalu ditinjau dan disetujui pengguna.",
+                "Agent dapat mengusulkan retry. Tindakan material selalu "
+                "ditinjau dan disetujui pengguna.",
                 "info",
             )
         )
@@ -527,7 +536,8 @@ def _recovery_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "Status external belum dapat dipastikan",
-                "Job S018 mungkin sudah terkirim sebelum aplikasi berhenti. Verifikasi dulu; jangan submit ulang.",
+                "Job S018 mungkin sudah terkirim sebelum aplikasi berhenti. "
+                "Verifikasi dulu; jangan submit ulang.",
                 "warning",
             )
         )
@@ -544,7 +554,8 @@ def _recovery_screen(fixture: UiFixture) -> QWidget:
         layout.addWidget(
             info_banner(
                 "Snapshot recovery tersedia",
-                "Project EP001 dapat dikembalikan ke state lokal terakhir tanpa membuat generation baru.",
+                "Project EP001 dapat dikembalikan ke state lokal terakhir "
+                "tanpa membuat generation baru.",
                 "warning",
             )
         )
@@ -722,7 +733,8 @@ def _scene_panel(fixture: UiFixture) -> QWidget:
     layout.addWidget(labeled_value("Rasio", "16:9"))
     prompt = QPlainTextEdit()
     prompt.setPlainText(
-        "Camera pushes slowly toward the subject with subtle parallax and stable character continuity."
+        "Camera pushes slowly toward the subject with subtle parallax "
+        "and stable character continuity."
     )
     prompt.setMinimumHeight(95)
     layout.addWidget(prompt)
