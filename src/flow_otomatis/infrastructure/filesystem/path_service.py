@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +28,7 @@ class PathService:
         executable: Path | None = None,
         environ: Mapping[str, str] | None = None,
         home: Path | None = None,
-    ) -> "PathService":
+    ) -> PathService:
         """Resolve roots without depending on the current working directory."""
         env = environ if environ is not None else os.environ
         exe = executable if executable is not None else Path(sys.executable)
