@@ -369,3 +369,43 @@ I12-02B2-LIVE remains BLOCKED by the existing real-account restart validation ga
 ### Audit next exact action
 After the product owner says `lanjutkan`, execute only A02 for F04: isolate corrupt project data at the canonical SQLite read boundary, keep healthy projects usable, surface corruption safely in Project Hub, never mutate the corrupt source while reading, and stop before A03.
 
+## STEP 12 audit remediation track — A02
+- A02 status: PASS.
+- Finding closed: F04.
+- Implementation merge SHA: `9525a9d8ed370ab8b3f3ed916735e03ef04ecfce`.
+- PR: #2 — `A02: isolate corrupt workspace data`.
+- Final PR head: `989a57dc026f9544334803711c99544caad1044e`.
+- Official main CI run: `37647427626` — SUCCESS.
+- Quality job: `112881739521` — SUCCESS.
+- UI visual job: `112882633481` — SUCCESS.
+- Windows package job: `112883036794` — SUCCESS.
+- Ruff format: PASS — 127 files already formatted.
+- Ruff lint: PASS.
+- mypy: PASS — 63 source files.
+- architecture guard: PASS.
+- pytest: PASS — 99 passed, 1904 warnings.
+- frozen UI regression: PASS — 30/30 fixtures, similarity 0.6344–0.9643.
+- UI evidence artifact: `11494409352`, 3316911 bytes, SHA-256 `3a213c84085d22340b5bdc7f0bd8882ffeeff6becf5c8416ecef0c06fb01c20f`.
+- Playwright Chromium smoke: PASS.
+- portable application smoke: PASS.
+- Windows artifact: `11495321054`, 435481873 bytes, SHA-256 `fa9bd2be4725cc1af42d84b09755d2ca5f3f1862125c7cef98ab847d2684181e`.
+
+### A02 delivered
+- canonical workspace reads now use SQLite read-only mode and never create/repair schema while inspecting an existing project;
+- invalid readiness enum, numeric conversion, timestamp conversion, and corrupt SQLite data are normalized to typed storage/corruption errors rather than leaking raw decode exceptions;
+- `scan_recent` returns healthy workspaces plus isolated `CORRUPT` / `UNAVAILABLE` entries;
+- one corrupt project no longer prevents healthy projects from appearing or opening;
+- Project Hub reuses the frozen five-column layout and marks damaged entries honestly as `Data Rusak` / `Tidak Tersedia`;
+- opening a corrupt/unavailable entry from Qt is translated into a safe Indonesian warning;
+- regression tests hash the corrupt SQLite file before/after listing/open attempts and prove read/recovery discovery does not modify the source database.
+
+### Findings still open after A02
+- F03 — queued request revision/readiness consistency.
+- F05 — Google session probing can block the Qt UI thread.
+- F06 — orphan RUNNING job recovery is incomplete.
+
+I12-02B2-LIVE remains BLOCKED by the existing real-account restart validation gate. A02 does not authorize live Generate.
+
+### Audit next exact action
+After the product owner says `lanjutkan`, execute only A03 for F03 and F06 under ADR-016: request revision/fingerprint consistency plus owner/lease recovery, transactional migration, zero blind resubmit, full local queue/results regressions, then stop before A04.
+

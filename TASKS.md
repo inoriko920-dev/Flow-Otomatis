@@ -155,8 +155,13 @@ Evidence:
   - missing prompt TXT now fails with typed `PROMPT_FILE_MISSING` before persistence;
   - duplicate create is rejected atomically and preserves prior jobs/downloads;
   - official main CI `37644208386`: 95 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
-- A02 — F04 corrupt-data isolation: READY, not started.
-- A03 — F03 + F06 request revision/lease/recovery: PENDING after A02.
+- A02 — F04 corrupt-data isolation: PASS.
+  - merge SHA: `9525a9d8ed370ab8b3f3ed916735e03ef04ecfce`;
+  - canonical SQLite reads are read-only and typed corrupt-data errors isolate bad projects;
+  - healthy projects remain listable/openable while corrupt entries are surfaced safely;
+  - source DB non-mutation is regression-tested by SHA-256;
+  - official main CI `37647427626`: 99 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
+- A03 — F03 + F06 request revision/lease/recovery: READY, not started.
 - A04 — F05 Browser Worker/UI responsiveness: PENDING after A03.
 - A05 — combined verification/build/handoff: PENDING after A04.
 

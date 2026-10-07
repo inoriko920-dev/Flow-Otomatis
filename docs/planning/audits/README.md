@@ -89,3 +89,37 @@ Evidence file:
 
 Next package is A02 only: isolate F04 corrupt project data. F03/F05/F06 remain open. Live Generate remains BLOCKED.
 
+## Current A02 state
+A02: **PASS**.
+
+Closed:
+- F04 — a corrupt persisted Scene/project no longer breaks the whole local Project Hub.
+
+Implementation:
+- merge SHA: `9525a9d8ed370ab8b3f3ed916735e03ef04ecfce`;
+- final PR #2 head: `989a57dc026f9544334803711c99544caad1044e`;
+- typed `WorkspaceCorruptError`;
+- read-only SQLite canonical load path;
+- explicit healthy-workspace + read-issue scan result;
+- safe Project Hub corruption rows and Indonesian open-error translation;
+- no delete, auto-repair, schema repair, or source mutation during reads.
+
+Official main evidence:
+- CI run: `37647427626` — SUCCESS;
+- quality: `112881739521` — SUCCESS;
+- UI visual: `112882633481` — SUCCESS;
+- package Windows: `112883036794` — SUCCESS;
+- pytest: 99 passed;
+- mypy: 63 source files, no issues;
+- architecture guard: PASS;
+- UI: 30/30 PASS, similarity 0.6344–0.9643;
+- Playwright Chromium smoke: PASS;
+- portable smoke: PASS;
+- UI artifact: `11494409352`, SHA-256 `3a213c84085d22340b5bdc7f0bd8882ffeeff6becf5c8416ecef0c06fb01c20f`;
+- Windows artifact: `11495321054`, 435481873 bytes, SHA-256 `fa9bd2be4725cc1af42d84b09755d2ca5f3f1862125c7cef98ab847d2684181e`.
+
+Evidence file:
+- `A02_CORRUPT_DATA_ISOLATION_EVIDENCE_2026-10-07.md`
+
+Next package is A03 only: F03 + F06 queue revision/lease/recovery. F05 remains open. Live Generate remains BLOCKED.
+
