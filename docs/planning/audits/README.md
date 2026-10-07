@@ -123,3 +123,32 @@ Evidence file:
 
 Next package is A03 only: F03 + F06 queue revision/lease/recovery. F05 remains open. Live Generate remains BLOCKED.
 
+
+## Current A03 state
+A03: **PASS**.
+
+Closed:
+- F03 — queued generation requests no longer mix stale and current Scene state.
+- F06 — RUNNING work now has durable owner/lease evidence and safe orphan classification.
+
+Implementation:
+- merge SHA: `3ee8d8118c1a137ac5c24d6ed7896b15bb3ccafb`;
+- final PR #3 head: `4733d55ad6c36fe5611f36278e1e60f1898fa8da`;
+- full prepared request snapshot + SHA-256 fingerprint;
+- dispatch-time revision/readiness validation;
+- owner/lease/submit-boundary persistence;
+- conservative orphan and ambiguous-submit handling;
+- versioned transactional migration preserving confirmed results.
+
+Official main evidence:
+- CI `37651619177` — SUCCESS;
+- quality `112896105913`: 106 tests PASS;
+- UI `112896465371`: 30/30 PASS;
+- Windows `112896815896`: Chromium and portable smoke PASS;
+- UI artifact `11496781147`;
+- Windows artifact `11497130854`.
+
+Evidence:
+- `A03_REQUEST_REVISION_LEASE_RECOVERY_EVIDENCE_2026-10-07.md`
+
+Next package is A04 only for F05 under ADR-017. Live Generate remains blocked by its independent validation gate.

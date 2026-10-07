@@ -409,3 +409,30 @@ I12-02B2-LIVE remains BLOCKED by the existing real-account restart validation ga
 ### Audit next exact action
 After the product owner says `lanjutkan`, execute only A03 for F03 and F06 under ADR-016: request revision/fingerprint consistency plus owner/lease recovery, transactional migration, zero blind resubmit, full local queue/results regressions, then stop before A04.
 
+
+## STEP 12 audit remediation track — A03
+- A03 status: PASS.
+- Findings closed: F03 and F06.
+- Implementation merge SHA: `3ee8d8118c1a137ac5c24d6ed7896b15bb3ccafb`.
+- PR #3 final head: `4733d55ad6c36fe5611f36278e1e60f1898fa8da`.
+- Official main CI: `37651619177` — SUCCESS.
+- Quality: `112896105913` — SUCCESS; 106 tests passed; mypy 63 source files; architecture PASS.
+- UI visual: `112896465371` — SUCCESS; 30/30 fixtures; similarity 0.6344–0.9643.
+- UI artifact: `11496781147`; SHA-256 `6e4ea19f855ebd96338421793f5ab90c9f3ba3219f09a7f272a78444984d467c`.
+- Windows package: `112896815896` — SUCCESS; Chromium smoke PASS; portable smoke PASS.
+- Windows artifact: `11497130854`; 435495092 bytes; SHA-256 `5de387b7279a369ee4d4e51f041ad396be1bf77357f58696c1796675cdb58d5f`.
+
+### A03 delivered
+- generation jobs persist a coherent request snapshot plus deterministic SHA-256 fingerprint;
+- dispatch checks current Scene state against the prepared revision before any provider call;
+- stale/unverifiable jobs move to ATTENTION_REQUIRED until explicitly prepared again;
+- RUNNING jobs persist worker owner, lease expiry, and submit-boundary evidence;
+- active leases cannot be stolen by a second instance;
+- expired pre-submit and possible-submit work are classified separately and never auto-resubmitted;
+- migration is versioned/transactional and preserves confirmed result/download history.
+
+### Findings still open after A03
+- F05 — browser/session probing can block the Qt UI event path.
+
+### Audit next exact action
+After the product owner says `lanjutkan`, execute only A04 under ADR-017: dedicated Browser Worker ownership and non-blocking Qt command boundary, then stop before A05.

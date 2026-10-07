@@ -161,8 +161,13 @@ Evidence:
   - healthy projects remain listable/openable while corrupt entries are surfaced safely;
   - source DB non-mutation is regression-tested by SHA-256;
   - official main CI `37647427626`: 99 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
-- A03 — F03 + F06 request revision/lease/recovery: READY, not started.
-- A04 — F05 Browser Worker/UI responsiveness: PENDING after A03.
+- A03 — F03 + F06 request revision/lease/recovery: PASS.
+  - merge SHA: `3ee8d8118c1a137ac5c24d6ed7896b15bb3ccafb`;
+  - coherent request snapshot/fingerprint is verified before dispatch;
+  - durable owner/lease recovery blocks blind resubmit;
+  - versioned migration preserves confirmed results/download linkage;
+  - main CI `37651619177`: 106 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
+- A04 — F05 Browser Worker/UI responsiveness: READY, not started.
 - A05 — combined verification/build/handoff: PENDING after A04.
 
 Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by the existing real-account restart validation.
