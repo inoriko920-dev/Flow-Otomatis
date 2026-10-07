@@ -1,22 +1,34 @@
 # Flow-Otomatis
 
-Flow-Otomatis is a Windows 11 desktop application project for deterministic scene-based Google Flow production orchestration.
+Flow-Otomatis is a Windows 11 desktop application for deterministic scene-based Google Flow production orchestration.
 
 ## Software Factory status
-- STEP 00–08: completed through Repository Foundation.
-- STEP 08: **PASS**.
-- Next: **STEP 09 — App Shell/UI Implementation + screenshot actual vs frozen reference**.
-- Live Google Flow has **NOT** been tested yet; that belongs to later integration work.
+- STEP 00–10: completed through the Minimum End-to-End Vertical Slice.
+- STEP 10: **PASS**.
+- Next: **STEP 11 — Feature Implementation Waves**.
+- Real Google login, live Google Flow generation, live video download, and Gemini external integration are **NOT TESTED**; external services belong to STEP 12.
 
-## Foundation verified on Windows
-- CPython 3.14.7.
-- PySide6 6.11.2.
-- Playwright 1.63.0 with staged Chromium smoke.
-- Pydantic 2.13.5.
-- keyring 25.7.0.
-- PyInstaller 6.22.3 onedir portable build.
-- Ruff / mypy / pytest / architecture guards.
-- GitHub Actions windows-2025.
+## What is real now
+- Production PySide6 App Shell based on the frozen 30-state UI reference.
+- Episode Package picker and FLOW_OTOMATIS_IMPORT.json validation.
+- Safe ZIP/package parsing with traversal protection.
+- Real scene timing/readiness derivation.
+- Approved-image existence validation.
+- Recomputed 4/6/8/10 Flow-duration recommendation from Target.
+- Per-project SQLite workspace persistence.
+- Frozen Validation/Workspace UI bound to real imported package state.
+- Windows portable onedir build and smoke test.
+
+## STEP 10 verification
+- Tested implementation SHA: 64903913e83cbb9d86909b0c1c255585b2295351.
+- CI run: 37590300417 — SUCCESS.
+- Ruff + mypy + architecture guard: PASS.
+- pytest: 32 passed.
+- Frozen UI regression: 30/30 PASS.
+- Visual similarity: 0.6344–0.9643, threshold 0.55.
+- Windows artifact ID: 11468466375.
+- Windows artifact SHA-256: 5372cc919f7194085705e920eddcacff2d6654eef5e5ff9a2cae9268ede1e83d.
+- Portable EXE smoke: PASS.
 
 ## Frozen product rules
 - Windows 11 x64, portable multi-file ZIP.
@@ -24,7 +36,7 @@ Flow-Otomatis is a Windows 11 desktop application project for deterministic scen
 - Biography production lock: Omni Flash 1.1 • 720p • 16:9.
 - Audio/SRT Target Duration remains authoritative.
 - Flow generation duration is 4/6/8/10; app recommends, user confirms valid choice.
-- Approved reference image auto-mapped by canonical SCENE_###.
+- Approved reference image maps by canonical SCENE_###.
 - Generate and Download are separate.
 - No CAPTCHA/MFA bypass, credential export, hidden account rotation, or quota/rate-limit evasion.
 
@@ -40,4 +52,4 @@ Before modifying implementation, read:
 8. docs/adr/
 9. docs/handoff/current/
 
-STEP 09 must implement against the frozen UI reference; silent redesign is forbidden.
+STEP 11 must preserve the frozen UI and build local features in small evidence-backed waves. External-service integration belongs to STEP 12.

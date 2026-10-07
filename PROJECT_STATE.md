@@ -3,18 +3,19 @@
 ## Current verified baseline
 - Repository: inoriko920-dev/Flow-Otomatis
 - Branch: main
-- Factory STEP completed: STEP 09 — App Shell/UI Implementation
-- STEP 09 status: PASS
-- Last tested implementation SHA: ee90740ba6e620af1107d73b19b6753395aa26bd
-- Final STEP 09 CI run: 37587748975 — SUCCESS
-- UI visual evidence artifact ID: 11467640780
-- Windows portable artifact ID: 11467562919
-- Windows artifact outer ZIP size: 387245835 bytes
-- Windows artifact outer ZIP SHA-256: 4ec31ef23ddeda873177f6f359704543624c19005b83e45fd6834eb398653f90
-- Inner portable ZIP size: 387667735 bytes
-- Inner portable ZIP SHA-256: 14006921da4d119c0de2d713e32ab8a2a58d0e534ccdb3f5f025914253e166d6
-- Downloaded artifact checksum verification: PASS
-- Live Google Flow: NOT TESTED
+- Factory STEP completed: STEP 10 — Minimum End-to-End Vertical Slice
+- STEP 10 status: PASS
+- Last tested implementation SHA: 64903913e83cbb9d86909b0c1c255585b2295351
+- Final STEP 10 CI run: 37590300417 — SUCCESS
+- Quality job: 112689913103 — SUCCESS
+- UI regression job: 112690164915 — SUCCESS
+- Windows package job: 112690654318 — SUCCESS
+- UI regression artifact ID: 11468740474
+- Windows portable artifact ID: 11468466375
+- Windows artifact uploaded size: 395615389 bytes
+- Windows artifact SHA-256: 5372cc919f7194085705e920eddcacff2d6654eef5e5ff9a2cae9268ede1e83d
+- UI evidence artifact SHA-256: 5ce22d1f21d6b535bccd4ee0812d00f94f3ce5230b5b9ce8461f0ac941e9768b
+- Live Google login / Flow generation / Flow download: NOT TESTED
 
 ## STEP status
 - STEP 00: PASS
@@ -27,88 +28,102 @@
 - STEP 07: PASS_WITH_PROVISIONAL
 - STEP 08: PASS
 - STEP 09: PASS
-- NEXT: STEP 10 — SLC-001 Import / Validate Episode Package → Create Real Workspace State
+- STEP 10: PASS
+- NEXT: STEP 11 — Feature Implementation Waves
 
-## STEP 09 evidence
+## STEP 10 scope delivered
+SLC-001 — Import / Validate Episode Package → Create Real Workspace State.
 
-### S09-T01 — Production App Shell + Frozen UI States
+### S10-T01 — Versioned import contract + domain readiness
 PASS.
-- Production PySide6 App Shell implemented.
-- Canonical 7-item navigation implemented.
-- Top project/status bar, main content host, optional Scene/AI Agent right dock, and bottom status bar implemented.
-- Frozen UI fixture registry contains 30/30 STEP 04 states.
-- UI production settings preserve Omni Flash 1.1 • 720p • 16:9.
-- Scene Target timing remains authoritative.
-- Flow duration remains restricted to 4/6/8/10.
-- Dialog overlays render over their real background screens.
-- No presentation-layer direct ownership of SQLite, filesystem, Playwright, keyring, or provider SDK.
+- FLOW_OTOMATIS_IMPORT.json schema version 1.0 represented with typed Pydantic boundary models.
+- Production profile remains locked to Omni Flash 1.1 • 720p • 16:9.
+- Canonical scene IDs SCENE_### are validated and unique.
+- Target duration is >0 and <=10 seconds.
+- Recommendation is recomputed from authoritative Target using 4/6/8/10 rules.
+- selected_flow_duration_s may be null at import but, when present, cannot be shorter than Target.
+- trim_target_s must equal Target in this workflow.
+- Scene readiness is derived locally; imported status text is not trusted as business truth.
 
-### S09-T02 — Semantic / Interaction UI Verification
+### S10-T02 — Safe package reader + project persistence
 PASS.
-- Ruff format PASS.
-- Ruff lint PASS.
-- mypy strict PASS.
-- architecture guard PASS.
-- unit/contract/smoke/UI semantic tests PASS.
-- Navigation mouse click PASS.
-- Keyboard navigation focus PASS.
-- Escape closes frozen modal states PASS.
-- Minimum 1366×768 resize smoke PASS.
-- Canonical screenshot viewport: 1920×1080.
+- ZIP, package directory, or FLOW_OTOMATIS_IMPORT.json can be read through EpisodePackagePort.
+- ZIP path traversal / absolute drive-like archive paths are rejected.
+- Relative approved-image references are resolved inside the package boundary.
+- Motion prompt supports inline text or referenced UTF-8 TXT.
+- Minimal project/workspace state persists to per-project SQLite:
+  <LocalAppData>/Flow-Otomatis/Projects/<episode_id>/project.sqlite3
+- Persistence remains behind WorkspaceRepositoryPort.
 
-### S09-T03 — ACTUAL vs Frozen REFERENCE
+### S10-T03 — Frozen UI wired to real state
 PASS.
-- 30/30 ACTUAL screenshots captured from production code.
-- 30/30 visual fixtures PASS.
-- Similarity threshold: 0.550.
-- Similarity range: 0.6344–0.9643.
-- Visual evidence artifact ID: 11467640780.
-- Visual artifact ZIP SHA-256: dc68142e82638c7bbe200c4efbf7009307bfcb330a55fc7e79d32be1337822c5.
-- No frozen screen remains FAIL/BLOCKED.
+- Existing "Impor Paket Episode" action opens a real package picker when the import service is configured.
+- Package validation renders the frozen validation composition using real package scene data.
+- "Buat Workspace" persists validated state then renders real Workspace rows.
+- Workspace navigation returns to the real in-session workspace.
+- Scene dock uses real first-scene Target/recommendation/prompt data.
+- No silent redesign of the STEP 09 UI.
+- Presentation does not own SQLite/filesystem/provider logic.
 
-### S09-T04 — Windows Portable UI Build
+### S10-T04 — Automated proof
 PASS.
-- Playwright Chromium staging PASS.
-- Bundled Chromium smoke PASS.
-- PyInstaller onedir build PASS.
-- Portable EXE launch/exit smoke from foreign CWD PASS.
-- Portable artifact uploaded and downloaded successfully.
-- Outer artifact ZIP integrity PASS.
-- Inner portable ZIP checksum matched SHA256SUMS exactly.
-- Windows artifact ID: 11467562919.
+- Ruff format: PASS — 73 files formatted.
+- Ruff lint: PASS.
+- mypy strict: PASS — 34 source files.
+- architecture guard: PASS.
+- pytest: 32 passed.
+- Happy-path synthetic episode ZIP validates, recomputes recommendation, persists, and reloads.
+- Failure path Target >10 seconds rejects before persistence.
+- ZIP traversal attack fixture rejects safely.
+- Real-state UI import/validation/workspace test PASS.
+- Frozen UI regression: 30/30 PASS.
+- Visual similarity range: 0.6344–0.9643 at threshold 0.55.
+- Chromium staging/smoke: PASS.
+- PyInstaller onedir build: PASS.
+- Portable EXE smoke: PASS.
 
-## Frozen architecture/product decisions
+## Architecture/product rules still frozen
 - CPython 3.14.x x64 + PySide6 Qt Widgets.
-- Playwright Chromium in dedicated Browser Worker process.
+- Playwright Chromium belongs to dedicated Browser Worker.
 - Modular monolith + ports/adapters.
-- SQLite global DB + per-project DB.
-- Windows Credential Locker/keyring for API secrets.
+- SQLite global/per-project persistence.
+- Windows Credential Locker/keyring for secrets.
 - PyInstaller onedir portable ZIP.
 - Serial R1 generation queue.
 - Omni Flash 1.1 • 720p • 16:9.
-- Audio/SRT Target remains authoritative.
-- Flow duration 4/6/8/10: app recommends, user confirms valid selection.
-- Approved image auto-mapped by SCENE_###.
-- Generate and Download are separate.
-- No CAPTCHA/MFA bypass, credential export, or quota/rate-limit evasion.
-- Frozen STEP 09 App Shell must not be silently redesigned during STEP 10.
+- Audio/SRT Target is authoritative.
+- Flow duration values: 4/6/8/10.
+- Generate and Download remain separate states.
+- No CAPTCHA/MFA bypass.
+- No credential export or quota/rate-limit evasion.
+- STEP 09 frozen UI cannot be silently redesigned.
 
-## Known limitations after STEP 09
-- Current screen data is still deterministic fixture data where real application services are not yet connected.
-- Live Google login, live Flow generation, and live Flow download are NOT TESTED.
-- Sidebar symbol glyphs remain deterministic placeholders and are not a STEP 10 redesign target.
-- Provider/persistence wiring is intentionally deferred to later vertical slices.
+## Known limitations after STEP 10
+- Only SLC-001 is real end-to-end.
+- Duration selection persistence and image-rescan/edit workflow are not yet fully interactive production features.
+- Project Hub/recovery/result workflows remain fixture-backed where not covered by SLC-001.
+- Queue/generation/download provider behavior is not live.
+- Google login, Google Flow, and Gemini provider integration are explicitly NOT TESTED and belong to STEP 12.
+- PySide6 emits an existing deprecation warning for QTableWidgetItem.setTextAlignment(int); it is non-blocking and can be cleaned during later feature/hardening work.
+
+## STEP 11 contract
+Software Factory defines STEP 11 as **Feature Implementation Waves**:
+- build features in small measurable waves/tasks;
+- every wave has acceptance criteria and regression evidence;
+- do not implement the full backlog in one large change;
+- SOL leads implementation;
+- external-service integration remains STEP 12.
 
 ## Next exact action
-STEP 10 must implement only **SLC-001 — Import / Validate Episode Package → Create Real Workspace State**.
+Start STEP 11 only after the product owner says "lanjutkan".
 
-Required STEP 10 proof:
-1. select a biography episode package;
-2. validate FLOW_OTOMATIS_IMPORT.json;
-3. verify Scene IDs, approved-image mapping, motion prompt presence, Target timing, and valid Flow-duration rules;
-4. derive real Scene readiness in domain/application code;
-5. persist a minimal real project/workspace state;
-6. render existing frozen Import/Validation/Workspace UI from the real state;
-7. prove one happy path and one representative failure path with integration/contract tests.
+Recommended first READY wave:
+**W11-01 — Scene Planning & Readiness**
+1. persist user-selected Flow duration per scene;
+2. validate allowed selections against Target;
+3. add real image rescan/remap state using the existing package/filesystem owner;
+4. refresh real Scene readiness without rewriting Target;
+5. bind the frozen Workspace/Scene Inspector controls to those application commands;
+6. prove persistence/reload plus UI regression.
 
-Do not start live Google Flow generation/login/download in STEP 10.
+Do not start Google login, live Flow generation/download, or Gemini API work in W11-01.
