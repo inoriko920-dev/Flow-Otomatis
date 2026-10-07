@@ -84,9 +84,7 @@ class SqliteWorkspaceRepository:
         try:
             with sqlite3.connect(db_path) as connection:
                 connection.row_factory = sqlite3.Row
-                project = connection.execute(
-                    "SELECT * FROM project WHERE singleton = 1"
-                ).fetchone()
+                project = connection.execute("SELECT * FROM project WHERE singleton = 1").fetchone()
                 if project is None:
                     return None
                 scene_rows = connection.execute(
