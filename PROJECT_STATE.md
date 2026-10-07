@@ -5,7 +5,7 @@
 - Branch: main
 - Initial repository state before STEP 08: greenfield/empty.
 - Initial documentation guard commit: 164ef0073115d1e0178a1c6eb920443e761cd35e
-- Latest verified HEAD after textual source-of-truth bootstrap: 2cfe510179d89582fc7ec8f9280f08e2649566e4
+- Latest verified HEAD before this update: 4fe73753e29f699c000136eac916aa002889d2d1
 - Root tree verified: governance files + docs/ are present; src/ is absent.
 - Current Factory STEP: STEP 08 — Repository Foundation
 - Current task: S08-T01 Documentation Source-of-Truth Bootstrap
@@ -32,6 +32,7 @@
 - docs/planning/SOURCE_OF_TRUTH_MANIFEST.md with canonical binary paths, sizes and SHA-256.
 - docs/ui/UI_REFERENCE_MANIFEST.md with 30 final UI PNG hashes.
 - docs/ui/IMPLEMENTATION_OVERRIDES.md.
+- Repo-ready binary upload pack prepared: 47 entries, 83847809 bytes, SHA-256 7f14ee5a877d041daa08a486628f8541d62fe1ecffdd20cd8b2230a28b56f107, integrity PASS.
 - GitHub root verification confirms no src/ production source exists.
 
 ## Why coding is still blocked
@@ -63,10 +64,10 @@ B08-DOCBIN-001 — Mandatory DOCX/PNG source-of-truth binaries are not yet uploa
 
 ## Work/evidence status
 - Text governance/source-of-truth: VERIFIED IN GITHUB.
-- Binary source-of-truth: NOT PRESENT / NOT VERIFIED.
+- Binary source-of-truth: PACKAGED / NOT PRESENT IN REPO / NOT VERIFIED.
 - Production code: NOT STARTED.
 - CI/build/package: NOT STARTED.
 - Live Google Flow: NOT TESTED.
 
 ## Next exact action
-Upload the binary DOCX/PNG source-of-truth files listed in the manifests, verify their hashes, then set S08-T01 PASS. Only after that may S08-T02 create src/ and dependency tooling.
+Place the 47 prepared binary source-of-truth files at their canonical repo paths, verify hashes, then set S08-T01 PASS. Only after that may S08-T02 create src/ and dependency tooling.
