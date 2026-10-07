@@ -6,7 +6,15 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from flow_otomatis.domain.errors import StorageError, WorkspaceAlreadyExistsError
+from flow_otomatis.application.ports.workspace_repository import (
+    WorkspaceReadIssue,
+    WorkspaceScanResult,
+)
+from flow_otomatis.domain.errors import (
+    StorageError,
+    WorkspaceAlreadyExistsError,
+    WorkspaceCorruptError,
+)
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 
@@ -151,11 +159,13 @@ class SqliteWorkspaceRepository:
             raise StorageError(f"Could not save workspace: {exc}") from exc
 
     def load(self, episode_id: str) -> WorkspaceState | None:
+        """Read one project without mutating its SQLite source."""
+
         db_path = self._db_path(episode_id)
         if not db_path.is_file():
             return None
         try:
-            with sqlite3.connect(db_path) as connection:
+            with self._connect_readonly(db_path) as connection:
                 connection.row_factory = sqlite3.Row
                 project = connection.execute("SELECT * FROM project WHERE singleton = 1").fetchone()
                 if project is None:
@@ -163,33 +173,67 @@ class SqliteWorkspaceRepository:
                 scene_rows = connection.execute(
                     "SELECT * FROM scenes ORDER BY scene_order"
                 ).fetchall()
+                return self._decode_workspace(episode_id, project, scene_rows)
+        except sqlite3.OperationalError as exc:
+            raise StorageError(f"Could not load workspace: {episode_id}") from exc
+        except sqlite3.DatabaseError as exc:
+            raise WorkspaceCorruptError(episode_id) from exc
         except sqlite3.Error as exc:
-            raise StorageError(f"Could not load workspace: {exc}") from exc
+            raise StorageError(f"Could not load workspace: {episode_id}") from exc
+        except (ValueError, TypeError, IndexError, OverflowError) as exc:
+            raise WorkspaceCorruptError(episode_id) from exc
 
-        scenes = tuple(
-            WorkspaceScene(
-                scene_id=str(row["scene_id"]),
-                image_file=str(row["image_file"]),
-                image_exists=bool(row["image_exists"]),
-                motion_prompt=str(row["motion_prompt"]),
-                target_duration_s=float(row["target_duration_s"]),
-                recommended_flow_duration_s=int(row["recommended_flow_duration_s"]),
-                selected_flow_duration_s=(
-                    int(row["selected_flow_duration_s"])
-                    if row["selected_flow_duration_s"] is not None
-                    else None
-                ),
-                readiness=SceneReadiness(str(row["readiness"])),
-                trim_target_s=float(row["trim_target_s"]),
-                model=str(row["model"]),
-                resolution=str(row["resolution"]),
-                aspect_ratio=str(row["aspect_ratio"]),
-            )
-            for row in scene_rows
+    def list_recent(self, limit: int = 10) -> tuple[WorkspaceState, ...]:
+        """Read healthy project databases and isolate failures."""
+
+        return self.scan_recent(limit).workspaces
+
+    def scan_recent(self, limit: int = 10) -> WorkspaceScanResult:
+        """Return healthy projects plus corrupt/unavailable local entries."""
+
+        if limit < 1 or not self._projects_root.is_dir():
+            return WorkspaceScanResult(workspaces=(), issues=())
+
+        workspaces: list[WorkspaceState] = []
+        issues: list[WorkspaceReadIssue] = []
+        for db_path in self._projects_root.glob("*/project.sqlite3"):
+            episode_id = db_path.parent.name
+            try:
+                workspace = self.load(episode_id)
+            except WorkspaceCorruptError:
+                issues.append(WorkspaceReadIssue(episode_id=episode_id, kind="CORRUPT"))
+                continue
+            except StorageError:
+                issues.append(WorkspaceReadIssue(episode_id=episode_id, kind="UNAVAILABLE"))
+                continue
+            if workspace is not None:
+                workspaces.append(workspace)
+
+        workspaces.sort(key=lambda item: item.imported_at, reverse=True)
+        issues.sort(key=lambda item: item.episode_id)
+        return WorkspaceScanResult(
+            workspaces=tuple(workspaces[:limit]),
+            issues=tuple(issues),
         )
+
+    def _connect_readonly(self, db_path: Path) -> sqlite3.Connection:
+        uri = f"{db_path.resolve().as_uri()}?mode=ro"
+        return sqlite3.connect(uri, uri=True)
+
+    def _decode_workspace(
+        self,
+        requested_episode_id: str,
+        project: sqlite3.Row,
+        scene_rows: list[sqlite3.Row],
+    ) -> WorkspaceState:
+        stored_episode_id = str(project["episode_id"])
+        if stored_episode_id != requested_episode_id:
+            raise ValueError("Stored episode identity does not match its project directory")
+
+        scenes = tuple(self._decode_scene(row) for row in scene_rows)
         return WorkspaceState(
             schema_version=str(project["schema_version"]),
-            episode_id=str(project["episode_id"]),
+            episode_id=stored_episode_id,
             project_name=str(project["project_name"]),
             source_package_path=str(project["source_package_path"]),
             created_at=datetime.fromisoformat(str(project["created_at"])),
@@ -200,24 +244,28 @@ class SqliteWorkspaceRepository:
             scenes=scenes,
         )
 
-    def list_recent(self, limit: int = 10) -> tuple[WorkspaceState, ...]:
-        """Read valid project databases and return newest persisted state first."""
-
-        if limit < 1 or not self._projects_root.is_dir():
-            return ()
-
-        workspaces: list[WorkspaceState] = []
-        for db_path in self._projects_root.glob("*/project.sqlite3"):
-            episode_id = db_path.parent.name
-            try:
-                workspace = self.load(episode_id)
-            except StorageError:
-                continue
-            if workspace is not None:
-                workspaces.append(workspace)
-
-        workspaces.sort(key=lambda item: item.imported_at, reverse=True)
-        return tuple(workspaces[:limit])
+    def _decode_scene(self, row: sqlite3.Row) -> WorkspaceScene:
+        image_exists = int(row["image_exists"])
+        if image_exists not in {0, 1}:
+            raise ValueError("image_exists must be stored as 0 or 1")
+        return WorkspaceScene(
+            scene_id=str(row["scene_id"]),
+            image_file=str(row["image_file"]),
+            image_exists=bool(image_exists),
+            motion_prompt=str(row["motion_prompt"]),
+            target_duration_s=float(row["target_duration_s"]),
+            recommended_flow_duration_s=int(row["recommended_flow_duration_s"]),
+            selected_flow_duration_s=(
+                int(row["selected_flow_duration_s"])
+                if row["selected_flow_duration_s"] is not None
+                else None
+            ),
+            readiness=SceneReadiness(str(row["readiness"])),
+            trim_target_s=float(row["trim_target_s"]),
+            model=str(row["model"]),
+            resolution=str(row["resolution"]),
+            aspect_ratio=str(row["aspect_ratio"]),
+        )
 
     def _db_path(self, episode_id: str) -> Path:
         return self._projects_root / episode_id / "project.sqlite3"
