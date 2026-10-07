@@ -75,11 +75,21 @@ def test_real_hasil_view_exports_handoff_manifest(tmp_path: Path, qtbot) -> None
         state=GenerationJobState.QUEUED,
         created_at=now,
         updated_at=now,
+        image_file=scene.image_file,
+        motion_prompt=scene.motion_prompt,
+        model=scene.model,
+        resolution=scene.resolution,
+        aspect_ratio=scene.aspect_ratio,
+        request_fingerprint="verified-results-ui-fixture",
     )
     job_repo.ensure_jobs((job,))
-    claimed = job_repo.claim_next(workspace.episode_id)
+    claimed = job_repo.claim_next(
+        workspace.episode_id,
+        "results-ui-owner",
+        lease_seconds=60,
+    )
     assert claimed is not None
-    job_repo.mark_generated(job.job_id, "fake:SCENE_001")
+    job_repo.mark_generated(job.job_id, "fake:SCENE_001", "results-ui-owner")
     output = tmp_path / "SCENE_001.mp4"
     output.write_bytes(b"synthetic-video")
     service.record_downloaded(workspace.episode_id, scene.scene_id, str(output))

@@ -244,6 +244,7 @@ def test_duplicate_import_is_rejected_without_changing_workspace_jobs_or_downloa
 
     now = datetime.now(UTC)
     job_repo = SqliteGenerationJobRepository(projects_root)
+    original_scene = next(scene for scene in original.scenes if scene.scene_id == "SCENE_017")
     job = GenerationJob(
         job_id="EP001_STEVE_JOBS:SCENE_017:GENERATE",
         episode_id="EP001_STEVE_JOBS",
@@ -253,11 +254,25 @@ def test_duplicate_import_is_rejected_without_changing_workspace_jobs_or_downloa
         state=GenerationJobState.QUEUED,
         created_at=now,
         updated_at=now,
+        image_file=original_scene.image_file,
+        motion_prompt=original_scene.motion_prompt,
+        model=original_scene.model,
+        resolution=original_scene.resolution,
+        aspect_ratio=original_scene.aspect_ratio,
+        request_fingerprint="verified-duplicate-import-fixture",
     )
     job_repo.ensure_jobs((job,))
-    claimed = job_repo.claim_next("EP001_STEVE_JOBS")
+    claimed = job_repo.claim_next(
+        "EP001_STEVE_JOBS",
+        "duplicate-import-fixture-owner",
+        lease_seconds=60,
+    )
     assert claimed is not None
-    generated = job_repo.mark_generated(job.job_id, "synthetic-result-017")
+    generated = job_repo.mark_generated(
+        job.job_id,
+        "synthetic-result-017",
+        "duplicate-import-fixture-owner",
+    )
 
     download_repo = SqliteDownloadResultRepository(projects_root)
     downloaded = DownloadRecord(
