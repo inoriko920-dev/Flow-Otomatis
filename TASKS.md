@@ -143,3 +143,18 @@ Evidence:
 - No automatic account/key rotation to evade limits.
 - No guessed live generation selectors.
 - No silent retry after ambiguous mutation.
+
+### STEP 12 Audit Remediation — A00–A05
+- A00 — Source-of-truth synchronization and baseline verification: PASS.
+  - audit DOCX committed under `docs/planning/audits/`;
+  - cross-layer decisions recorded as ADR-015/016/017;
+  - official Windows Python 3.14.7 + uv 0.12.23 quality job SUCCESS;
+  - 90 tests passed; mypy 63 source files; architecture guard PASS.
+- A01 — F01 + F02 import/data linkage: READY, not started.
+- A02 — F04 corrupt-data isolation: PENDING after A01.
+- A03 — F03 + F06 request revision/lease/recovery: PENDING after A02.
+- A04 — F05 Browser Worker/UI responsiveness: PENDING after A03.
+- A05 — combined verification/build/handoff: PENDING after A04.
+
+Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by the existing real-account restart validation.
+

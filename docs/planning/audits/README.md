@@ -35,4 +35,18 @@ A00 records the cross-layer decisions needed before implementation:
 - ADR-017 — Browser Worker ownership and async UI command boundary for A04.
 
 ## Current A00 state
-Documentation synchronization is complete in the A00 commit. Official Windows Python 3.14 + uv 0.12.23 CI evidence must pass before A00 is marked PASS and handed to A01.
+A00: **PASS**.
+
+Evidence:
+- documentation-sync commit: `bc550e57407d1be09fceb64eadd18217f4d9c37c`;
+- official CI run: `37639865121`;
+- quality job: `112855631708` — SUCCESS;
+- CPython 3.14.7 x64;
+- uv 0.12.23;
+- frozen sync PASS;
+- Ruff format/lint PASS;
+- mypy PASS — 63 source files;
+- architecture guard PASS;
+- pytest PASS — 90 passed.
+
+The next package is A01 only. Live Generate remains BLOCKED.
