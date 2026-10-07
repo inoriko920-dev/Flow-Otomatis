@@ -524,8 +524,7 @@ def _scene_panel(fixture: UiFixture) -> QWidget:
     layout.setContentsMargins(12, 10, 12, 12)
     layout.setSpacing(9)
     layout.addWidget(section_header("Scene", "S016"))
-    thumb = QLabel("APPROVED IMAGE
-SCENE_016")
+    thumb = QLabel("APPROVED IMAGE\\nSCENE_016")
     thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
     thumb.setMinimumHeight(160)
     thumb.setStyleSheet("background:#E5E7EB; border:1px solid #CBD5E1; border-radius:7px; color:#64748B;")
