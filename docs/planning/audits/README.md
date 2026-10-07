@@ -52,3 +52,40 @@ Evidence:
 - pytest PASS — 90 passed.
 
 The next package is A01 only. Live Generate remains BLOCKED.
+
+## Current A01 state
+A01: **PASS**.
+
+Closed:
+- F01 — a missing prompt TXT reference is no longer accepted as literal usable prompt text.
+- F02 — a second import/create for an existing episode no longer replaces Scene content while retaining old results.
+
+Implementation:
+- merge SHA: `865e92f4a3da01a35339203f263ab938a420d3bd`;
+- PR #1 head: `2aa9de28ce0ba379d3ed11b1ba1d6a035d5b01a4`;
+- explicit repository `create` / `update` semantics;
+- atomic duplicate detection with SQLite `BEGIN IMMEDIATE`;
+- typed `WorkspaceAlreadyExistsError`;
+- typed `PROMPT_FILE_MISSING` for ZIP and folder package readers;
+- safe Indonesian UI handling;
+- real generation-job/download repositories used in regression coverage.
+
+Official main evidence:
+- CI run: `37644208386` — SUCCESS;
+- quality: `112870617392` — SUCCESS;
+- UI visual: `112871584570` — SUCCESS;
+- package Windows: `112872148801` — SUCCESS;
+- pytest: 95 passed;
+- mypy: 63 source files, no issues;
+- architecture guard: PASS;
+- UI: 30/30 PASS, similarity 0.6344–0.9643;
+- Playwright Chromium smoke: PASS;
+- portable smoke: PASS;
+- UI artifact: `11493692056`, SHA-256 `b0e8d1671e0e368b21a09a31595e9502efd9e0efe8e6ce61db89539bc645a200`;
+- Windows artifact: `11494735790`, 435479977 bytes, SHA-256 `8a17a7f24aaa203877326952fe97f3b711c40ceac3a603fd3310b76b5c0990a9`.
+
+Evidence file:
+- `A01_IMPORT_INTEGRITY_EVIDENCE_2026-10-07.md`
+
+Next package is A02 only: isolate F04 corrupt project data. F03/F05/F06 remain open. Live Generate remains BLOCKED.
+

@@ -150,8 +150,12 @@ Evidence:
   - cross-layer decisions recorded as ADR-015/016/017;
   - official Windows Python 3.14.7 + uv 0.12.23 quality job SUCCESS;
   - 90 tests passed; mypy 63 source files; architecture guard PASS.
-- A01 — F01 + F02 import/data linkage: READY, not started.
-- A02 — F04 corrupt-data isolation: PENDING after A01.
+- A01 — F01 + F02 import/data linkage: PASS.
+  - merge SHA: `865e92f4a3da01a35339203f263ab938a420d3bd`;
+  - missing prompt TXT now fails with typed `PROMPT_FILE_MISSING` before persistence;
+  - duplicate create is rejected atomically and preserves prior jobs/downloads;
+  - official main CI `37644208386`: 95 tests PASS, mypy/architecture PASS, UI 30/30 PASS, Windows portable smoke PASS.
+- A02 — F04 corrupt-data isolation: READY, not started.
 - A03 — F03 + F06 request revision/lease/recovery: PENDING after A02.
 - A04 — F05 Browser Worker/UI responsiveness: PENDING after A03.
 - A05 — combined verification/build/handoff: PENDING after A04.

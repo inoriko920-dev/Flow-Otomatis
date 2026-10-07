@@ -326,3 +326,46 @@ After successful validation and an explicit “lanjutkan”, start I12-02B2-LIVE
 ### Audit next exact action
 After the product owner says `lanjutkan`, execute only A01: close F01 and F02 with atomic create semantics, missing-prompt typed validation, regression tests, and no destructive project replacement.
 
+## STEP 12 audit remediation track — A01
+- A01 status: PASS.
+- Findings closed: F01 and F02.
+- Implementation merge SHA: `865e92f4a3da01a35339203f263ab938a420d3bd`.
+- PR: #1 — `A01: fix import integrity and atomic workspace creation`.
+- PR head SHA: `2aa9de28ce0ba379d3ed11b1ba1d6a035d5b01a4`.
+- Official main CI run: `37644208386` — SUCCESS.
+- Quality job: `112870617392` — SUCCESS.
+- UI visual job: `112871584570` — SUCCESS.
+- Windows package job: `112872148801` — SUCCESS.
+- Runtime: Windows Server 2025, CPython 3.14.7 x64, uv 0.12.23.
+- Ruff format: PASS — 125 files already formatted.
+- Ruff lint: PASS.
+- mypy: PASS — 63 source files.
+- architecture guard: PASS.
+- pytest: PASS — 95 passed, 1827 warnings.
+- frozen UI regression: PASS — 30/30 fixtures, similarity 0.6344–0.9643.
+- UI evidence artifact: `11493692056`, SHA-256 `b0e8d1671e0e368b21a09a31595e9502efd9e0efe8e6ce61db89539bc645a200`.
+- Playwright Chromium smoke: PASS.
+- portable application smoke: PASS.
+- Windows artifact: `11494735790`, 435479977 bytes, SHA-256 `8a17a7f24aaa203877326952fe97f3b711c40ceac3a603fd3310b76b5c0990a9`.
+
+### A01 delivered
+- ZIP/folder prompt values ending in `.txt` are treated as file references; missing files raise typed `PackageValidationError(code="PROMPT_FILE_MISSING")` before workspace persistence.
+- Missing-prompt errors identify the Scene and safe relative reference.
+- `WorkspaceRepositoryPort` now exposes explicit `create` and `update` semantics.
+- imports use atomic `create`; duplicate episode identity is rejected under `BEGIN IMMEDIATE` with `WorkspaceAlreadyExistsError`.
+- Scene planning uses the explicit update path.
+- duplicate import does not delete/reset prior project state, generation jobs, or download results.
+- Qt create action translates duplicate identity into a safe Indonesian message and directs the user to the existing project.
+- regression coverage proves missing TXT ZIP/folder rejection, empty/UTF-8 prompt handling, old duration/traversal behavior, prior job/download preservation, and concurrent duplicate creation safety.
+
+### Findings still open after A01
+- F03 — queued request revision/readiness consistency.
+- F04 — corrupt scene data can break project listing.
+- F05 — Google session probing can block the Qt UI thread.
+- F06 — orphan RUNNING job recovery is incomplete.
+
+I12-02B2-LIVE remains BLOCKED by the existing real-account restart validation gate; A01 does not authorize live Generate.
+
+### Audit next exact action
+After the product owner says `lanjutkan`, execute only A02 for F04: isolate corrupt project data at the canonical SQLite read boundary, keep healthy projects usable, surface corruption safely in Project Hub, never mutate the corrupt source while reading, and stop before A03.
+
