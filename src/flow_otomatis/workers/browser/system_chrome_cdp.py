@@ -26,6 +26,7 @@ from flow_otomatis.domain.errors import FlowOtomatisError
 
 _DEVTOOLS_ACTIVE_PORT = "DevToolsActivePort"
 _DEFAULT_STARTUP_TIMEOUT_S = 15.0
+_DEFAULT_CONNECT_TIMEOUT_MS = 15_000
 
 
 def find_google_chrome_executable(
@@ -147,9 +148,11 @@ class SystemChromeCdpPool:
         *,
         chrome_executable: Path | None = None,
         startup_timeout_s: float = _DEFAULT_STARTUP_TIMEOUT_S,
+        connect_timeout_ms: int = _DEFAULT_CONNECT_TIMEOUT_MS,
     ) -> None:
         self._chrome_executable = chrome_executable
-        self._startup_timeout_s = startup_timeout_s
+        self._startup_timeout_s = max(startup_timeout_s, 0.1)
+        self._connect_timeout_ms = max(connect_timeout_ms, 1)
         self._manual_processes: dict[str, subprocess.Popen[bytes]] = {}
         self._debug_processes: dict[str, subprocess.Popen[bytes]] = {}
         self._browsers: dict[str, Browser] = {}
@@ -243,7 +246,10 @@ class SystemChromeCdpPool:
             playwright = sync_playwright().start()
             self._playwright = playwright
         try:
-            return playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+            return playwright.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}",
+                timeout=self._connect_timeout_ms,
+            )
         except Exception as exc:
             raise FlowOtomatisError(
                 "Flow-Otomatis gagal terhubung ke Google Chrome melalui CDP lokal."

@@ -15,6 +15,7 @@ from flow_otomatis.workers.browser.google_flow_request_plan import (
     PreparedGoogleFlowRequest,
     prepare_google_flow_request,
 )
+from flow_otomatis.workers.browser.google_session_commands import ThreadedGoogleSessionCommands
 from flow_otomatis.workers.browser.google_session_worker import (
     BrowserSessionProbe,
     GoogleSessionBrowserDriver,
@@ -45,6 +46,7 @@ __all__ = [
     "GoogleSessionWorker",
     "PlaywrightGoogleSessionDriver",
     "SystemChromeGoogleSessionDriver",
+    "ThreadedGoogleSessionCommands",
     "build_debug_chrome_command",
     "build_manual_chrome_command",
     "find_google_chrome_executable",

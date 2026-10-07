@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -81,6 +82,14 @@ _NAV_GLYPHS = {
     "Pengaturan": "⚙",
 }
 
+class _GoogleSessionSignals(QObject):
+    """Marshal sanitized Browser Worker outcomes back onto the Qt thread."""
+
+    profile_ready = Signal(str, object)
+    all_ready = Signal()
+    failed = Signal(str, str)
+
+
 _DIALOG_BACKGROUNDS = {
     "UI-IMG-001C": "UI-IMG-001A",
     "UI-IMG-012A": "UI-IMG-002A",
@@ -123,6 +132,12 @@ class MainWindow(QMainWindow):
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
+        self._google_session_signals = _GoogleSessionSignals(self)
+        self._google_session_signals.profile_ready.connect(
+            self._on_google_session_profile_ready
+        )
+        self._google_session_signals.all_ready.connect(self.show_google_profiles)
+        self._google_session_signals.failed.connect(self._show_google_session_error)
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -494,12 +509,8 @@ class MainWindow(QMainWindow):
     def _open_google_login(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
-        try:
-            profile = self._google_session_service.open_login(profile_id)
-        except FlowOtomatisError as exc:
-            QMessageBox.warning(self, "Bantuan Login", str(exc))
-            return
-        self.show_google_login(profile)
+        future = self._google_session_service.open_login_async(profile_id)
+        self._watch_google_profile_future(future, "open", "Bantuan Login")
 
     def _reopen_active_google_login(self) -> None:
         if self._active_google_profile_id is None:
@@ -511,38 +522,87 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None or self._active_google_profile_id is None:
             self.show_google_profiles()
             return
-        try:
-            profile = self._google_session_service.check_profile(self._active_google_profile_id)
-        except FlowOtomatisError as exc:
-            QMessageBox.warning(self, "Bantuan Login", str(exc))
-            return
-        self.show_google_login(profile)
+        future = self._google_session_service.check_profile_async(
+            self._active_google_profile_id
+        )
+        self._watch_google_profile_future(future, "recheck", "Bantuan Login")
 
     def _check_google_profile(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
-        try:
-            self._google_session_service.check_profile(profile_id)
-        except FlowOtomatisError as exc:
-            QMessageBox.warning(self, "Profil Google", str(exc))
-            return
-        self.show_google_profiles()
+        future = self._google_session_service.check_profile_async(profile_id)
+        self._watch_google_profile_future(future, "check", "Profil Google")
 
     def _check_all_google_profiles(self) -> None:
         if self._google_session_service is None:
             return
-        try:
-            self._google_session_service.check_all()
-        except FlowOtomatisError as exc:
-            QMessageBox.warning(self, "Profil Google", str(exc))
+        future = self._google_session_service.check_all_async()
+        self._watch_google_all_future(future, "Profil Google")
+
+    def _watch_google_profile_future(
+        self,
+        future: Future[GoogleSessionProfile],
+        action: str,
+        title: str,
+    ) -> None:
+        """Observe only sanitized DTOs; worker callbacks emit Qt signals."""
+
+        def completed(done: Future[GoogleSessionProfile]) -> None:
+            try:
+                profile = done.result()
+            except FlowOtomatisError as exc:
+                self._google_session_signals.failed.emit(title, str(exc))
+            except Exception:
+                self._google_session_signals.failed.emit(
+                    title,
+                    "Operasi sesi Google gagal tanpa mengekspos detail browser.",
+                )
+            else:
+                self._google_session_signals.profile_ready.emit(action, profile)
+
+        future.add_done_callback(completed)
+
+    def _watch_google_all_future(
+        self,
+        future: Future[tuple[GoogleSessionProfile, ...]],
+        title: str,
+    ) -> None:
+        def completed(done: Future[tuple[GoogleSessionProfile, ...]]) -> None:
+            try:
+                done.result()
+            except FlowOtomatisError as exc:
+                self._google_session_signals.failed.emit(title, str(exc))
+            except Exception:
+                self._google_session_signals.failed.emit(
+                    title,
+                    "Operasi sesi Google gagal tanpa mengekspos detail browser.",
+                )
+            else:
+                self._google_session_signals.all_ready.emit()
+
+        future.add_done_callback(completed)
+
+    def _on_google_session_profile_ready(
+        self,
+        action: str,
+        profile: GoogleSessionProfile,
+    ) -> None:
+        if action == "open":
+            self.show_google_login(profile)
+            return
+        if action == "recheck" and self._active_google_profile_id == profile.profile_id:
+            self.show_google_login(profile)
             return
         self.show_google_profiles()
 
+    def _show_google_session_error(self, title: str, message: str) -> None:
+        QMessageBox.warning(self, title, message)
+
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Close Browser Worker resources before the Qt shell exits."""
+        """Bound how long Qt waits while Browser Worker cleans up."""
 
         if self._google_session_service is not None:
-            self._google_session_service.shutdown()
+            self._google_session_service.shutdown(timeout_s=1.5)
         super().closeEvent(event)
 
     def _wire_import_button(self, screen: QWidget) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -45,7 +46,7 @@ class GoogleSessionRestartGate:
 
 
 class GoogleSessionPort(Protocol):
-    """Port implemented only by the browser/session boundary."""
+    """Synchronous session adapter owned below the Browser Worker boundary."""
 
     def list_profiles(self) -> tuple[GoogleSessionProfile, ...]:
         """Return safe local profile metadata."""
@@ -70,3 +71,28 @@ class GoogleSessionPort(Protocol):
 
     def shutdown(self) -> None:
         """Close all browser resources owned by the adapter."""
+
+
+class GoogleSessionCommandPort(Protocol):
+    """Asynchronous command boundary for browser-touching session operations."""
+
+    def submit_open_login(self, profile_id: str) -> Future[GoogleSessionProfile]:
+        """Schedule manual-login Chrome creation on the Browser Worker owner."""
+
+    def submit_check_profile(self, profile_id: str) -> Future[GoogleSessionProfile]:
+        """Schedule one authorization probe on the Browser Worker owner."""
+
+    def submit_check_all(
+        self,
+        profile_ids: tuple[str, ...],
+    ) -> Future[tuple[GoogleSessionProfile, ...]]:
+        """Schedule serial authorization probes on the Browser Worker owner."""
+
+    def submit_cancel_profile(self, profile_id: str) -> Future[None]:
+        """Schedule profile browser shutdown without transferring runtime ownership."""
+
+    def submit_delete_profile(self, profile_id: str) -> Future[None]:
+        """Schedule profile close/delete on the Browser Worker owner."""
+
+    def shutdown(self, *, timeout_s: float) -> bool:
+        """Request worker-owned shutdown and wait no longer than the bounded policy."""

@@ -33,6 +33,7 @@ from flow_otomatis.workers.browser import (
     GoogleSessionWorker,
     SystemChromeCdpPool,
     SystemChromeGoogleSessionDriver,
+    ThreadedGoogleSessionCommands,
 )
 
 
@@ -54,11 +55,13 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         ResultManifestWriter(paths.projects_root),
     )
     chrome_pool = SystemChromeCdpPool()
+    google_session_worker = GoogleSessionWorker(
+        paths.session_root,
+        driver=SystemChromeGoogleSessionDriver(context_pool=chrome_pool),
+    )
     google_session_service = GoogleSessionService(
-        GoogleSessionWorker(
-            paths.session_root,
-            driver=SystemChromeGoogleSessionDriver(context_pool=chrome_pool),
-        )
+        google_session_worker,
+        commands=ThreadedGoogleSessionCommands(google_session_worker),
     )
     return MainWindow(
         fixture_code=fixture_code,
