@@ -23,6 +23,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionPort,
     GoogleSessionProfile,
+    GoogleSessionRestartGate,
     GoogleSessionState,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
@@ -32,6 +33,7 @@ from flow_otomatis.workers.browser.browser_context_pool import (
 
 _PROFILE_ID = re.compile(r"^profile-[0-9a-f]{12}$")
 _METADATA_NAME = "profile.json"
+_RESTART_PROOF_NAME = "restart-proof.json"
 _GOOGLE_LOGIN_URL = "https://accounts.google.com/"
 _GOOGLE_ACCOUNT_URL = "https://myaccount.google.com/"
 
@@ -164,10 +166,12 @@ class GoogleSessionWorker(GoogleSessionPort):
         *,
         driver: GoogleSessionBrowserDriver | None = None,
         timeout_ms: int = 20_000,
+        instance_id: str | None = None,
     ) -> None:
         self._root = session_root / "google"
         self._driver = driver or PlaywrightGoogleSessionDriver(browser_runtime_root)
         self._timeout_ms = timeout_ms
+        self._instance_id = instance_id or uuid4().hex
 
     def list_profiles(self) -> tuple[GoogleSessionProfile, ...]:
         if not self._root.exists():
@@ -235,15 +239,28 @@ class GoogleSessionWorker(GoogleSessionPort):
             self._browser_data_dir(profile_id),
             timeout_ms=self._timeout_ms,
         )
+        checked_at = datetime.now(UTC)
+        if probe.state is GoogleSessionState.READY:
+            self._record_ready_probe(profile_id, checked_at)
         updated = GoogleSessionProfile(
             profile_id=profile.profile_id,
             label=profile.label,
             state=probe.state,
-            last_checked_at=datetime.now(UTC),
+            last_checked_at=checked_at,
             detail=probe.detail,
         )
         self._write_profile(updated)
         return updated
+
+    def get_restart_gate(self, profile_id: str) -> GoogleSessionRestartGate:
+        profile = self._read_profile(profile_id)
+        first_ready_at, restart_verified_at = self._read_restart_proof(profile_id)
+        return GoogleSessionRestartGate(
+            profile_id=profile.profile_id,
+            current_state=profile.state,
+            first_ready_at=first_ready_at,
+            restart_verified_at=restart_verified_at,
+        )
 
     def cancel_profile(self, profile_id: str) -> None:
         self._validated_profile_root(profile_id)
@@ -288,6 +305,60 @@ class GoogleSessionWorker(GoogleSessionPort):
             last_checked_at=checked,
             detail=detail,
         )
+
+    def _record_ready_probe(self, profile_id: str, checked_at: datetime) -> None:
+        profile_root = self._validated_profile_root(profile_id)
+        proof_path = profile_root / _RESTART_PROOF_NAME
+        first_instance_id = self._instance_id
+        first_ready_at = checked_at
+        restart_verified_at: datetime | None = None
+
+        if proof_path.is_file():
+            try:
+                payload = json.loads(proof_path.read_text(encoding="utf-8"))
+                first_instance_id = str(payload["first_ready_instance_id"])
+                first_ready_at = datetime.fromisoformat(str(payload["first_ready_at"]))
+                verified_raw = payload.get("restart_verified_at")
+                restart_verified_at = (
+                    datetime.fromisoformat(str(verified_raw)) if verified_raw else None
+                )
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise FlowOtomatisError("Bukti restart sesi Google lokal tidak valid.") from exc
+
+        if restart_verified_at is None and first_instance_id != self._instance_id:
+            restart_verified_at = checked_at
+
+        payload = {
+            "first_ready_instance_id": first_instance_id,
+            "first_ready_at": first_ready_at.isoformat(),
+            "restart_verified_at": (
+                restart_verified_at.isoformat() if restart_verified_at is not None else None
+            ),
+        }
+        temp_path = proof_path.with_suffix(".tmp")
+        temp_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temp_path.replace(proof_path)
+
+    def _read_restart_proof(
+        self,
+        profile_id: str,
+    ) -> tuple[datetime | None, datetime | None]:
+        proof_path = self._validated_profile_root(profile_id) / _RESTART_PROOF_NAME
+        if not proof_path.is_file():
+            return None, None
+        try:
+            payload = json.loads(proof_path.read_text(encoding="utf-8"))
+            first_ready_at = datetime.fromisoformat(str(payload["first_ready_at"]))
+            verified_raw = payload.get("restart_verified_at")
+            restart_verified_at = (
+                datetime.fromisoformat(str(verified_raw)) if verified_raw else None
+            )
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise FlowOtomatisError("Bukti restart sesi Google lokal tidak valid.") from exc
+        return first_ready_at, restart_verified_at
 
     def _write_profile(self, profile: GoogleSessionProfile) -> None:
         profile_root = self._validated_profile_root(profile.profile_id)

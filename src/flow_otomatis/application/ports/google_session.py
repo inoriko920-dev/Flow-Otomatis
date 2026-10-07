@@ -28,6 +28,23 @@ class GoogleSessionProfile:
     detail: str
 
 
+@dataclass(frozen=True, slots=True)
+class GoogleSessionRestartGate:
+    """Credential-free proof that READY was observed again after an app restart."""
+
+    profile_id: str
+    current_state: GoogleSessionState
+    first_ready_at: datetime | None
+    restart_verified_at: datetime | None
+
+    @property
+    def ready_after_restart(self) -> bool:
+        return (
+            self.current_state is GoogleSessionState.READY
+            and self.restart_verified_at is not None
+        )
+
+
 class GoogleSessionPort(Protocol):
     """Port implemented only by the browser/session boundary."""
 
@@ -42,6 +59,9 @@ class GoogleSessionPort(Protocol):
 
     def check_profile(self, profile_id: str) -> GoogleSessionProfile:
         """Probe whether the profile is authorized without reading credentials."""
+
+    def get_restart_gate(self, profile_id: str) -> GoogleSessionRestartGate:
+        """Return sanitized restart-persistence evidence for one profile."""
 
     def cancel_profile(self, profile_id: str) -> None:
         """Close the active browser context for one profile."""

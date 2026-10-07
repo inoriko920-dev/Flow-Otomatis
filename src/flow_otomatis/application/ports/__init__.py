@@ -25,6 +25,7 @@ from flow_otomatis.application.ports.google_flow_preflight import (
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionPort,
     GoogleSessionProfile,
+    GoogleSessionRestartGate,
     GoogleSessionState,
 )
 from flow_otomatis.application.ports.result_manifest import ResultManifestWriterPort
@@ -47,6 +48,7 @@ __all__ = [
     "GoogleFlowPreflightPort",
     "GoogleSessionPort",
     "GoogleSessionProfile",
+    "GoogleSessionRestartGate",
     "GoogleSessionState",
     "PackageSceneEvidence",
     "PackageSnapshot",

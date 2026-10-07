@@ -5,6 +5,7 @@ from __future__ import annotations
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionPort,
     GoogleSessionProfile,
+    GoogleSessionRestartGate,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
 
@@ -48,6 +49,11 @@ class GoogleSessionService:
         return tuple(
             self._sessions.check_profile(profile.profile_id) for profile in self.list_profiles()
         )
+
+    def get_restart_gate(self, profile_id: str) -> GoogleSessionRestartGate:
+        """Return sanitized evidence that READY survived an application restart."""
+
+        return self._sessions.get_restart_gate(profile_id)
 
     def cancel_profile(self, profile_id: str) -> None:
         """Close one profile browser context without deleting its persisted session."""
