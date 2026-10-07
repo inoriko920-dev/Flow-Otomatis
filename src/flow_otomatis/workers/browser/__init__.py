@@ -1,5 +1,11 @@
 """Browser Worker boundary. Playwright runtime and authorized sessions live here."""
 
+from flow_otomatis.workers.browser.google_flow_download import (
+    GoogleFlowDownloadDriver,
+    GoogleFlowDownloadEvidence,
+    GoogleFlowDownloadProvider,
+    GoogleFlowDownloadState,
+)
 from flow_otomatis.workers.browser.google_flow_generation import (
     GoogleFlowGenerationDriver,
     GoogleFlowGenerationProvider,
@@ -33,6 +39,10 @@ from flow_otomatis.workers.browser.system_chrome_cdp import (
 
 __all__ = [
     "BrowserSessionProbe",
+    "GoogleFlowDownloadDriver",
+    "GoogleFlowDownloadEvidence",
+    "GoogleFlowDownloadProvider",
+    "GoogleFlowDownloadState",
     "GoogleFlowGenerationDriver",
     "GoogleFlowPreflightDriver",
     "GoogleFlowPreflightWorker",
