@@ -184,11 +184,13 @@ class GeminiGenerateContentAgent:
         parts = content.get("parts")
         if not isinstance(parts, list):
             raise GeminiAgentProviderError("Bagian respons Gemini AI Agent tidak tersedia.")
-        texts = [
-            part.get("text")
-            for part in parts
-            if isinstance(part, dict) and isinstance(part.get("text"), str)
-        ]
+        texts: list[str] = []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            text = part.get("text")
+            if isinstance(text, str):
+                texts.append(text)
         result = "".join(texts).strip()
         if not result:
             raise GeminiAgentProviderError("Gemini AI Agent mengembalikan respons kosong.")
