@@ -51,9 +51,7 @@ def test_import_masks_keys_deduplicates_and_keeps_raw_secret_out_of_sqlite(tmp_p
     first = "A" * 36 + "1234"
     second = "B" * 36 + "5678"
 
-    summary = service.import_text(
-        f"Gemini Utama | {first}\nGemini Cadangan | {second}\n{first}\n"
-    )
+    summary = service.import_text(f"Gemini Utama | {first}\nGemini Cadangan | {second}\n{first}\n")
 
     assert len(summary.imported) == 2
     assert summary.duplicate_count == 1
@@ -90,7 +88,9 @@ def test_health_updates_metadata_and_manual_activation_never_rotates_automatical
     assert checked.status is GeminiKeyStatus.VALID
     assert checked.last_checked_at is not None
     assert checker.calls == [second]
-    assert next(profile for profile in service.list_profiles() if profile.label == "First").is_active
+    assert next(
+        profile for profile in service.list_profiles() if profile.label == "First"
+    ).is_active
 
     service.set_active(second_profile.key_id)
     active = [profile for profile in service.list_profiles() if profile.is_active]

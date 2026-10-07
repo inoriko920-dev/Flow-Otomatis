@@ -19,7 +19,9 @@ def _keys_table(root: QWidget) -> QTableWidget:
 
 
 def _button(root: QWidget, text: str) -> QPushButton | None:
-    return next((button for button in root.findChildren(QPushButton) if button.text() == text), None)
+    return next(
+        (button for button in root.findChildren(QPushButton) if button.text() == text), None
+    )
 
 
 def _status_text(status: GeminiKeyStatus) -> str:
@@ -72,9 +74,11 @@ def build_gemini_keys_view(
     check_button = _button(root, "Cek Health")
     if check_button is not None:
         check_button.clicked.connect(
-            lambda: on_check(key_ids[table.currentRow()])
-            if 0 <= table.currentRow() < len(key_ids)
-            else None
+            lambda: (
+                on_check(key_ids[table.currentRow()])
+                if 0 <= table.currentRow() < len(key_ids)
+                else None
+            )
         )
 
     table.cellDoubleClicked.connect(

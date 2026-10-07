@@ -46,12 +46,12 @@ class GeminiModelsHealthChecker:
                 status=GeminiKeyStatus.ERROR,
                 detail=f"Gemini API health check gagal dengan HTTP {exc.code}.",
             )
-        except (urllib.error.URLError, TimeoutError, OSError):
+        except urllib.error.URLError, TimeoutError, OSError:
             return GeminiKeyHealthEvidence(
                 status=GeminiKeyStatus.ERROR,
                 detail="Gemini API tidak dapat dijangkau saat health check.",
             )
-        except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+        except UnicodeDecodeError, json.JSONDecodeError, TypeError:
             return GeminiKeyHealthEvidence(
                 status=GeminiKeyStatus.ERROR,
                 detail="Respons Gemini API tidak dapat diverifikasi.",
