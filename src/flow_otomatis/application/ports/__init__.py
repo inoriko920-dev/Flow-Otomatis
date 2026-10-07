@@ -23,6 +23,7 @@ from flow_otomatis.application.ports.google_flow_preflight import (
     GoogleFlowPreflightPort,
 )
 from flow_otomatis.application.ports.google_session import (
+    GoogleSessionCommandPort,
     GoogleSessionPort,
     GoogleSessionProfile,
     GoogleSessionRestartGate,
@@ -46,6 +47,7 @@ __all__ = [
     "GoogleFlowAccessProbe",
     "GoogleFlowAccessState",
     "GoogleFlowPreflightPort",
+    "GoogleSessionCommandPort",
     "GoogleSessionPort",
     "GoogleSessionProfile",
     "GoogleSessionRestartGate",
