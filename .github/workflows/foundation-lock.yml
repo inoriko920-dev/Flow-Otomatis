@@ -1,36 +1,22 @@
-name: Foundation Lock
+name: Foundation Lock (manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "pyproject.toml"
-      - ".python-version"
-      - "src/**"
-      - "tests/**"
-      - "scripts/**"
-      - ".github/workflows/foundation-lock.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
-concurrency:
-  group: foundation-lock-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  PYTHONUTF8: "1"
+  QT_QPA_PLATFORM: "offscreen"
+  UV_LINK_MODE: "copy"
 
 jobs:
-  lock-and-verify:
+  verify-lock:
     runs-on: windows-2025
-    env:
-      PYTHONUTF8: "1"
-      QT_QPA_PLATFORM: "offscreen"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Set up Python 3.14
         uses: actions/setup-python@v7
@@ -41,36 +27,13 @@ jobs:
       - name: Install uv
         run: python -m pip install --disable-pip-version-check "uv==0.12.23"
 
-      - name: Resolve lockfile
-        run: uv lock
-
-      - name: Sync locked environment
+      - name: Verify frozen environment
         run: uv sync --frozen --all-groups
 
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-      - name: Ruff lint
-        run: uv run ruff check .
-
-      - name: Mypy
-        run: uv run mypy src/flow_otomatis
-
-      - name: Architecture guard
-        run: uv run python scripts/check_architecture.py
-
-      - name: Unit and contract tests
-        run: uv run pytest -q tests/unit tests/contract
-
-      - name: Commit uv.lock if changed
-        shell: pwsh
+      - name: Run foundation quality gates
         run: |
-          if (git status --porcelain -- uv.lock) {
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add uv.lock
-            git commit -m "chore(deps): lock foundation dependencies"
-            git push origin HEAD:main
-          } else {
-            Write-Host "uv.lock already up to date."
-          }
+          uv run ruff format --check .
+          uv run ruff check .
+          uv run mypy src/flow_otomatis
+          uv run python scripts/check_architecture.py
+          uv run pytest -q tests/unit tests/contract
