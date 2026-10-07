@@ -306,7 +306,8 @@ After successful validation and an explicit “lanjutkan”, start I12-02B2-LIVE
 ## STEP 12 audit remediation track — A00
 - A00 status: PASS.
 - ASTRA audit source: `docs/planning/audits/00_ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-07.docx`.
-- Audit SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`.
+- Original uploaded audit SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210` (48486 bytes).
+- Repository compact text-equivalent audit SHA-256: `39ee9d8c37aa573f019649b7f6f04c76812e80cf88b397e5694e0c96f9946527` (10028 bytes); full logical text preserved, formatting simplified, render verification PASS.
 - ASTRA baseline SHA: `e6724a0a5c3d68789149ed5c7eb094d44c9f0967`.
 - A00 documentation-sync commit: `bc550e57407d1be09fceb64eadd18217f4d9c37c`.
 - Official CI run: `37639865121`.

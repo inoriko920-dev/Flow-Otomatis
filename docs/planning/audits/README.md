@@ -3,7 +3,9 @@
 ## Authority
 Primary audit document:
 - `00_ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-07.docx`
-- SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- original uploaded source SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210` (48486 bytes)
+- repository compact text-equivalent SHA-256: `39ee9d8c37aa573f019649b7f6f04c76812e80cf88b397e5694e0c96f9946527` (10028 bytes)
+- repository-copy verification: complete logical audit text preserved in order; DOCX opened and rendered cleanly to five pages; original visual layout was intentionally simplified after the first binary upload was detected as truncated.
 - ASTRA baseline: `e6724a0a5c3d68789149ed5c7eb094d44c9f0967`
 
 This audit is a remediation track inside STEP 12. It does not restart Software Factory planning and does not replace the frozen UI reference.

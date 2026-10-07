@@ -33,6 +33,13 @@ GitHub Actions marks each command step SUCCESS, which is the official zero-failu
 ## Warning boundary
 The 1827 pytest warnings are dominated by the existing PySide6 deprecation warning from `QTableWidgetItem.setTextAlignment(int alignment)`. A00 does not alter that code and does not classify the warning as closure of any F01–F06 finding.
 
+## Audit artifact integrity
+- Original uploaded ASTRA DOCX: 48486 bytes, SHA-256 `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`.
+- Repository audit DOCX: compact text-equivalent, 10028 bytes, SHA-256 `39ee9d8c37aa573f019649b7f6f04c76812e80cf88b397e5694e0c96f9946527`.
+- The first binary-identical upload attempt was detected as truncated during final verification and was replaced before A00 closure.
+- The replacement preserves the complete logical audit text in document order; formatting and table layout are simplified.
+- Validation before commit: opened successfully as DOCX and rendered cleanly to five pages with no clipped text.
+
 ## Finding applicability
 Because the A00 tested commit differs from the ASTRA baseline only by documentation, all six audit findings remain applicable:
 F01, F02, F03, F04, F05, and F06.

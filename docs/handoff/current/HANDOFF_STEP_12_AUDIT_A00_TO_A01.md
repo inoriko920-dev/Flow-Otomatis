@@ -10,14 +10,16 @@ This handoff is for the audit-remediation track inside STEP 12. It does not supe
 - Branch: `main`
 - ASTRA audit baseline: `e6724a0a5c3d68789149ed5c7eb094d44c9f0967`
 - A00 documentation-sync commit: `bc550e57407d1be09fceb64eadd18217f4d9c37c`
-- Audit DOCX SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- Original uploaded audit DOCX: 48486 bytes, SHA-256 `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- Repository compact text-equivalent DOCX: 10028 bytes, SHA-256 `39ee9d8c37aa573f019649b7f6f04c76812e80cf88b397e5694e0c96f9946527`
 
 ## A00 work completed
-- committed the exact ASTRA audit DOCX under `docs/planning/audits/`;
+- committed a validated compact text-equivalent copy of the ASTRA audit DOCX under `docs/planning/audits/`; the original uploaded source hash is retained separately for provenance;
 - added the audit index and source-of-truth manifest entry;
 - recorded ADR-015 for atomic workspace create/update semantics;
 - recorded ADR-016 for queue request revision/fingerprint plus owner/lease recovery;
 - recorded ADR-017 for Browser Worker ownership and non-blocking Qt command boundary;
+- detected and repaired a truncated first DOCX upload; the replacement DOCX preserves all logical audit text, opens successfully, and rendered cleanly to five pages;
 - verified no production source/test/runtime file changed from the ASTRA baseline during A00.
 
 ## Official baseline evidence

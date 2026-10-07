@@ -21,10 +21,11 @@ Mandatory planning/reference DOCX files physically committed to the repository:
 | docs/planning/FLOW_OTOMATIS_SYNC_REVISION_SPEC_FOR_100_FAMOUS_PEOPLE.docx | 61194 | b3c6c416c91fee917e693faadfce3eb4fde72d872798d77ebdbed5e263134956 | VERIFIED |
 
 ## STEP 12 audit remediation source of truth
-The ASTRA audit handed to SOL on 7 October 2026 is committed at:
+The ASTRA audit handed to SOL on 7 October 2026 is represented in the repository at:
 - `docs/planning/audits/00_ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-07.docx`
-- bytes: 48486
-- SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- original uploaded source: 48486 bytes, SHA-256 `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- repository DOCX: compact text-equivalent copy, 10028 bytes, SHA-256 `39ee9d8c37aa573f019649b7f6f04c76812e80cf88b397e5694e0c96f9946527`
+- integrity note: the repository copy preserves the complete logical audit text in document order; layout/tables are simplified because the connector truncated the first binary-identical upload attempt. The compact DOCX was reopened and rendered successfully to five pages before commit.
 - audit baseline: `e6724a0a5c3d68789149ed5c7eb094d44c9f0967`
 - implementation packages: A00–A05 inside STEP 12
 - live Generate gate remains BLOCKED until the existing real-account restart validation passes.
