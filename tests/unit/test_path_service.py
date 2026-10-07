@@ -15,9 +15,7 @@ def test_user_data_root_prefers_local_app_data() -> None:
     assert paths.log_root.name == "Logs"
 
 
-def test_discovery_does_not_use_current_working_directory(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_discovery_does_not_use_current_working_directory(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     paths = PathService.discover(
         environ={},
