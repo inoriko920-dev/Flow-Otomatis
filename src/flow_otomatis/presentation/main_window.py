@@ -393,9 +393,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Scene planning service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        workspace = self._scene_planning_service.rescan_images(
-            self._current_workspace.episode_id
-        )
+        workspace = self._scene_planning_service.rescan_images(self._current_workspace.episode_id)
         self.show_workspace_state(workspace)
         return workspace
 
