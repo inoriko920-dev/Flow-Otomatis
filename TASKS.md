@@ -90,6 +90,22 @@ Evidence:
   - size: `435465430` bytes
   - digest: `f719cbd338b95febec821788dbdef8f1693947a319d2ad8714c4fd81aa7d2d8a`
 
+### I12-02B2-GATE — Restart-Gated Generation Provider Contract
+- Status: PASS.
+- Tested implementation SHA: `6abfbc169a0864c00f1136cfc7dd6a7fe7583b8a`.
+- CI: `37617108389` — SUCCESS.
+- Quality: `112778002338` — SUCCESS.
+- UI visual: `112778281237` — SUCCESS.
+- Windows package: `112778575235` — SUCCESS.
+- pytest: 85 passed.
+- mypy: 62 source files.
+- UI artifact: `11480692141`.
+- Windows artifact: `11481001812`.
+- Blocks downstream generation when restart validation is not currently valid.
+- Blocked path makes zero downstream provider calls.
+- Passed gate forwards one request.
+- Runtime live provider is not yet composed; future I12-02B2-LIVE wiring must use this wrapper.
+
 ### I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver
 - Status: BLOCKED pending successful I12-01 real-account validation.
 - Start only after successful manual validation + next explicit `lanjutkan`.

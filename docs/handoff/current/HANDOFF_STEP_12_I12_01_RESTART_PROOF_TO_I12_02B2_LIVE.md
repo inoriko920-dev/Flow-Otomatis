@@ -10,13 +10,13 @@ I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: **BLOCKED** until th
 ## Tested baseline
 - Repository: `inoriko920-dev/Flow-Otomatis`
 - Branch: `main`
-- Tested implementation SHA: `5cb889e20a4300b1fa5ae215986239e556b9b553`
-- CI: `37616109456` — SUCCESS
-- Quality: `112774708163` — SUCCESS
-- UI visual: `112774969887` — SUCCESS
-- Windows package: `112775342322` — SUCCESS
-- pytest: **80 passed**
-- mypy: **61 source files**
+- Tested implementation SHA: `6abfbc169a0864c00f1136cfc7dd6a7fe7583b8a`
+- CI: `37617108389` — SUCCESS
+- Quality: `112778002338` — SUCCESS
+- UI visual: `112778281237` — SUCCESS
+- Windows package: `112778575235` — SUCCESS
+- pytest: **85 passed**
+- mypy: **62 source files**
 - UI regression: **30/30 PASS**
 
 ## Restart-proof contract
@@ -52,6 +52,22 @@ This allows the product owner to report the gate result without inspecting files
   - size: `435468948` bytes
   - digest: `sha256:cfbb320859360b877f3362684915cc32db1e11aa33ce39d8421f5a2e3b631b4a`
 
+## Mandatory runtime gate contract
+`RestartGatedGenerationProvider` is now tested and must wrap any future live Flow generation provider.
+
+Behavior:
+- restart gate not passed → `GenerationAuthenticationRequiredError`;
+- current state not READY → blocked;
+- blocked path → zero downstream provider calls;
+- gate passed → exactly one downstream generation call;
+- queue maps authentication-required to ATTENTION_REQUIRED.
+
+Important: `bootstrap/main.py` does not yet compose a live Google Flow generation provider. This is deliberate. The guard is ready for live wiring but does not prove live Generate works.
+
+Latest artifacts:
+- UI evidence: `11480692141`, digest `sha256:b7ec06b0ec28fe330c8dae6467efd963ef353e538bccf5ca4ee6be740c725bc6`
+- Windows portable: `11481001812`, size `435469955` bytes, digest `sha256:e24ff70fb31cc8ffa31de2fa1f6af5507f742d6ace49bf77d5ad548e1dd19d75`
+
 ## Still not proven
 CI cannot prove:
 - the product owner's Google account is authenticated;
@@ -76,6 +92,7 @@ Do not share password, MFA code, cookies, tokens, browser-data, or session files
 Only after the real local validation succeeds and the product owner explicitly says `lanjutkan`:
 - mark I12-01 real-account validation PASS;
 - start I12-02B2-LIVE for exactly one Scene;
+- wrap the live provider with `RestartGatedGenerationProvider`; direct ungated wiring is forbidden;
 - inspect the current authorized Flow UI before selector locking;
 - perform at most one mutating submit attempt;
 - no silent retry;

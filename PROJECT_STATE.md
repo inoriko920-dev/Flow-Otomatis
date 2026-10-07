@@ -9,9 +9,21 @@
 - I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard: PASS
 - I12-02B1 — Read-Only Google Flow Preflight: PASS
 - I12-02B2-PRECHECK — Pre-Submit Request Guard: PASS
+- I12-02B2-GATE — Restart-Gated Generation Provider Contract: PASS
 - I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: BLOCKED pending real-account session validation
-- Last tested implementation SHA: 5cb889e20a4300b1fa5ae215986239e556b9b553
-- I12-01-RESTART-PROOF-UI CI run: 37616109456 — SUCCESS
+- Last tested implementation SHA: 6abfbc169a0864c00f1136cfc7dd6a7fe7583b8a
+- I12-02B2-GATE CI run: 37617108389 — SUCCESS
+- Quality job: 112778002338 — SUCCESS
+- UI regression job: 112778281237 — SUCCESS
+- Windows package job: 112778575235 — SUCCESS
+- pytest: 85 passed
+- mypy strict: 62 source files
+- UI evidence artifact ID: 11480692141
+- UI evidence digest: sha256:b7ec06b0ec28fe330c8dae6467efd963ef353e538bccf5ca4ee6be740c725bc6
+- Windows artifact ID: 11481001812
+- Windows artifact size: 435469955 bytes
+- Windows artifact digest: sha256:e24ff70fb31cc8ffa31de2fa1f6af5507f742d6ace49bf77d5ad548e1dd19d75
+- Previous I12-01-RESTART-PROOF-UI CI run: 37616109456 — SUCCESS
 - Quality job: 112774708163 — SUCCESS
 - UI regression job: 112774969887 — SUCCESS
 - Windows package job: 112775342322 — SUCCESS
@@ -59,9 +71,38 @@
   - I12-02A: PASS
   - I12-02B1: PASS
   - I12-02B2-PRECHECK: PASS
+  - I12-02B2-GATE: PASS
   - I12-02B2-LIVE: BLOCKED pending I12-01 live validation
   - I12-03: PLANNED after live generation submit
   - I12-04: PLANNED after I12-03
+
+## I12-02B2-GATE delivered
+This safe slice adds an application-layer `RestartGatedGenerationProvider` that must sit in front of any future live generation provider.
+
+Delivered:
+- generation is refused with `GenerationAuthenticationRequiredError` when the selected profile has not passed READY-after-restart;
+- READY without cross-instance restart proof is blocked;
+- NEEDS_LOGIN, UNKNOWN, and ERROR remain blocked even if restart proof existed earlier;
+- blocked requests never call the downstream provider;
+- a passed restart gate forwards exactly one request to downstream;
+- the queue already maps `GenerationAuthenticationRequiredError` to ATTENTION_REQUIRED, preserving the anti-retry safety contract;
+- no Flow selector, upload, prompt entry, settings mutation, project mutation, or Generate click was added.
+
+Automated evidence:
+- Ruff format/lint: PASS;
+- mypy strict: PASS — 62 source files;
+- architecture guard: PASS;
+- pytest: 85 passed;
+- frozen UI regression: 30/30 PASS;
+- visual similarity: 0.6344–0.9643;
+- Chromium staging/smoke: PASS;
+- PyInstaller onedir build: PASS;
+- portable smoke: PASS.
+
+Critical composition note:
+- the live Google Flow generation provider is not yet wired into `bootstrap/main.py`;
+- therefore this guard is a verified contract ready for mandatory live wiring, not proof that real Generate is operational;
+- when I12-02B2-LIVE is implemented, the live provider must be wrapped by `RestartGatedGenerationProvider`; direct ungated runtime wiring is forbidden.
 
 ## I12-01-RESTART-PROOF UI delivered
 The existing credential-free restart proof is now visible to the product owner on the real Google login surface.
