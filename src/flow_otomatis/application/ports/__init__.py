@@ -6,6 +6,15 @@ from flow_otomatis.application.ports.episode_package import (
     PackageSceneEvidence,
     PackageSnapshot,
 )
+from flow_otomatis.application.ports.generated_media_download import (
+    GeneratedMediaDownloadProviderPort,
+    GeneratedMediaDownloadRequest,
+    GeneratedMediaDownloadResult,
+    MediaDownloadAmbiguousError,
+    MediaDownloadAuthenticationRequiredError,
+    MediaDownloadCancelledError,
+    MediaDownloadProviderError,
+)
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
@@ -35,6 +44,9 @@ from flow_otomatis.application.ports.workspace_repository import WorkspaceReposi
 __all__ = [
     "DownloadResultRepositoryPort",
     "EpisodePackagePort",
+    "GeneratedMediaDownloadProviderPort",
+    "GeneratedMediaDownloadRequest",
+    "GeneratedMediaDownloadResult",
     "GenerationAuthenticationRequiredError",
     "GenerationCancelledError",
     "GenerationJobRepositoryPort",
@@ -52,6 +64,10 @@ __all__ = [
     "GoogleSessionProfile",
     "GoogleSessionRestartGate",
     "GoogleSessionState",
+    "MediaDownloadAmbiguousError",
+    "MediaDownloadAuthenticationRequiredError",
+    "MediaDownloadCancelledError",
+    "MediaDownloadProviderError",
     "PackageSceneEvidence",
     "PackageSnapshot",
     "ResultManifestWriterPort",
