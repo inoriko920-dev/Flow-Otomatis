@@ -40,8 +40,7 @@ class GoogleSessionRestartGate:
     @property
     def ready_after_restart(self) -> bool:
         return (
-            self.current_state is GoogleSessionState.READY
-            and self.restart_verified_at is not None
+            self.current_state is GoogleSessionState.READY and self.restart_verified_at is not None
         )
 
 
