@@ -8,6 +8,7 @@ This manifest is authoritative for the binary source-of-truth gate. Production c
 
 | Repo path | Bytes | SHA-256 | Status |
 |---|---:|---|---|
+| docs/planning/SOFTWARE_FACTORY_ASTRA_SOL_COMPLETE_FINAL_V2.zip | 1196213 | 7e75836fd291b9794481dc33d1e711ce358d706bb0c9228aa7780747c85edcd9 | PENDING |
 | docs/planning/00_STEP_00_PROJECT_INTAKE_FLOW_OTOMATIS_FACTORY_V2.docx | 51064 | 97b1176ca760284eab7559a659d44e64b5255e8fe8453edef1a11172bdd5e53d | PENDING |
 | docs/planning/01_STEP_01_PRODUCT_DEFINITION_FLOW_OTOMATIS_FACTORY_V2.docx | 64573 | 83baea1b24865ee0a64b38044ed200bd320789c55d48dfcf9bb93281253d6132 | PENDING |
 | docs/planning/02_STEP_02_EXISTING_SOLUTION_GITHUB_DISCOVERY_FLOW_OTOMATIS_FACTORY_V2.docx | 60215 | 3e027f10e3350123a19b829516802f6453661016db4bcf97722f52a4fb6d4eab | PENDING |
@@ -23,11 +24,23 @@ This manifest is authoritative for the binary source-of-truth gate. Production c
 | docs/ui/prompts/Flow-Otomatis_STEP04_UI_PROMPTS_SYNC_V1_2.zip | 93939 | 322fb1c632dafaf5e39360cecb152f9596986d925d0d4d816ce03cd696e5a4dd | PENDING |
 | docs/ui/prompts/Flow-Otomatis_STEP04_UI_PROMPTS_SYNC_V1_2_BATCHED.zip | 18739 | 99f78377d93f3f3238c8ecb69d860cb58572c7c502415b7e17359d456c7ec3ef | PENDING |
 
+The 30 final PNG files are separately listed in `docs/ui/UI_REFERENCE_MANIFEST.md`.
+
+## Prepared repo-ready upload pack
+A local repo-ready archive has been prepared with the exact canonical paths above plus all 30 UI PNG files:
+- Name: `Flow-Otomatis_S08_T01_BINARY_SOURCE_OF_TRUTH_UPLOAD_PACK.zip`
+- Size: 83847809 bytes
+- SHA-256: `7f14ee5a877d041daa08a486628f8541d62fe1ecffdd20cd8b2230a28b56f107`
+- ZIP integrity: PASS
+- Entries: 47
+
+The upload pack is a transfer aid only. S08-T01 remains PENDING until its contained files are actually present at their canonical repo paths.
+
 ## Gate rule
 S08-T01 can be PASS only when:
-1. every entry is present at the canonical path;
+1. every required binary entry is present at the canonical path;
 2. every hash matches;
-3. the 30 final UI PNG files in `docs/ui/UI_REFERENCE_MANIFEST.md` are present and hash-verified;
+3. all 30 final UI PNG files in `docs/ui/UI_REFERENCE_MANIFEST.md` are present and hash-verified;
 4. AGENTS/PROJECT_STATE/PLAN/TASKS and architecture/handoff text files are present;
 5. repo contains no secrets/user session data/generated build data.
 
