@@ -10,7 +10,7 @@ from flow_otomatis.application.services import LocalResultsService
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
-from flow_otomatis.domain.result import DownloadState
+from flow_otomatis.domain.result import DownloadRecord, DownloadState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
 from flow_otomatis.infrastructure.persistence import (
@@ -78,6 +78,12 @@ def _queue_one(job_repo: SqliteGenerationJobRepository) -> GenerationJob:
         state=GenerationJobState.QUEUED,
         created_at=now,
         updated_at=now,
+        image_file="SCENE_001.png",
+        motion_prompt="Slow push-in.",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        request_fingerprint="verified-results-fixture",
     )
     job_repo.ensure_jobs((job,))
     return job
@@ -86,9 +92,13 @@ def _queue_one(job_repo: SqliteGenerationJobRepository) -> GenerationJob:
 def test_generate_download_and_handoff_manifest_remain_separate(tmp_path: Path) -> None:
     service, job_repo = _service(tmp_path)
     job = _queue_one(job_repo)
-    claimed = job_repo.claim_next("EP400_RESULTS")
+    claimed = job_repo.claim_next(
+        "EP400_RESULTS",
+        "results-owner",
+        lease_seconds=60,
+    )
     assert claimed is not None
-    job_repo.mark_generated(job.job_id, "fake:SCENE_001")
+    job_repo.mark_generated(job.job_id, "fake:SCENE_001", "results-owner")
 
     before_download = service.snapshot("EP400_RESULTS")
     assert before_download.generated_count == 1
@@ -124,3 +134,83 @@ def test_download_success_requires_generated_job(tmp_path: Path) -> None:
 
     with pytest.raises(InternalInvariantError):
         service.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
+
+
+
+def test_migration_preserves_generated_result_and_existing_download(tmp_path: Path) -> None:
+    projects_root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(projects_root)
+    workspace = _workspace()
+    workspace_repo.save(workspace)
+    db_path = projects_root / workspace.episode_id / "project.sqlite3"
+    now = datetime(2026, 10, 7, 15, 0, tzinfo=UTC)
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE generation_jobs (
+                job_id TEXT PRIMARY KEY,
+                episode_id TEXT NOT NULL,
+                scene_id TEXT NOT NULL,
+                target_duration_s REAL NOT NULL,
+                flow_duration_s INTEGER NOT NULL,
+                state TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                remote_result_id TEXT,
+                error_message TEXT,
+                UNIQUE (episode_id, scene_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO generation_jobs (
+                job_id, episode_id, scene_id, target_duration_s,
+                flow_duration_s, state, created_at, updated_at,
+                remote_result_id, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                "EP400_RESULTS:SCENE_001:GENERATE",
+                "EP400_RESULTS",
+                "SCENE_001",
+                3.8,
+                4,
+                GenerationJobState.GENERATED.value,
+                now.isoformat(),
+                now.isoformat(),
+                "remote:kept",
+            ),
+        )
+        connection.commit()
+
+    output = tmp_path / "already-downloaded.mp4"
+    output.write_bytes(b"existing-result")
+    download_repo = SqliteDownloadResultRepository(projects_root)
+    download_repo.save(
+        DownloadRecord(
+            episode_id="EP400_RESULTS",
+            scene_id="SCENE_001",
+            state=DownloadState.DOWNLOADED,
+            updated_at=now,
+            output_path=str(output.resolve()),
+            take=1,
+        )
+    )
+
+    job_repo = SqliteGenerationJobRepository(projects_root)
+    writer = ResultManifestWriter(projects_root)
+    service = LocalResultsService(workspace_repo, job_repo, download_repo, writer)
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    migrated = job_repo.list_for_episode("EP400_RESULTS")
+
+    assert migrated[0].state is GenerationJobState.GENERATED
+    assert migrated[0].remote_result_id == "remote:kept"
+    assert migrated[0].created_at == now
+    assert migrated[0].updated_at == now
+    assert snapshot.generated_count == 1
+    assert snapshot.downloaded_count == 1
+    assert snapshot.scenes[0].remote_result_id == "remote:kept"
+    assert snapshot.scenes[0].output_path == str(output.resolve())
