@@ -171,9 +171,11 @@ class PlaywrightGoogleSessionDriver:
         user_data_dir.mkdir(parents=True, exist_ok=True)
         if self._browser_runtime_root.exists():
             os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(self._browser_runtime_root.resolve())
-        if self._playwright is None:
-            self._playwright = sync_playwright().start()
-        return self._playwright.chromium.launch_persistent_context(
+        playwright = self._playwright
+        if playwright is None:
+            playwright = sync_playwright().start()
+            self._playwright = playwright
+        return playwright.chromium.launch_persistent_context(
             user_data_dir=str(user_data_dir),
             headless=False,
         )
@@ -304,7 +306,7 @@ class GoogleSessionWorker(GoogleSessionPort):
             checked_raw = payload.get("last_checked_at")
             checked = datetime.fromisoformat(str(checked_raw)) if checked_raw else None
             detail = str(payload["detail"])
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             raise FlowOtomatisError("Metadata profil Google lokal tidak valid.") from exc
         return GoogleSessionProfile(
             profile_id=profile_id,
