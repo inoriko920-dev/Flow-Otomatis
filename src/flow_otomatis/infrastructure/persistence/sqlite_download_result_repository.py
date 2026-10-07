@@ -120,7 +120,5 @@ class SqliteDownloadResultRepository:
             updated_at=datetime.fromisoformat(str(row["updated_at"])),
             output_path=(str(row["output_path"]) if row["output_path"] is not None else None),
             take=int(row["take"]),
-            error_message=(
-                str(row["error_message"]) if row["error_message"] is not None else None
-            ),
+            error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
         )
