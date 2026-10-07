@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from flow_otomatis.presentation.fixtures import UiFixture
+from flow_otomatis.presentation.fixtures import UiFixture, get_fixture
 from flow_otomatis.presentation.widgets import (
     card,
     danger_button,
@@ -575,7 +575,27 @@ def _recovery_screen(fixture: UiFixture) -> QWidget:
 
 def _dialog_screen(fixture: UiFixture) -> QWidget:
     root = QWidget()
-    outer = QVBoxLayout(root)
+    stack = QGridLayout(root)
+    stack.setContentsMargins(0, 0, 0, 0)
+    stack.setSpacing(0)
+
+    background_codes = {
+        "UI-IMG-001C": "UI-IMG-001A",
+        "UI-IMG-012A": "UI-IMG-002A",
+        "UI-IMG-012B": "UI-IMG-002A",
+        "UI-IMG-013A": "UI-IMG-004B",
+        "UI-IMG-014A": "UI-IMG-002B",
+        "UI-IMG-015A": "UI-IMG-007A",
+    }
+    background = build_screen(get_fixture(background_codes[fixture.code]))
+    opacity = QGraphicsOpacityEffect(background)
+    opacity.setOpacity(0.42)
+    background.setGraphicsEffect(opacity)
+    stack.addWidget(background, 0, 0)
+
+    overlay = QWidget()
+    overlay.setStyleSheet("background: rgba(17, 24, 39, 38);")
+    outer = QVBoxLayout(overlay)
     outer.setContentsMargins(80, 50, 80, 50)
     outer.addStretch(1)
     modal, modal_layout = card(11)
@@ -677,6 +697,7 @@ def _dialog_screen(fixture: UiFixture) -> QWidget:
     center_layout.addStretch(1)
     outer.addWidget(center)
     outer.addStretch(1)
+    stack.addWidget(overlay, 0, 0)
     return root
 
 
