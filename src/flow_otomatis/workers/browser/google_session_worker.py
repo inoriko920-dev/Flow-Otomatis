@@ -81,9 +81,7 @@ class PlaywrightGoogleSessionDriver:
         *,
         context_pool: PlaywrightPersistentContextPool | None = None,
     ) -> None:
-        self._context_pool = context_pool or PlaywrightPersistentContextPool(
-            browser_runtime_root
-        )
+        self._context_pool = context_pool or PlaywrightPersistentContextPool(browser_runtime_root)
 
     def open_login(
         self,
