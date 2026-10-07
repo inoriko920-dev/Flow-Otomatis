@@ -131,6 +131,115 @@ jobs:
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
 
+      - name: Split portable ZIP into exactly three transport parts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $source = "dist/Flow-Otomatis-portable-win-x64.zip"
+          if (-not (Test-Path $source)) { throw "Portable ZIP not found: $source" }
+
+          $sourceFile = Get-Item $source
+          $totalLength = [int64]$sourceFile.Length
+          $partSize = [int64][Math]::Ceiling($totalLength / 3.0)
+          $buffer = New-Object byte[] (4MB)
+
+          $input = [System.IO.File]::OpenRead($source)
+          try {
+            for ($i = 1; $i -le 3; $i++) {
+              $partPath = "dist/Flow-Otomatis-portable-win-x64.zip.{0:D3}" -f $i
+              $output = [System.IO.File]::Create($partPath)
+              try {
+                $remaining = [Math]::Min($partSize, $totalLength - $input.Position)
+                while ($remaining -gt 0) {
+                  $toRead = [int][Math]::Min($buffer.Length, $remaining)
+                  $read = $input.Read($buffer, 0, $toRead)
+                  if ($read -le 0) { break }
+                  $output.Write($buffer, 0, $read)
+                  $remaining -= $read
+                }
+              }
+              finally {
+                $output.Dispose()
+              }
+            }
+          }
+          finally {
+            $input.Dispose()
+          }
+
+          $parts = @(
+            "dist/Flow-Otomatis-portable-win-x64.zip.001",
+            "dist/Flow-Otomatis-portable-win-x64.zip.002",
+            "dist/Flow-Otomatis-portable-win-x64.zip.003"
+          )
+          foreach ($part in $parts) {
+            if (-not (Test-Path $part)) { throw "Missing split part: $part" }
+            if ((Get-Item $part).Length -le 0) { throw "Empty split part: $part" }
+          }
+
+          $verify = "dist/Flow-Otomatis-portable-win-x64.recombined-check.zip"
+          $verifyStream = [System.IO.File]::Create($verify)
+          try {
+            foreach ($part in $parts) {
+              $partStream = [System.IO.File]::OpenRead($part)
+              try {
+                $partStream.CopyTo($verifyStream)
+              }
+              finally {
+                $partStream.Dispose()
+              }
+            }
+          }
+          finally {
+            $verifyStream.Dispose()
+          }
+
+          $sourceHash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          $verifyHash = (Get-FileHash $verify -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sourceHash -ne $verifyHash) {
+            throw "Recombined ZIP SHA-256 mismatch"
+          }
+
+          $lines = @("ORIGINAL_SHA256  $sourceHash")
+          foreach ($part in $parts) {
+            $hash = (Get-FileHash $part -Algorithm SHA256).Hash.ToLowerInvariant()
+            $name = Split-Path $part -Leaf
+            $size = (Get-Item $part).Length
+            $lines += "$hash  $name  $size bytes"
+          }
+          $lines | Set-Content -Path "dist/PARTS_SHA256SUMS.txt" -Encoding utf8
+          Remove-Item $verify -Force
+
+      - name: Upload transport part 001
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-PRE-LIVE-READY-part-001
+          path: |
+            dist/Flow-Otomatis-portable-win-x64.zip.001
+            dist/PARTS_SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload transport part 002
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-PRE-LIVE-READY-part-002
+          path: |
+            dist/Flow-Otomatis-portable-win-x64.zip.002
+            dist/PARTS_SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload transport part 003
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-PRE-LIVE-READY-part-003
+          path: |
+            dist/Flow-Otomatis-portable-win-x64.zip.003
+            dist/PARTS_SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload portable STEP 12 I12-01 restart-proof artifact
         uses: actions/upload-artifact@v4
         with:
