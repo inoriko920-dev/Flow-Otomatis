@@ -43,7 +43,9 @@ def _write_manifest(bundle_root: Path, repo_root: Path) -> None:
 
 
 def _zip_bundle(bundle_root: Path, zip_path: Path) -> None:
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+    with zipfile.ZipFile(
+        zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+    ) as archive:
         for path in sorted(bundle_root.rglob("*")):
             if path.is_file():
                 archive.write(path, path.relative_to(bundle_root.parent))
