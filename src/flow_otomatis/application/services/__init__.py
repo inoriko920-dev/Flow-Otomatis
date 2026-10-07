@@ -1,6 +1,7 @@
 """Application services."""
 
 from flow_otomatis.application.services.episode_import import EpisodeImportService
+from flow_otomatis.application.services.gemini_agent import GeminiAgentService
 from flow_otomatis.application.services.gemini_keys import (
     GeminiKeyImportSummary,
     GeminiKeyService,
@@ -21,6 +22,7 @@ from flow_otomatis.application.services.scene_planning import ScenePlanningServi
 __all__ = [
     "EpisodeImportService",
     "GeneratedMediaDownloadService",
+    "GeminiAgentService",
     "GeminiKeyImportSummary",
     "GeminiKeyService",
     "GoogleFlowPreflightService",

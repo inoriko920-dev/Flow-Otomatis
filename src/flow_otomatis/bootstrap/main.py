@@ -12,13 +12,17 @@ from PySide6.QtWidgets import QApplication
 
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GeminiAgentService,
     GeminiKeyService,
     GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
     ScenePlanningService,
 )
-from flow_otomatis.infrastructure.external import GeminiModelsHealthChecker
+from flow_otomatis.infrastructure.external import (
+    GeminiGenerateContentAgent,
+    GeminiModelsHealthChecker,
+)
 from flow_otomatis.infrastructure.filesystem import (
     EpisodePackageReader,
     PathService,
@@ -72,6 +76,10 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         KeyringSecretStore(),
         GeminiModelsHealthChecker(),
     )
+    gemini_agent_service = GeminiAgentService(
+        gemini_key_service,
+        GeminiGenerateContentAgent(),
+    )
     return MainWindow(
         fixture_code=fixture_code,
         episode_import_service=import_service,
@@ -80,6 +88,7 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         local_results_service=results_service,
         google_session_service=google_session_service,
         gemini_key_service=gemini_key_service,
+        gemini_agent_service=gemini_agent_service,
     )
 
 
