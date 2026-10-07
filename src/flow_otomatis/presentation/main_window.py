@@ -18,7 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
+from flow_otomatis.application.services import (
+    EpisodeImportService,
+    ProjectLibraryService,
+    ScenePlanningService,
+)
 from flow_otomatis.domain.errors import FlowOtomatisError, InternalInvariantError
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
@@ -26,6 +30,7 @@ from flow_otomatis.presentation.fixtures import (
     NAV_ITEMS,
     get_fixture,
 )
+from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 from flow_otomatis.presentation.theme import (
     RIGHT_DOCK_WIDTH,
@@ -80,6 +85,7 @@ class MainWindow(QMainWindow):
         *,
         episode_import_service: EpisodeImportService | None = None,
         scene_planning_service: ScenePlanningService | None = None,
+        project_library_service: ProjectLibraryService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -92,6 +98,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
+        self._project_library_service = project_library_service
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
@@ -229,13 +236,16 @@ class MainWindow(QMainWindow):
                 event.accept()
                 return
             if self._fixture_code == "REAL_VALIDATION":
-                self.show_fixture("UI-IMG-001A")
+                self.show_project_hub()
                 event.accept()
                 return
         super().keyPressEvent(event)
 
     def _open_navigation_item(self, item: str, checked: bool = False) -> None:
         del checked
+        if item == "Beranda" and self._project_library_service is not None:
+            self.show_project_hub()
+            return
         if item == "Workspace" and self._current_workspace is not None:
             self.show_workspace_state(self._current_workspace)
             return
@@ -284,6 +294,38 @@ class MainWindow(QMainWindow):
         self._right_host.setVisible(right_panel is not None)
         self._wire_import_button(screen)
 
+    def show_project_hub(self) -> None:
+        """Render real local recent projects using the frozen Project Hub."""
+
+        if self._project_library_service is None:
+            self.show_fixture("UI-IMG-001A")
+            return
+        workspaces = self._project_library_service.list_recent()
+        self._fixture_code = "REAL_PROJECT_HUB"
+        self._set_navigation("Beranda")
+        self._project_label.setText("Project lokal")
+        self._project_state_label.setText("Beranda")
+        self._status_project.setText(f"{len(workspaces)} project")
+        view = build_project_hub_view(
+            workspaces,
+            on_open=self.open_local_project,
+            on_import=self._choose_episode_package,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def open_local_project(self, episode_id: str) -> WorkspaceState:
+        """Open/recover one persisted workspace into the active session."""
+
+        if self._project_library_service is None:
+            raise InternalInvariantError("Project library service is not configured")
+        workspace = self._project_library_service.open_project(episode_id)
+        self._current_workspace = workspace
+        self._selected_scene_id = workspace.scenes[0].scene_id if workspace.scenes else None
+        self.show_workspace_state(workspace)
+        return workspace
+
     def _wire_import_button(self, screen: QWidget) -> None:
         if self._episode_import_service is None:
             return
@@ -320,7 +362,7 @@ class MainWindow(QMainWindow):
         view = build_validation_view(
             workspace,
             on_create=self.create_pending_workspace,
-            on_cancel=lambda: self.show_fixture("UI-IMG-001A"),
+            on_cancel=self.show_project_hub,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)

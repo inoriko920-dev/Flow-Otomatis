@@ -10,7 +10,11 @@ from typing import cast
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
+from flow_otomatis.application.services import (
+    EpisodeImportService,
+    ProjectLibraryService,
+    ScenePlanningService,
+)
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader, PathService
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
 from flow_otomatis.presentation.fixtures import DEFAULT_FIXTURE_CODE
@@ -18,17 +22,19 @@ from flow_otomatis.presentation.main_window import MainWindow
 
 
 def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
-    """Create the production shell with local import/planning adapters."""
+    """Create the production shell with local STEP 10/11 adapters."""
 
     paths = PathService.discover()
     package_reader = EpisodePackageReader()
     workspace_repository = SqliteWorkspaceRepository(paths.projects_root)
     import_service = EpisodeImportService(package_reader, workspace_repository)
     planning_service = ScenePlanningService(package_reader, workspace_repository)
+    library_service = ProjectLibraryService(workspace_repository)
     return MainWindow(
         fixture_code=fixture_code,
         episode_import_service=import_service,
         scene_planning_service=planning_service,
+        project_library_service=library_service,
     )
 
 

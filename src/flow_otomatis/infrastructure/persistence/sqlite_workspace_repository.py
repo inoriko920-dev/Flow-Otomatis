@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from flow_otomatis.domain.errors import StorageError
@@ -83,7 +84,9 @@ class SqliteWorkspaceRepository:
         try:
             with sqlite3.connect(db_path) as connection:
                 connection.row_factory = sqlite3.Row
-                project = connection.execute("SELECT * FROM project WHERE singleton = 1").fetchone()
+                project = connection.execute(
+                    "SELECT * FROM project WHERE singleton = 1"
+                ).fetchone()
                 if project is None:
                     return None
                 scene_rows = connection.execute(
@@ -113,9 +116,6 @@ class SqliteWorkspaceRepository:
             )
             for row in scene_rows
         )
-
-        from datetime import datetime
-
         return WorkspaceState(
             schema_version=str(project["schema_version"]),
             episode_id=str(project["episode_id"]),
@@ -128,6 +128,25 @@ class SqliteWorkspaceRepository:
             aspect_ratio=str(project["aspect_ratio"]),
             scenes=scenes,
         )
+
+    def list_recent(self, limit: int = 10) -> tuple[WorkspaceState, ...]:
+        """Read valid project databases and return newest persisted state first."""
+
+        if limit < 1 or not self._projects_root.is_dir():
+            return ()
+
+        workspaces: list[WorkspaceState] = []
+        for db_path in self._projects_root.glob("*/project.sqlite3"):
+            episode_id = db_path.parent.name
+            try:
+                workspace = self.load(episode_id)
+            except StorageError:
+                continue
+            if workspace is not None:
+                workspaces.append(workspace)
+
+        workspaces.sort(key=lambda item: item.imported_at, reverse=True)
+        return tuple(workspaces[:limit])
 
     def _db_path(self, episode_id: str) -> Path:
         return self._projects_root / episode_id / "project.sqlite3"

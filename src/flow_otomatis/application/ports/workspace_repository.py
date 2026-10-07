@@ -17,3 +17,7 @@ class WorkspaceRepositoryPort(Protocol):
     def load(self, episode_id: str) -> WorkspaceState | None:
         """Load the latest persisted workspace for an episode."""
         ...
+
+    def list_recent(self, limit: int = 10) -> tuple[WorkspaceState, ...]:
+        """List most recently imported local workspaces."""
+        ...
