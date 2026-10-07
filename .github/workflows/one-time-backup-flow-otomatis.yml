@@ -1,4 +1,4 @@
-name: One-time Flow-Otomatis full backup
+name: One-time Flow-Otomatis recovery backup
 
 on:
   push:
@@ -7,10 +7,17 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   backup:
     runs-on: ubuntu-latest
+    env:
+      BACKUP_TS: 2026-10-07_20-09-12_WIB
+      MAIN_COMMIT: 60b9a303d46bd623c94e24865782d15a6f64f375
+      BUILD_COMMIT: 6abfbc169a0864c00f1136cfc7dd6a7fe7583b8a
+      BUILD_RUN_ID: "37617108389"
+      BUILD_ARTIFACT_ID: "11481001812"
     steps:
       - name: Checkout main with full history
         uses: actions/checkout@v4
@@ -19,51 +26,326 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Fetch all accessible refs
+      - name: Fetch all refs and assert frozen main commit
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' --prune --force
           git checkout main
           git reset --hard origin/main
+          ACTUAL="$(git rev-parse HEAD)"
+          test "$ACTUAL" = "$MAIN_COMMIT"
 
-      - name: Create verified Git bundle and source snapshot
+      - name: Assemble single-app recovery backup
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TS="2026-10-07_20-09-12_WIB"
-          OUT="$RUNNER_TEMP/flow-backup"
-          mkdir -p "$OUT"
+          ROOT="$RUNNER_TEMP/BACKUP-FLOW-OTOMATIS-$BACKUP_TS"
+          APP="$ROOT/APP_001_FLOW_OTOMATIS"
+          mkdir -p "$APP"/{GIT,SOURCE,BUILD,DOCS,RECOVERY}
 
-          git bundle create "$OUT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle" --all
-          git bundle verify "$OUT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle"             > "$OUT/GIT_BUNDLE_VERIFY.txt" 2>&1
+          # Git history + source snapshot are intentionally separate.
+          BUNDLE="$APP/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$BACKUP_TS.bundle"
+          SOURCE_ZIP="$APP/SOURCE/Flow-Otomatis-SOURCE-main-$BACKUP_TS.zip"
+          git bundle create "$BUNDLE" --all
+          git bundle verify "$BUNDLE" > "$APP/GIT/GIT_BUNDLE_VERIFY.txt" 2>&1
+          git archive --format=zip --output "$SOURCE_ZIP" main
+          unzip -t "$SOURCE_ZIP" > "$APP/SOURCE/SOURCE_ZIP_VERIFY.txt"
 
-          git archive --format=zip             --output "$OUT/Flow-Otomatis-SOURCE-main-$TS.zip"             main
+          # Prove bundle can reconstruct the repository and reaches the frozen main commit.
+          RESTORE_TEST="$RUNNER_TEMP/restore-test"
+          rm -rf "$RESTORE_TEST"
+          git clone "$BUNDLE" "$RESTORE_TEST" > "$APP/GIT/GIT_BUNDLE_CLONE_TEST.txt" 2>&1
+          RESTORED_HEAD="$(git -C "$RESTORE_TEST" rev-parse main)"
+          test "$RESTORED_HEAD" = "$MAIN_COMMIT"
+          echo "RESTORED_MAIN_COMMIT=$RESTORED_HEAD" >> "$APP/GIT/GIT_BUNDLE_CLONE_TEST.txt"
 
-          git rev-parse main > "$OUT/MAIN_COMMIT.txt"
-          git for-each-ref --format='%(refname) %(objectname)' refs/heads refs/remotes refs/tags             > "$OUT/ALL_REFS.txt"
-          git for-each-ref --format='%(refname:short) %(objectname)' refs/heads             > "$OUT/BRANCHES.txt"
-          git for-each-ref --format='%(refname:short) %(objectname)' refs/tags             > "$OUT/TAGS.txt"
-          git log --all --date=iso-strict             --pretty=format:'%H%x09%ad%x09%an%x09%s'             > "$OUT/COMMIT_HISTORY.txt"
+          # Repository metadata.
+          git rev-parse main > "$APP/MAIN_COMMIT.txt"
+          git for-each-ref --format='%(refname:short) %(objectname)' refs/heads > "$APP/BRANCHES.txt"
+          git for-each-ref --format='%(refname:short) %(objectname)' refs/tags > "$APP/TAGS.txt"
+          git for-each-ref --format='%(refname) %(objectname)' refs/heads refs/remotes refs/tags > "$APP/ALL_REFS.txt"
+          git log --all --date=iso-strict --pretty=format:'%H%x09%ad%x09%an%x09%s' > "$APP/COMMIT_HISTORY.txt"
 
+          cat > "$APP/REPOSITORY_INFO.txt" <<EOF
+          APP_NAME=Flow-Otomatis
+          ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis
+          DEFAULT_BRANCH=main
+          MAIN_COMMIT=$MAIN_COMMIT
+          BACKUP_STARTED_WIB=2026-10-07T20:09:12+07:00
+          BACKUP_COMPLETED_WIB=$(TZ=Asia/Jakarta date --iso-8601=seconds)
+          SOURCE_STATUS=BACKUP_COMPLETE
+          GIT_HISTORY_STATUS=BACKUP_COMPLETE
+          EOF
+
+          # Important documentation is duplicated outside SOURCE for easier recovery reading.
+          cp -R docs "$APP/DOCS/repo-docs"
+          for f in README.md PROJECT_STATE.md TASKS.md AGENTS.md PLAN.md pyproject.toml uv.lock; do
+            test ! -f "$f" || cp "$f" "$APP/DOCS/"
+          done
+          cp -R .github "$APP/DOCS/github-config"
+
+          # Record secret names referenced by workflows, never secret values.
+          SECRET_NAMES="$(grep -RhoE 'secrets\.[A-Za-z0-9_]+' .github/workflows 2>/dev/null | sed 's/^secrets\.//' | sort -u || true)"
           {
-            echo "BACKUP_TIMESTAMP_WIB=2026-10-07T20:09:12+07:00"
-            echo "REPOSITORY=https://github.com/inoriko920-dev/Flow-Otomatis"
-            echo "DEFAULT_BRANCH=main"
-            echo "MAIN_COMMIT=$(git rev-parse main)"
-            echo "GIT_BUNDLE_VERIFY=PASS"
-          } > "$OUT/BACKUP_CAPTURE_INFO.txt"
+            echo "Secret values are NEVER included in this backup."
+            if [ -n "$SECRET_NAMES" ]; then
+              while IFS= read -r name; do
+                [ -n "$name" ] && echo "SECRET_REQUIRED_BUT_NOT_BACKED_UP: $name"
+              done <<< "$SECRET_NAMES"
+            else
+              echo "NO_REPOSITORY_SECRET_REFERENCE_DETECTED"
+            fi
+          } > "$APP/REQUIRED_SECRETS.txt"
 
-          cd "$OUT"
-          sha256sum * > SHA256SUMS_CAPTURE.txt
-          test -s "Flow-Otomatis-COMPLETE-GIT-HISTORY-$TS.bundle"
-          test -s "Flow-Otomatis-SOURCE-main-$TS.zip"
-          unzip -t "Flow-Otomatis-SOURCE-main-$TS.zip"
+          # Download the latest tested Windows artifact from the known successful CI run.
+          BUILD_CONTAINER="$RUNNER_TEMP/windows-build-artifact.zip"
+          BUILD_EXTRACT="$RUNNER_TEMP/windows-build-extract"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$BUILD_ARTIFACT_ID/zip" > "$BUILD_CONTAINER"
+          mkdir -p "$BUILD_EXTRACT"
+          unzip -q "$BUILD_CONTAINER" -d "$BUILD_EXTRACT"
+          INNER_ZIP="$(find "$BUILD_EXTRACT" -type f -name '*.zip' | head -1 || true)"
+          if [ -n "$INNER_ZIP" ]; then
+            cp "$INNER_ZIP" "$APP/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip"
+          else
+            (cd "$BUILD_EXTRACT" && zip -qr "$APP/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip" .)
+          fi
+          unzip -t "$APP/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip" > "$APP/BUILD/BUILD_ZIP_VERIFY.txt"
+          cat > "$APP/BUILD/BUILD_INFO.txt" <<EOF
+          BUILD_STATUS=TESTED_CI_ARTIFACT
+          BUILD_COMMIT=$BUILD_COMMIT
+          CI_RUN_ID=$BUILD_RUN_ID
+          ARTIFACT_ID=$BUILD_ARTIFACT_ID
+          ORIGINAL_ARTIFACT_DIGEST=sha256:e24ff70fb31cc8ffa31de2fa1f6af5507f742d6ace49bf77d5ad548e1dd19d75
+          EOF
 
-      - name: Upload verified backup capture
+          # Beginner-oriented restore instructions.
+          cat > "$APP/README_RESTORE.txt" <<'EOF'
+          FLOW-OTOMATIS — PETUNJUK RESTORE RINGKAS
+          1. Jalankan RECOVERY\VERIFY_BACKUP.ps1.
+          2. Pastikan seluruh checksum PASS.
+          3. Pastikan GIT\GIT_BUNDLE_VERIFY.txt menyatakan bundle valid.
+          4. Buat repository KOSONG pada akun GitHub baru.
+          5. Jalankan RECOVERY\RESTORE_TO_NEW_GITHUB.ps1.
+          6. Masukkan URL repo GitHub baru saat diminta.
+          7. Script akan memulihkan Git Bundle ke folder lokal.
+          8. Script TIDAK push otomatis tanpa konfirmasi.
+          9. Pasang ulang secret yang tercatat di REQUIRED_SECRETS.txt jika ada.
+          10. Cocokkan MAIN_COMMIT.txt setelah restore.
+          EOF
+
+          cat > "$APP/RECOVERY/PETUNJUK_PEMULIHAN.txt" <<'EOF'
+          KONDISI: GitHub lama sudah tidak bisa diakses.
+          1. Ekstrak ZIP backup ini.
+          2. Buka APP_001_FLOW_OTOMATIS.
+          3. Jalankan VERIFY_BACKUP.ps1 dari PowerShell.
+          4. Buat repo kosong baru di GitHub.
+          5. Jalankan RESTORE_TO_NEW_GITHUB.ps1.
+          6. Masukkan URL repo baru.
+          7. Periksa branch main dan commit terhadap MAIN_COMMIT.txt.
+          8. Pasang ulang secret yang disebut REQUIRED_SECRETS.txt; nilai secret tidak ada di backup.
+          9. Push hanya setelah Anda menyetujui konfirmasi script.
+          10. Jalankan workflow CI/build dari repo baru.
+          EOF
+
+          cat > "$APP/RECOVERY/VERIFY_BACKUP.ps1" <<'PS1'
+          $ErrorActionPreference = "Stop"
+          $AppRoot = Split-Path $PSScriptRoot -Parent
+          $List = Join-Path $AppRoot "SHA256SUMS.txt"
+          if (!(Test-Path $List)) { throw "SHA256SUMS.txt tidak ditemukan." }
+          $failed = $false
+          Get-Content $List | ForEach-Object {
+              if ($_ -match '^([0-9a-fA-F]{64})\s+\*(.+)$') {
+                  $expected = $Matches[1].ToLower()
+                  $relative = $Matches[2]
+                  $target = Join-Path $AppRoot $relative
+                  if (!(Test-Path $target)) {
+                      Write-Host "MISSING $relative"
+                      $failed = $true
+                  } else {
+                      $actual = (Get-FileHash -Algorithm SHA256 $target).Hash.ToLower()
+                      if ($actual -eq $expected) { Write-Host "PASS $relative" }
+                      else { Write-Host "FAIL $relative"; $failed = $true }
+                  }
+              }
+          }
+          if ($failed) { throw "Verifikasi backup gagal." }
+          Write-Host "SEMUA CHECKSUM APP PASS."
+          PS1
+
+          cat > "$APP/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1" <<'PS1'
+          $ErrorActionPreference = "Stop"
+          $AppRoot = Split-Path $PSScriptRoot -Parent
+          $Bundle = Get-ChildItem (Join-Path $AppRoot "GIT") -Filter "*.bundle" | Select-Object -First 1
+          if (!$Bundle) { throw "Git Bundle tidak ditemukan." }
+          $Dest = Read-Host "Folder restore lokal (contoh C:\Restore\Flow-Otomatis)"
+          if (Test-Path $Dest) { throw "Folder tujuan sudah ada. Pilih folder kosong." }
+          git clone $Bundle.FullName $Dest
+          if ($LASTEXITCODE -ne 0) { throw "git clone bundle gagal." }
+          Set-Location $Dest
+          $NewRemote = Read-Host "URL repo GitHub BARU (contoh https://github.com/user/Flow-Otomatis.git)"
+          git remote remove origin 2>$null
+          git remote add origin $NewRemote
+          Write-Host "Remote baru sudah disiapkan: $NewRemote"
+          $answer = Read-Host "Ketik PUSH untuk push main dan tags. Selain PUSH = berhenti aman"
+          if ($answer -ceq "PUSH") {
+              git push -u origin main
+              if ($LASTEXITCODE -ne 0) { throw "Push main gagal." }
+              git push origin --tags
+              if ($LASTEXITCODE -ne 0) { throw "Push tags gagal." }
+              Write-Host "Restore GitHub selesai."
+          } else {
+              Write-Host "Tidak ada data yang dikirim ke GitHub."
+          }
+          PS1
+
+          # Secret/token safety scan of repository source.
+          RISK=0
+          if grep -RIlE '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----' . --exclude-dir=.git --exclude='*.lock' | grep -q .; then RISK=1; fi
+          if grep -RIEl 'AIza[0-9A-Za-z_-]{30,}|github_pat_[0-9A-Za-z_]{20,}|gh[pousr]_[0-9A-Za-z]{20,}' . --exclude-dir=.git | grep -q .; then RISK=1; fi
+          if find . -type f \( -name '.env' -o -name '*.pem' -o -name '*.p12' -o -name '*.key' \) | grep -q .; then RISK=1; fi
+          test "$RISK" -eq 0
+          echo "PASS: no high-confidence API key/token/private-key file pattern detected in main source." > "$APP/SECRET_SCAN.txt"
+
+          cat > "$APP/STATUS_BACKUP.txt" <<EOF
+          BACKUP_STATUS=BACKUP_COMPLETE
+          SOURCE=BACKUP_COMPLETE
+          GIT_HISTORY=BACKUP_COMPLETE
+          GIT_BUNDLE_VERIFY=PASS
+          GIT_BUNDLE_CLONE_TEST=PASS
+          BUILD=BACKUP_COMPLETE
+          BUILD_VERIFY=PASS
+          DOCUMENTATION=BACKUP_COMPLETE
+          RECOVERY_SCRIPTS=BACKUP_COMPLETE
+          SECRET_SCAN=PASS
+          MAIN_COMMIT=$MAIN_COMMIT
+          EOF
+
+          # Checksums per app (exclude checksum file itself).
+          (
+            cd "$APP"
+            find . -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  *#'
+          ) > "$APP/SHA256SUMS.txt"
+
+          cat > "$ROOT/00_README_PERTAMA.txt" <<'EOF'
+          BACKUP KHUSUS SATU APP: FLOW-OTOMATIS
+          Ini BUKAN backup seluruh aplikasi.
+          Mulai dari APP_001_FLOW_OTOMATIS\README_RESTORE.txt.
+          Jalankan VERIFY_ALL_BACKUP.ps1 sebelum melakukan restore.
+          Password, API key, token, cookie, browser-data, MFA code, dan secret value tidak disimpan.
+          EOF
+
+          cat > "$ROOT/00_BACKUP_INFO.txt" <<EOF
+          BACKUP_SCOPE=Flow-Otomatis ONLY
+          BACKUP_STARTED_WIB=2026-10-07T20:09:12+07:00
+          BACKUP_COMPLETED_WIB=$(TZ=Asia/Jakarta date --iso-8601=seconds)
+          ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis
+          DEFAULT_BRANCH=main
+          MAIN_COMMIT=$MAIN_COMMIT
+          BUILD_COMMIT=$BUILD_COMMIT
+          FINAL_STATUS=BACKUP_COMPLETE
+          EOF
+
+          cat > "$ROOT/00_MASTER_MANIFEST.txt" <<EOF
+          TOTAL_PROJECTS=1
+          APP_NAME=Flow-Otomatis
+          ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis
+          BACKUP_DATE_WIB=2026-10-07
+          BACKUP_TIME_WIB=20:09:12
+          MAIN_COMMIT=$MAIN_COMMIT
+          GIT_BUNDLE=APP_001_FLOW_OTOMATIS/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY-$BACKUP_TS.bundle
+          SOURCE_SNAPSHOT=APP_001_FLOW_OTOMATIS/SOURCE/Flow-Otomatis-SOURCE-main-$BACKUP_TS.zip
+          BUILD=APP_001_FLOW_OTOMATIS/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip
+          DOCS=APP_001_FLOW_OTOMATIS/DOCS
+          RECOVERY_SCRIPT=APP_001_FLOW_OTOMATIS/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1
+          BACKUP_STATUS=BACKUP_COMPLETE
+          CHECKSUM_STATUS=PASS
+          EOF
+
+          cat > "$ROOT/00_MASTER_MANIFEST.csv" <<EOF
+          NAMA_PROYEK,REPO,DEFAULT_BRANCH,COMMIT_TERBARU,BRANCH,TAG,STATUS_SOURCE,STATUS_BUILD,STATUS_DOKUMENTASI,STATUS_BACKUP,CATATAN
+          Flow-Otomatis,https://github.com/inoriko920-dev/Flow-Otomatis,main,$MAIN_COMMIT,main,"$(tr '\n' ';' < "$APP/TAGS.txt")",BACKUP_COMPLETE,BACKUP_COMPLETE,BACKUP_COMPLETE,BACKUP_COMPLETE,"Git Bundle verified; latest tested Windows build included"
+          EOF
+
+          cat > "$ROOT/RESTORE_ALL.ps1" <<'PS1'
+          $ErrorActionPreference = "Stop"
+          Write-Host "[1] Flow-Otomatis"
+          $choice = Read-Host "Pilih nomor aplikasi yang akan direstore"
+          if ($choice -eq "1") {
+              & (Join-Path $PSScriptRoot "APP_001_FLOW_OTOMATIS\RECOVERY\RESTORE_TO_NEW_GITHUB.ps1")
+          } else {
+              Write-Host "Tidak ada restore dijalankan."
+          }
+          PS1
+
+          cat > "$ROOT/VERIFY_ALL_BACKUP.ps1" <<'PS1'
+          $ErrorActionPreference = "Stop"
+          $List = Join-Path $PSScriptRoot "00_SHA256SUMS.txt"
+          if (!(Test-Path $List)) { throw "00_SHA256SUMS.txt tidak ditemukan." }
+          $failed = $false
+          Get-Content $List | ForEach-Object {
+              if ($_ -match '^([0-9a-fA-F]{64})\s+\*(.+)$') {
+                  $expected = $Matches[1].ToLower()
+                  $relative = $Matches[2]
+                  $target = Join-Path $PSScriptRoot $relative
+                  if (!(Test-Path $target)) {
+                      Write-Host "MISSING $relative"; $failed = $true
+                  } else {
+                      $actual = (Get-FileHash -Algorithm SHA256 $target).Hash.ToLower()
+                      if ($actual -eq $expected) { Write-Host "PASS $relative" }
+                      else { Write-Host "FAIL $relative"; $failed = $true }
+                  }
+              }
+          }
+          if ($failed) { throw "Verifikasi master backup gagal." }
+          Write-Host "SEMUA CHECKSUM MASTER PASS."
+          PS1
+
+          # Master checksums, excluding itself.
+          (
+            cd "$ROOT"
+            find . -type f ! -name '00_SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  *#'
+          ) > "$ROOT/00_SHA256SUMS.txt"
+
+          # Final structural and content validation before artifact upload.
+          test -s "$APP/MAIN_COMMIT.txt"
+          test "$(cat "$APP/MAIN_COMMIT.txt")" = "$MAIN_COMMIT"
+          test -s "$BUNDLE"
+          git bundle verify "$BUNDLE" >/dev/null
+          test -s "$SOURCE_ZIP"
+          unzip -t "$SOURCE_ZIP" >/dev/null
+          test -s "$APP/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip"
+          unzip -t "$APP/BUILD/Flow-Otomatis-Windows-Portable-Latest-Tested.zip" >/dev/null
+          test -s "$APP/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1"
+          test -s "$ROOT/VERIFY_ALL_BACKUP.ps1"
+          test "$(find "$ROOT" -maxdepth 1 -type d -name 'APP_*' | wc -l)" -eq 1
+          grep -q 'TOTAL_PROJECTS=1' "$ROOT/00_MASTER_MANIFEST.txt"
+
+          # Verify master checksum list on Linux before packaging.
+          (
+            cd "$ROOT"
+            while IFS= read -r line; do
+              hash="${line%% *}"
+              file="${line#*\*}"
+              echo "$hash  $file" | sha256sum -c -
+            done < 00_SHA256SUMS.txt
+          ) > "$ROOT/00_CHECKSUM_VERIFY_RESULT.txt"
+
+          # Validate an equivalent local final ZIP before GitHub artifact packaging.
+          FINAL_TEST_ZIP="$RUNNER_TEMP/BACKUP-FLOW-OTOMATIS-$BACKUP_TS-LOCAL-VERIFIED.zip"
+          (cd "$ROOT" && zip -qr "$FINAL_TEST_ZIP" .)
+          unzip -t "$FINAL_TEST_ZIP" > "$ROOT/00_FINAL_ZIP_VERIFY.txt"
+          sha256sum "$FINAL_TEST_ZIP" > "$ROOT/00_LOCAL_VERIFIED_ZIP_SHA256.txt"
+
+          echo "BACKUP_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Upload final single-app backup
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-git-source-backup-2026-10-07_20-09-12_WIB
-          path: ${{ runner.temp }}/flow-backup/*
+          name: BACKUP-FLOW-OTOMATIS-2026-10-07_20-09-12_WIB
+          path: ${{ env.BACKUP_ROOT }}/*
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
