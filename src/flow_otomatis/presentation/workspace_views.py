@@ -6,10 +6,12 @@ from collections.abc import Callable
 
 from PySide6.QtWidgets import (
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QWidget,
 )
 
@@ -172,6 +174,9 @@ def build_workspace_right_panel(
     *,
     scene_id: str,
     on_select_duration: Callable[[int], object],
+    on_agent_question: Callable[[str], object] | None = None,
+    agent_answer: str | None = None,
+    agent_busy: bool = False,
 ) -> QWidget | None:
     """Render frozen Scene/Agent dock for the selected persisted Scene."""
 
@@ -215,4 +220,51 @@ def build_workspace_right_panel(
         )
         button.setObjectName("Primary" if is_selected or is_recommended else "")
         button.clicked.connect(lambda _checked=False, value=duration: on_select_duration(value))
+
+    agent_inputs = panel.findChildren(QLineEdit)
+    agent_input = agent_inputs[0] if agent_inputs else None
+    send_button = next(
+        (button for button in panel.findChildren(QPushButton) if button.text() == "Kirim"),
+        None,
+    )
+    answer_label = next(
+        (
+            label
+            for label in panel.findChildren(QLabel)
+            if label.text().startswith("Saya siap membantu membaca status project")
+        ),
+        None,
+    )
+    display_answer = (
+        "Sedang menganalisis status project…"
+        if agent_busy
+        else (
+            agent_answer
+            or "Saya siap membantu membaca status project dan mengusulkan tindakan yang aman."
+        )
+    )
+    if answer_label is not None:
+        answer_label.setText(display_answer[:2400])
+        answer_label.setWordWrap(True)
+
+    def submit_agent_question() -> None:
+        if on_agent_question is None or agent_input is None or agent_busy:
+            return
+        question = agent_input.text().strip()
+        if question:
+            on_agent_question(question)
+
+    if agent_input is not None:
+        agent_input.setEnabled(not agent_busy)
+        if on_agent_question is not None:
+            agent_input.returnPressed.connect(submit_agent_question)
+    if send_button is not None:
+        send_button.setEnabled(not agent_busy and on_agent_question is not None)
+        if on_agent_question is not None:
+            send_button.clicked.connect(submit_agent_question)
+
+    if agent_busy or agent_answer:
+        tabs = panel if isinstance(panel, QTabWidget) else panel.findChild(QTabWidget)
+        if tabs is not None and tabs.count() > 1:
+            tabs.setCurrentIndex(1)
     return panel
