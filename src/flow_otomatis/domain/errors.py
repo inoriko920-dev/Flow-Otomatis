@@ -41,3 +41,11 @@ class WorkspaceAlreadyExistsError(FlowOtomatisError):
 
 class StorageError(FlowOtomatisError):
     """Local project persistence failed."""
+
+
+class WorkspaceCorruptError(StorageError):
+    """Persisted workspace rows cannot be decoded safely."""
+
+    def __init__(self, episode_id: str) -> None:
+        self.episode_id = episode_id
+        super().__init__(f"Workspace data is corrupt: {episode_id}")

@@ -30,7 +30,9 @@ from flow_otomatis.application.services import (
 from flow_otomatis.domain.errors import (
     FlowOtomatisError,
     InternalInvariantError,
+    StorageError,
     WorkspaceAlreadyExistsError,
+    WorkspaceCorruptError,
 )
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
@@ -335,20 +337,57 @@ class MainWindow(QMainWindow):
         if self._project_library_service is None:
             self.show_fixture("UI-IMG-001A")
             return
-        workspaces = self._project_library_service.list_recent()
+        scan = self._project_library_service.scan_recent()
+        workspaces = scan.workspaces
         self._fixture_code = "REAL_PROJECT_HUB"
         self._set_navigation("Beranda")
         self._project_label.setText("Project lokal")
         self._project_state_label.setText("Beranda")
-        self._status_project.setText(f"{len(workspaces)} project")
+        if scan.issues:
+            self._status_project.setText(
+                f"{len(workspaces)} project • {len(scan.issues)} bermasalah"
+            )
+        else:
+            self._status_project.setText(f"{len(workspaces)} project")
         view = build_project_hub_view(
             workspaces,
-            on_open=self.open_local_project,
+            issues=scan.issues,
+            on_open=self._open_local_project_from_ui,
             on_import=self._choose_episode_package,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
+
+    def _open_local_project_from_ui(self, episode_id: str) -> None:
+        """Open a Project Hub row without leaking storage/decode failures to Qt."""
+
+        try:
+            self.open_local_project(episode_id)
+        except WorkspaceCorruptError:
+            QMessageBox.warning(
+                self,
+                "Project Data Rusak",
+                (
+                    f"Project {episode_id} tidak dapat dibuka karena data lokalnya rusak. "
+                    "File project tidak diubah. Pulihkan dari backup atau salinan yang sehat."
+                ),
+            )
+        except StorageError:
+            QMessageBox.warning(
+                self,
+                "Project Tidak Tersedia",
+                (
+                    f"Project {episode_id} sementara tidak dapat dibaca. "
+                    "File project tidak diubah."
+                ),
+            )
+        except FlowOtomatisError:
+            QMessageBox.warning(
+                self,
+                "Project Tidak Dapat Dibuka",
+                f"Project {episode_id} tidak dapat dibuka dari penyimpanan lokal.",
+            )
 
     def open_local_project(self, episode_id: str) -> WorkspaceState:
         """Open/recover one persisted workspace into the active session."""
