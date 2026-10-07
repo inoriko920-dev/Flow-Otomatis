@@ -6,6 +6,12 @@ from flow_otomatis.application.ports.episode_package import (
     PackageSceneEvidence,
     PackageSnapshot,
 )
+from flow_otomatis.application.ports.gemini_keys import (
+    GeminiKeyHealthEvidence,
+    GeminiKeyHealthPort,
+    GeminiKeyRepositoryPort,
+    SecretStorePort,
+)
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
@@ -47,6 +53,9 @@ __all__ = [
     "GeneratedMediaDownloadProviderPort",
     "GeneratedMediaDownloadRequest",
     "GeneratedMediaDownloadResult",
+    "GeminiKeyHealthEvidence",
+    "GeminiKeyHealthPort",
+    "GeminiKeyRepositoryPort",
     "GenerationAuthenticationRequiredError",
     "GenerationCancelledError",
     "GenerationJobRepositoryPort",
@@ -71,5 +80,6 @@ __all__ = [
     "PackageSceneEvidence",
     "PackageSnapshot",
     "ResultManifestWriterPort",
+    "SecretStorePort",
     "WorkspaceRepositoryPort",
 ]
