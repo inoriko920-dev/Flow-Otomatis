@@ -58,4 +58,5 @@ warn_unused_configs = true
 minversion = "9.0"
 addopts = "-ra --strict-config --strict-markers"
 testpaths = ["tests"]
+pythonpath = ["."]
 qt_api = "pyside6"
