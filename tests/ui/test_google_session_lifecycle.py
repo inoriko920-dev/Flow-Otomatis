@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QLabel, QPushButton
 
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionProfile,
+    GoogleSessionRestartGate,
     GoogleSessionState,
 )
 from flow_otomatis.application.services import GoogleSessionService
@@ -22,6 +23,7 @@ class FixtureSessionPort:
             detail="Login manual diperlukan.",
         )
         self.opened = False
+        self.restart_verified = False
 
     def list_profiles(self) -> tuple[GoogleSessionProfile, ...]:
         return (self.profile,)
@@ -51,6 +53,17 @@ class FixtureSessionPort:
             detail="Sesi Google terotorisasi dan siap digunakan.",
         )
         return self.profile
+
+    def get_restart_gate(self, profile_id: str) -> GoogleSessionRestartGate:
+        assert profile_id == self.profile.profile_id
+        return GoogleSessionRestartGate(
+            profile_id=profile_id,
+            current_state=self.profile.state,
+            first_ready_at=self.profile.last_checked_at,
+            restart_verified_at=(
+                datetime.now(UTC) if self.restart_verified else None
+            ),
+        )
 
     def cancel_profile(self, profile_id: str) -> None:
         assert profile_id == self.profile.profile_id
@@ -82,3 +95,25 @@ def test_real_google_profile_navigation_and_manual_login(qtbot) -> None:
     assert window.fixture_code == "REAL_GOOGLE_LOGIN"
     labels = [label.text() for label in window.findChildren(QLabel)]
     assert "Sesi berhasil diverifikasi" in labels
+    assert "Restart belum diverifikasi" in labels
+    assert "Belum lulus" in labels
+
+
+def test_google_login_view_shows_restart_gate_pass(qtbot) -> None:
+    port = FixtureSessionPort()
+    port.profile = GoogleSessionProfile(
+        profile_id=port.profile.profile_id,
+        label=port.profile.label,
+        state=GoogleSessionState.READY,
+        last_checked_at=datetime.now(UTC),
+        detail="Sesi Google terotorisasi dan siap digunakan.",
+    )
+    port.restart_verified = True
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+
+    window.show_google_login(port.profile)
+
+    labels = [label.text() for label in window.findChildren(QLabel)]
+    assert "Restart berhasil diverifikasi" in labels
+    assert "Lulus" in labels

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionProfile,
+    GoogleSessionRestartGate,
     GoogleSessionState,
 )
 from flow_otomatis.presentation.widgets import (
@@ -133,6 +134,7 @@ def build_google_profiles_view(
 def build_google_login_view(
     profile: GoogleSessionProfile,
     *,
+    restart_gate: GoogleSessionRestartGate,
     on_open_login: Callable[[], None],
     on_recheck: Callable[[], None],
     on_back: Callable[[], None],
@@ -153,6 +155,22 @@ def build_google_login_view(
                 "success",
             )
         )
+        if restart_gate.ready_after_restart:
+            layout.addWidget(
+                info_banner(
+                    "Restart berhasil diverifikasi",
+                    "Sesi tetap Siap setelah aplikasi ditutup dan dibuka kembali.",
+                    "success",
+                )
+            )
+        else:
+            layout.addWidget(
+                info_banner(
+                    "Restart belum diverifikasi",
+                    "Sesi sudah Siap, tetapi belum terbukti bertahan setelah restart aplikasi.",
+                    "info",
+                )
+            )
     elif profile.state is GoogleSessionState.ERROR:
         layout.addWidget(info_banner("Sesi memerlukan perhatian", profile.detail, "error"))
     else:
@@ -169,9 +187,22 @@ def build_google_login_view(
     steps_layout.addWidget(section_header("Langkah aman"))
     steps_layout.addWidget(labeled_value("Profil", profile.label, strong=True))
     steps_layout.addWidget(labeled_value("Status", _STATE_TEXT[profile.state]))
+    steps_layout.addWidget(
+        labeled_value(
+            "Validasi restart",
+            "Lulus" if restart_gate.ready_after_restart else "Belum lulus",
+            strong=restart_gate.ready_after_restart,
+        )
+    )
     steps_layout.addWidget(labeled_value("1", "Buka / fokuskan sesi login resmi Google"))
     steps_layout.addWidget(labeled_value("2", "Selesaikan login, MFA, atau CAPTCHA secara manual"))
     steps_layout.addWidget(labeled_value("3", "Kembali ke Flow-Otomatis lalu pilih Cek Ulang Sesi"))
+    steps_layout.addWidget(
+        labeled_value(
+            "4",
+            "Setelah status Siap, tutup aplikasi, buka kembali, lalu Cek Ulang Sesi lagi.",
+        )
+    )
     action_row = QWidget()
     action_layout = QHBoxLayout(action_row)
     action_layout.setContentsMargins(0, 0, 0, 0)

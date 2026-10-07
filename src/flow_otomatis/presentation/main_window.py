@@ -420,8 +420,12 @@ class MainWindow(QMainWindow):
         self._project_label.setText(profile.label)
         self._project_state_label.setText("Bantuan Login")
         self._status_project.setText("Sesi user-owned")
+        if self._google_session_service is None:
+            raise InternalInvariantError("Google session service is not configured")
+        restart_gate = self._google_session_service.get_restart_gate(profile.profile_id)
         view = build_google_login_view(
             profile,
+            restart_gate=restart_gate,
             on_open_login=self._reopen_active_google_login,
             on_recheck=self._recheck_active_google_login,
             on_back=self.show_google_profiles,
