@@ -107,7 +107,9 @@ class GeminiKeyService:
 
         pending = self._pending.pop(preview_id, None)
         if pending is None:
-            raise FlowOtomatisError("Preview impor Gemini key sudah kedaluwarsa atau tidak dikenal.")
+            raise FlowOtomatisError(
+                "Preview impor Gemini key sudah kedaluwarsa atau tidak dikenal."
+            )
 
         saved: list[GeminiKeySummary] = []
         for candidate in pending:

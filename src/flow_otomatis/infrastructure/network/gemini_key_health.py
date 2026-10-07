@@ -45,7 +45,7 @@ class GeminiApiKeyHealthProbe:
                 GeminiKeyHealthState.ERROR,
                 f"Gemini API mengembalikan HTTP {exc.code}.",
             )
-        except (URLError, TimeoutError, OSError):
+        except URLError, TimeoutError, OSError:
             return GeminiKeyHealthResult(
                 GeminiKeyHealthState.ERROR,
                 "Gemini API tidak dapat dijangkau untuk health check.",
