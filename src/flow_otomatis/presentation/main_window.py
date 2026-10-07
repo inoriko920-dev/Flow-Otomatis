@@ -190,6 +190,8 @@ class MainWindow(QMainWindow):
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
         while layout.count():
             item = layout.takeAt(0)
+            if item is None:
+                break
             old_widget = item.widget()
             if old_widget is not None:
                 old_widget.setParent(None)
