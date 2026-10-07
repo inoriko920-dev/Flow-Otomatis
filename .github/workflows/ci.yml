@@ -46,11 +46,53 @@ jobs:
       - name: Architecture guard
         run: uv run python scripts/check_architecture.py
 
-      - name: Unit, contract and smoke tests
-        run: uv run pytest -q tests/unit tests/contract tests/smoke
+      - name: Unit, contract, smoke and UI semantic tests
+        run: uv run pytest -q tests/unit tests/contract tests/smoke tests/ui
+
+  ui-visual:
+    needs: quality
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          architecture: "x64"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check "uv==0.12.23"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --all-groups
+
+      - name: Capture 30 ACTUAL UI states
+        run: uv run python scripts/capture_ui_reference_suite.py artifacts/ui_actual
+
+      - name: Compare ACTUAL vs frozen REFERENCE
+        run: >
+          uv run python scripts/compare_ui_references.py
+          --actual-dir artifacts/ui_actual
+          --reference-dir artifacts/ui_reference
+          --report artifacts/ui_visual_report.md
+          --minimum-similarity 0.55
+
+      - name: Upload UI visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-step09-ui-visual-evidence
+          path: |
+            artifacts/ui_actual
+            artifacts/ui_reference
+            artifacts/ui_visual_report.md
+          if-no-files-found: warn
+          retention-days: 14
 
   package-windows:
-    needs: quality
+    needs: [quality, ui-visual]
     runs-on: windows-2025
     steps:
       - name: Checkout
@@ -83,10 +125,10 @@ jobs:
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
 
-      - name: Upload portable foundation artifact
+      - name: Upload portable STEP 09 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Flow-Otomatis-foundation-win-x64
+          name: Flow-Otomatis-step09-ui-win-x64
           path: |
             dist/Flow-Otomatis-portable-win-x64.zip
             dist/SHA256SUMS.txt
