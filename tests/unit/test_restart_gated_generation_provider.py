@@ -84,9 +84,7 @@ def _gate(
         profile_id="profile-0123456789ab",
         current_state=state,
         first_ready_at=datetime(2026, 10, 7, 10, 0, tzinfo=UTC),
-        restart_verified_at=(
-            datetime(2026, 10, 7, 10, 5, tzinfo=UTC) if verified else None
-        ),
+        restart_verified_at=(datetime(2026, 10, 7, 10, 5, tzinfo=UTC) if verified else None),
     )
 
 
