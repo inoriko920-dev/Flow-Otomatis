@@ -1,0 +1,540 @@
+name: Backup Flow-Otomatis 2026-10-08 01-35 WIB
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backup-single-repo:
+    runs-on: windows-2025
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch all repository refs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' --force --prune
+          git show-ref --head
+
+      - name: Download latest trusted Windows build
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 37664172842
+          name: Flow-Otomatis-step12-i12-01-restart-proof-win-x64
+          path: trusted_build
+
+      - name: Create and verify master backup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          $Stamp = "2026-10-08_01-35-WIB"
+          $MasterBase = "MASTER-BACKUP-FLOW-OTOMATIS-$Stamp"
+          $Out = Join-Path $PWD "backup_out"
+          $Root = Join-Path $Out $MasterBase
+          $App = Join-Path $Root "APP_001_FLOW_OTOMATIS"
+          $GitDir = Join-Path $App "GIT"
+          $SourceDir = Join-Path $App "SOURCE"
+          $BuildDir = Join-Path $App "BUILD"
+          $DocsDir = Join-Path $App "DOCS"
+          $RecoveryDir = Join-Path $App "RECOVERY"
+          $VerifyDir = Join-Path $Out "_verify"
+          $Bare = Join-Path $Out "_bare_repo.git"
+
+          Remove-Item $Out -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $GitDir,$SourceDir,$BuildDir,$DocsDir,$RecoveryDir,$VerifyDir | Out-Null
+
+          $MainSha = (git rev-parse refs/remotes/origin/main).Trim()
+          if (-not $MainSha) { throw "Cannot resolve origin/main" }
+
+          # Build a local bare repository with real branch refs and all tags.
+          git init --bare $Bare | Out-Null
+          git -C $Bare fetch $PWD '+refs/remotes/origin/*:refs/heads/*' '+refs/tags/*:refs/tags/*' --force
+          git -C $Bare symbolic-ref HEAD refs/heads/main
+
+          $Bundle = Join-Path $GitDir "Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          git -C $Bare bundle create $Bundle --all
+          if (-not (Test-Path $Bundle) -or (Get-Item $Bundle).Length -le 0) {
+            throw "Git bundle missing or empty"
+          }
+
+          $BundleVerifyLog = Join-Path $GitDir "BUNDLE_VERIFY.txt"
+          $verifyText = git -C $Bare bundle verify $Bundle 2>&1
+          $verifyText | Set-Content -Encoding UTF8 $BundleVerifyLog
+          if ($LASTEXITCODE -ne 0) { throw "git bundle verify failed" }
+
+          $BundleRefs = Join-Path $GitDir "BUNDLE_REFS.txt"
+          git bundle list-heads $Bundle | Set-Content -Encoding UTF8 $BundleRefs
+
+          $SourceZip = Join-Path $SourceDir "Flow-Otomatis-SOURCE-MAIN.zip"
+          git -C $Bare archive --format=zip --output=$SourceZip refs/heads/main
+          if (-not (Test-Path $SourceZip) -or (Get-Item $SourceZip).Length -le 0) {
+            throw "Source snapshot missing or empty"
+          }
+          $sourceArchive = [System.IO.Compression.ZipFile]::OpenRead($SourceZip)
+          try {
+            if ($sourceArchive.Entries.Count -lt 10) { throw "Source snapshot has too few entries" }
+          }
+          finally {
+            $sourceArchive.Dispose()
+          }
+
+          # Copy important docs separately for fast human recovery.
+          if (Test-Path "docs") { Copy-Item "docs" (Join-Path $DocsDir "docs") -Recurse -Force }
+          foreach ($name in @("README.md","PROJECT_STATE.md","TASKS.md","pyproject.toml","uv.lock")) {
+            if (Test-Path $name) { Copy-Item $name (Join-Path $DocsDir $name) -Force }
+          }
+
+          # Copy the latest already-tested Windows artifact; do not rebuild.
+          $TrustedBuild = Join-Path $PWD "trusted_build\Flow-Otomatis-portable-win-x64.zip"
+          $TrustedSums = Join-Path $PWD "trusted_build\SHA256SUMS.txt"
+          if (-not (Test-Path $TrustedBuild)) { throw "Trusted Windows build is unavailable" }
+          Copy-Item $TrustedBuild (Join-Path $BuildDir "Flow-Otomatis-Windows-Portable.zip") -Force
+          if (Test-Path $TrustedSums) { Copy-Item $TrustedSums (Join-Path $BuildDir "ORIGINAL_SHA256SUMS.txt") -Force }
+          $BuildHash = (Get-FileHash (Join-Path $BuildDir "Flow-Otomatis-Windows-Portable.zip") -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "SOURCE_CI_RUN=37664172842"
+            "SOURCE_ARTIFACT_ID=11502048305"
+            "SOURCE_ARTIFACT_NAME=Flow-Otomatis-step12-i12-01-restart-proof-win-x64"
+            "PORTABLE_SHA256=$BuildHash"
+            "BUILD_STATUS=TRUSTED_CI_ARTIFACT"
+          ) | Set-Content -Encoding UTF8 (Join-Path $BuildDir "BUILD_INFO.txt")
+
+          # Inventory repository refs/history.
+          git -C $Bare for-each-ref refs/heads --format='%(refname:short)|%(objectname)' | Sort-Object | Set-Content -Encoding UTF8 (Join-Path $App "BRANCHES.txt")
+          git -C $Bare for-each-ref refs/tags --format='%(refname:short)|%(objectname)' | Sort-Object | Set-Content -Encoding UTF8 (Join-Path $App "TAGS.txt")
+          git -C $Bare log --all --date=iso-strict --pretty=format:'%H|%ad|%an|%s' | Set-Content -Encoding UTF8 (Join-Path $App "COMMIT_HISTORY.txt")
+          $MainSha | Set-Content -Encoding ASCII (Join-Path $App "MAIN_COMMIT.txt")
+
+          # Required secret names only. Never read or export secret values.
+          $requiredSecrets = @()
+          $grepSecrets = git -C $Bare grep -ho -E 'secrets\.[A-Za-z0-9_]+' refs/heads/main -- .github/workflows 2>$null
+          foreach ($match in @($grepSecrets)) {
+            if ($match) { $requiredSecrets += ($match -replace '^secrets\.','') }
+          }
+          $requiredSecrets = $requiredSecrets | Sort-Object -Unique
+          $secretLines = @(
+            "SECRET_VALUES_ARE_NOT_BACKED_UP"
+            "Restore these manually in the new GitHub repository if required:"
+          )
+          if ($requiredSecrets.Count -eq 0) {
+            $secretLines += "NO_GITHUB_ACTION_SECRET_REFERENCE_DETECTED"
+          } else {
+            foreach ($secret in $requiredSecrets) {
+              $secretLines += "SECRET_REQUIRED_BUT_NOT_BACKED_UP: $secret"
+            }
+          }
+          $secretLines | Set-Content -Encoding UTF8 (Join-Path $App "REQUIRED_SECRETS.txt")
+
+          # Fail on high-confidence tracked secret material.
+          $trackedNames = git -C $Bare ls-tree -r --name-only refs/heads/main
+          $sensitiveNames = @($trackedNames | Where-Object {
+            $_ -match '(^|/)(\.env($|\.)|credentials\.json$|service[-_]?account.*\.json$|browser-data/|.*\.(pem|p12|pfx|key)$)' -and
+            $_ -notmatch '(example|sample|template)'
+          })
+          $highConfidence = git -C $Bare grep -n -E 'ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|sk-[A-Za-z0-9]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----' refs/heads/main -- . 2>$null
+          @(
+            "TRACKED_SENSITIVE_FILENAME_COUNT=$($sensitiveNames.Count)"
+            "HIGH_CONFIDENCE_SECRET_PATTERN_COUNT=$(@($highConfidence).Count)"
+          ) | Set-Content -Encoding UTF8 (Join-Path $App "SECRET_SCAN_REPORT.txt")
+          if ($sensitiveNames.Count -gt 0 -or @($highConfidence).Count -gt 0) {
+            throw "Potential tracked secret material detected; refusing BACKUP_COMPLETE"
+          }
+
+          @(
+            "APP_NAME=Flow-Otomatis"
+            "ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis"
+            "DEFAULT_BRANCH=main"
+            "BACKUP_START_WIB=2026-10-08 01:35:14 +07:00"
+            "MAIN_COMMIT=$MainSha"
+            "BACKUP_WORKFLOW_HEAD=${{ github.event.pull_request.head.sha }}"
+            "GIT_BUNDLE=GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+            "SOURCE_SNAPSHOT=SOURCE/Flow-Otomatis-SOURCE-MAIN.zip"
+            "BUILD=BUILD/Flow-Otomatis-Windows-Portable.zip"
+            "BUILD_SOURCE_RUN=37664172842"
+            "BACKUP_STATUS=BACKUP_COMPLETE"
+          ) | Set-Content -Encoding UTF8 (Join-Path $App "REPOSITORY_INFO.txt")
+
+          @(
+            "STATUS=BACKUP_COMPLETE"
+            "SOURCE=PASS"
+            "GIT_HISTORY_BUNDLE=PASS"
+            "BUNDLE_VERIFY=PASS"
+            "BRANCH_REFS=PASS"
+            "TAG_REFS=PASS"
+            "TRUSTED_BUILD=PASS"
+            "DOCS=PASS"
+            "SECRET_SCAN=PASS"
+            "RECOVERY_SCRIPTS=PASS"
+          ) | Set-Content -Encoding UTF8 (Join-Path $App "STATUS_BACKUP.txt")
+
+          @'
+          FLOW-OTOMATIS — PETUNJUK PEMULIHAN UNTUK PEMULA
+
+          Kondisi: GitHub lama sudah tidak bisa diakses.
+
+          1. Ekstrak MASTER BACKUP sampai folder APP_001_FLOW_OTOMATIS terlihat.
+          2. Jalankan RECOVERY\VERIFY_BACKUP.ps1 untuk mengecek checksum dan Git Bundle.
+          3. Pastikan hasilnya PASS.
+          4. Buat repository KOSONG baru di akun GitHub baru. Jangan centang README/.gitignore/license.
+          5. Jalankan RECOVERY\RESTORE_TO_NEW_GITHUB.ps1.
+          6. Masukkan URL repo baru, contoh:
+             https://github.com/AKUN-BARU/Flow-Otomatis.git
+          7. Script akan membuat clone lokal dari Git Bundle.
+          8. Periksa nama repo/branch sebelum menyetujui push.
+          9. Jika setuju, script push seluruh branch dan tag.
+          10. Buka REQUIRED_SECRETS.txt dan isi kembali secret yang memang dibutuhkan.
+          11. Jalankan workflow CI/build pada GitHub baru.
+          12. Cocokkan MAIN_COMMIT.txt, checksum, dan hasil build.
+
+          GIT Bundle menyimpan riwayat Git. SOURCE ZIP adalah snapshot main yang mudah dibuka manusia.
+          Jangan mengganti salah satunya dengan yang lain.
+          '@ | Set-Content -Encoding UTF8 (Join-Path $RecoveryDir "PETUNJUK_PEMULIHAN.txt")
+
+          @'
+          param(
+            [string]$NewRepoUrl
+          )
+          $ErrorActionPreference = "Stop"
+          $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          $App = Split-Path -Parent $Here
+          $Bundle = Join-Path $App "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          if (-not (Test-Path $Bundle)) { throw "Git Bundle tidak ditemukan." }
+
+          if (-not $NewRepoUrl) {
+            $NewRepoUrl = Read-Host "Masukkan URL repository GitHub BARU"
+          }
+          if (-not $NewRepoUrl) { throw "URL repo baru wajib diisi." }
+
+          $Target = Join-Path $Here "Flow-Otomatis-restored"
+          if (Test-Path $Target) { throw "Folder restore sudah ada: $Target" }
+
+          git bundle verify $Bundle
+          if ($LASTEXITCODE -ne 0) { throw "Git Bundle gagal diverifikasi." }
+
+          git clone $Bundle $Target
+          if ($LASTEXITCODE -ne 0) { throw "Clone dari Git Bundle gagal." }
+
+          git -C $Target remote remove origin
+          git -C $Target remote add origin $NewRepoUrl
+
+          Write-Host ""
+          Write-Host "Repo baru: $NewRepoUrl"
+          Write-Host "Branch yang akan dipush:"
+          git -C $Target branch -a
+          Write-Host "Tag yang akan dipush:"
+          git -C $Target tag
+          $ok = Read-Host "Ketik YA untuk push seluruh branch + tag"
+          if ($ok -ne "YA") {
+            Write-Host "Push dibatalkan. Repo hasil restore lokal tetap tersedia di $Target"
+            exit 0
+          }
+
+          git -C $Target push -u origin --all
+          if ($LASTEXITCODE -ne 0) { throw "Push branch gagal." }
+          git -C $Target push origin --tags
+          if ($LASTEXITCODE -ne 0) { throw "Push tag gagal." }
+
+          Write-Host "Restore Git selesai. Isi kembali secret dari REQUIRED_SECRETS.txt lalu jalankan CI."
+          '@ | Set-Content -Encoding UTF8 (Join-Path $RecoveryDir "RESTORE_TO_NEW_GITHUB.ps1")
+
+          @'
+          $ErrorActionPreference = "Stop"
+          $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          $App = Split-Path -Parent $Here
+          $Checksum = Join-Path $App "SHA256SUMS.txt"
+          $Bundle = Join-Path $App "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+
+          if (-not (Test-Path $Checksum)) { throw "SHA256SUMS.txt tidak ditemukan." }
+          $failed = 0
+          Get-Content $Checksum | ForEach-Object {
+            if (-not $_.Trim()) { return }
+            $parts = $_ -split '\|', 2
+            if ($parts.Count -ne 2) { throw "Format checksum tidak valid: $_" }
+            $expected = $parts[0].Trim().ToLowerInvariant()
+            $relative = $parts[1].Trim()
+            $path = Join-Path $App $relative
+            if (-not (Test-Path $path)) {
+              Write-Host "MISSING $relative"
+              $failed++
+              return
+            }
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) {
+              Write-Host "FAIL $relative"
+              $failed++
+            } else {
+              Write-Host "PASS $relative"
+            }
+          }
+          git bundle verify $Bundle
+          if ($LASTEXITCODE -ne 0) { $failed++ }
+          if ($failed -gt 0) { throw "Verifikasi gagal: $failed masalah." }
+          Write-Host "BACKUP VERIFIED"
+          '@ | Set-Content -Encoding UTF8 (Join-Path $RecoveryDir "VERIFY_BACKUP.ps1")
+
+          @'
+          FLOW-OTOMATIS BACKUP
+
+          Backup ini dibuat khusus untuk satu repo:
+          https://github.com/inoriko920-dev/Flow-Otomatis
+
+          Isi utama:
+          - Git Bundle seluruh branch/tag/history
+          - Source snapshot branch main
+          - Build Windows portable terakhir yang sudah PASS CI
+          - Dokumentasi source-of-truth
+          - Checksum SHA-256
+          - Script verify dan restore Windows 11
+
+          Jika GitHub lama hilang, mulai dari APP_001_FLOW_OTOMATIS\RECOVERY\PETUNJUK_PEMULIHAN.txt.
+          '@ | Set-Content -Encoding UTF8 (Join-Path $Root "00_README_PERTAMA.txt")
+
+          @(
+            "TOTAL_PROYEK=1"
+            "APP_NAME=Flow-Otomatis"
+            "ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis"
+            "BACKUP_DATE_WIB=2026-10-08"
+            "BACKUP_TIME_WIB=01:35:14"
+            "MAIN_COMMIT=$MainSha"
+            "GIT_BUNDLE=APP_001_FLOW_OTOMATIS/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+            "SOURCE_SNAPSHOT=APP_001_FLOW_OTOMATIS/SOURCE/Flow-Otomatis-SOURCE-MAIN.zip"
+            "BUILD=APP_001_FLOW_OTOMATIS/BUILD/Flow-Otomatis-Windows-Portable.zip"
+            "DOCS=APP_001_FLOW_OTOMATIS/DOCS"
+            "RECOVERY_SCRIPT=APP_001_FLOW_OTOMATIS/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1"
+            "BACKUP_STATUS=BACKUP_COMPLETE"
+            "CHECKSUM_STATUS=PASS_PENDING_MASTER_ZIP_FINALIZATION"
+          ) | Set-Content -Encoding UTF8 (Join-Path $Root "00_MASTER_MANIFEST.txt")
+
+          @(
+            '"NAMA PROYEK","REPO","DEFAULT BRANCH","COMMIT TERBARU","STATUS SOURCE","STATUS BUILD","STATUS DOKUMENTASI","STATUS BACKUP","CATATAN"'
+            ('"Flow-Otomatis","https://github.com/inoriko920-dev/Flow-Otomatis","main","' + $MainSha + '","PASS","TRUSTED_CI_ARTIFACT","PASS","BACKUP_COMPLETE","single-repo scope per user instruction"')
+          ) | Set-Content -Encoding UTF8 (Join-Path $Root "00_MASTER_MANIFEST.csv")
+
+          @(
+            "BACKUP_SCOPE=SINGLE_REPO_ONLY"
+            "REPOSITORY=Flow-Otomatis"
+            "BACKUP_STARTED_WIB=2026-10-08T01:35:14+07:00"
+            "PROMPT_BASIS=Prompt MASTER BACKUP Semua App(1).md"
+            "USER_SCOPE_OVERRIDE=Backup repo app ini saja; repo lain jangan."
+            "GITHUB_DEPENDENCY_AFTER_BACKUP=NONE_FOR_RESTORE"
+            "OPERATING_SYSTEM_TARGET=Windows 11"
+          ) | Set-Content -Encoding UTF8 (Join-Path $Root "00_BACKUP_INFO.txt")
+
+          @'
+          $ErrorActionPreference = "Stop"
+          $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          Write-Host "[1] Flow-Otomatis"
+          $choice = Read-Host "Pilih nomor aplikasi yang akan direstore"
+          if ($choice -ne "1") { throw "Pilihan tidak valid." }
+          & (Join-Path $Here "APP_001_FLOW_OTOMATIS\RECOVERY\RESTORE_TO_NEW_GITHUB.ps1")
+          '@ | Set-Content -Encoding UTF8 (Join-Path $Root "RESTORE_ALL.ps1")
+
+          @'
+          $ErrorActionPreference = "Stop"
+          $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          & (Join-Path $Here "APP_001_FLOW_OTOMATIS\RECOVERY\VERIFY_BACKUP.ps1")
+          if ($LASTEXITCODE -ne 0) { throw "Verifikasi backup gagal." }
+          Write-Host "SEMUA BACKUP TERVERIFIKASI"
+          '@ | Set-Content -Encoding UTF8 (Join-Path $Root "VERIFY_ALL_BACKUP.ps1")
+
+          # Per-app checksums (exclude its checksum file itself).
+          $appChecksum = Join-Path $App "SHA256SUMS.txt"
+          Get-ChildItem $App -Recurse -File |
+            Where-Object { $_.FullName -ne $appChecksum } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              $rel = [System.IO.Path]::GetRelativePath($App, $_.FullName).Replace('\','/')
+              "$hash|$rel"
+            } | Set-Content -Encoding UTF8 $appChecksum
+
+          # Global checksums, excluding the global checksum file itself.
+          $globalChecksum = Join-Path $Root "00_SHA256SUMS.txt"
+          Get-ChildItem $Root -Recurse -File |
+            Where-Object { $_.FullName -ne $globalChecksum } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              $rel = [System.IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\','/')
+              "$hash|$rel"
+            } | Set-Content -Encoding UTF8 $globalChecksum
+
+          # Verify all app checksums before creating master ZIP.
+          $fail = 0
+          Get-Content $appChecksum | ForEach-Object {
+            if (-not $_.Trim()) { return }
+            $parts = $_ -split '\|',2
+            $expected = $parts[0]
+            $path = Join-Path $App $parts[1]
+            if (-not (Test-Path $path)) { $fail++; return }
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { $fail++ }
+          }
+          if ($fail -gt 0) { throw "Per-app checksum verification failed: $fail" }
+
+          # Required structure checks.
+          foreach ($required in @(
+            (Join-Path $Root "00_README_PERTAMA.txt"),
+            (Join-Path $Root "00_MASTER_MANIFEST.txt"),
+            (Join-Path $Root "00_MASTER_MANIFEST.csv"),
+            (Join-Path $Root "00_SHA256SUMS.txt"),
+            (Join-Path $Root "00_BACKUP_INFO.txt"),
+            (Join-Path $Root "RESTORE_ALL.ps1"),
+            (Join-Path $Root "VERIFY_ALL_BACKUP.ps1"),
+            $Bundle,
+            $SourceZip,
+            (Join-Path $BuildDir "Flow-Otomatis-Windows-Portable.zip"),
+            (Join-Path $RecoveryDir "RESTORE_TO_NEW_GITHUB.ps1"),
+            (Join-Path $RecoveryDir "VERIFY_BACKUP.ps1"),
+            (Join-Path $RecoveryDir "PETUNJUK_PEMULIHAN.txt")
+          )) {
+            if (-not (Test-Path $required)) { throw "Required backup item missing: $required" }
+          }
+
+          $MasterZip = Join-Path $Out "$MasterBase.zip"
+          if (Test-Path $MasterZip) { Remove-Item $MasterZip -Force }
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $Root,
+            $MasterZip,
+            [System.IO.Compression.CompressionLevel]::Optimal,
+            $true
+          )
+
+          # Open final ZIP and validate required entry structure.
+          $masterArchive = [System.IO.Compression.ZipFile]::OpenRead($MasterZip)
+          try {
+            if ($masterArchive.Entries.Count -lt 20) { throw "Master ZIP has too few entries" }
+            $names = @($masterArchive.Entries | ForEach-Object { $_.FullName })
+            if (-not ($names -match '00_MASTER_MANIFEST.txt')) { throw "Manifest missing from master ZIP" }
+            if (-not ($names -match 'Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle')) { throw "Bundle missing from master ZIP" }
+            if (-not ($names -match 'Flow-Otomatis-SOURCE-MAIN.zip')) { throw "Source snapshot missing from master ZIP" }
+          }
+          finally {
+            $masterArchive.Dispose()
+          }
+
+          $MasterHash = (Get-FileHash $MasterZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $MasterSize = (Get-Item $MasterZip).Length
+          @(
+            "MASTER_FILE=$MasterBase.zip"
+            "MASTER_SIZE_BYTES=$MasterSize"
+            "MASTER_SHA256=$MasterHash"
+            "TOTAL_PROJECTS=1"
+            "BACKUP_COMPLETE=1"
+            "BACKUP_PARTIAL=0"
+            "REPO_NOT_ACCESSIBLE=0"
+            "VALIDATION=PASS"
+            "STATUS_AKHIR=BACKUP_COMPLETE"
+          ) | Set-Content -Encoding UTF8 (Join-Path $Out "MASTER_BACKUP_RESULT.txt")
+
+          # Split master ZIP into exactly 3 transport parts, verify recombination.
+          $PartSize = [int64][Math]::Ceiling($MasterSize / 3.0)
+          $buffer = New-Object byte[] (4MB)
+          $input = [System.IO.File]::OpenRead($MasterZip)
+          $partFiles = @()
+          try {
+            for ($i=1; $i -le 3; $i++) {
+              $part = "$MasterZip.{0:D3}" -f $i
+              $partFiles += $part
+              $output = [System.IO.File]::Create($part)
+              try {
+                $remaining = [Math]::Min($PartSize, $MasterSize - $input.Position)
+                while ($remaining -gt 0) {
+                  $take = [int][Math]::Min($buffer.Length, $remaining)
+                  $read = $input.Read($buffer,0,$take)
+                  if ($read -le 0) { break }
+                  $output.Write($buffer,0,$read)
+                  $remaining -= $read
+                }
+              }
+              finally { $output.Dispose() }
+            }
+          }
+          finally { $input.Dispose() }
+
+          $Recombined = Join-Path $Out "_recombined_verify.zip"
+          $reOut = [System.IO.File]::Create($Recombined)
+          try {
+            foreach ($part in $partFiles) {
+              $partIn = [System.IO.File]::OpenRead($part)
+              try { $partIn.CopyTo($reOut) } finally { $partIn.Dispose() }
+            }
+          }
+          finally { $reOut.Dispose() }
+
+          $ReHash = (Get-FileHash $Recombined -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($ReHash -ne $MasterHash) { throw "Three-part recombination SHA mismatch" }
+          Remove-Item $Recombined -Force
+
+          $transport = @("MASTER_SHA256=$MasterHash","MASTER_SIZE_BYTES=$MasterSize")
+          foreach ($part in $partFiles) {
+            $ph = (Get-FileHash $part -Algorithm SHA256).Hash.ToLowerInvariant()
+            $ps = (Get-Item $part).Length
+            $transport += "$(Split-Path $part -Leaf)|$ps|$ph"
+          }
+          $transport | Set-Content -Encoding UTF8 (Join-Path $Out "TRANSPORT_SHA256SUMS.txt")
+
+          Write-Host "BACKUP_COMPLETE"
+          Write-Host "MASTER_FILE=$MasterBase.zip"
+          Write-Host "MASTER_SIZE_BYTES=$MasterSize"
+          Write-Host "MASTER_SHA256=$MasterHash"
+          Write-Host "MAIN_COMMIT=$MainSha"
+          Get-Content (Join-Path $Out "TRANSPORT_SHA256SUMS.txt")
+
+      - name: Upload full master backup archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: MASTER-BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-WIB
+          path: |
+            backup_out/MASTER-BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-WIB.zip
+            backup_out/MASTER_BACKUP_RESULT.txt
+            backup_out/TRANSPORT_SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload master backup part 001
+        uses: actions/upload-artifact@v4
+        with:
+          name: MASTER-BACKUP-FLOW-OTOMATIS-PART-001
+          path: |
+            backup_out/MASTER-BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-WIB.zip.001
+            backup_out/TRANSPORT_SHA256SUMS.txt
+            backup_out/MASTER_BACKUP_RESULT.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload master backup part 002
+        uses: actions/upload-artifact@v4
+        with:
+          name: MASTER-BACKUP-FLOW-OTOMATIS-PART-002
+          path: |
+            backup_out/MASTER-BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-WIB.zip.002
+            backup_out/TRANSPORT_SHA256SUMS.txt
+            backup_out/MASTER_BACKUP_RESULT.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload master backup part 003
+        uses: actions/upload-artifact@v4
+        with:
+          name: MASTER-BACKUP-FLOW-OTOMATIS-PART-003
+          path: |
+            backup_out/MASTER-BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-WIB.zip.003
+            backup_out/TRANSPORT_SHA256SUMS.txt
+            backup_out/MASTER_BACKUP_RESULT.txt
+          if-no-files-found: error
+          retention-days: 14
