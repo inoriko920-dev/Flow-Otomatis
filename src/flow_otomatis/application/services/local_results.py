@@ -97,12 +97,15 @@ class LocalResultsService:
             raise InternalInvariantError(
                 "Download cannot be marked successful before Generate is GENERATED"
             )
+        local_output = Path(output_path).expanduser().resolve()
+        if not local_output.is_file():
+            raise InternalInvariantError("Download output file does not exist locally")
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
             state=DownloadState.DOWNLOADED,
             updated_at=datetime.now(UTC),
-            output_path=output_path,
+            output_path=str(local_output),
             take=max(take, 1),
         )
         self._download_repository.save(record)
