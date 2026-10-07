@@ -16,8 +16,22 @@ Status: PASS.
 Status: IN PROGRESS.
 
 ### I12-01 — Authorized Google Session / Manual Login Lifecycle
-- Status: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING.
+- Status: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING.
 - Real Google account login/restart persistence still requires product-owner validation.
+- Safe restart-proof support is now implemented:
+  - first READY records sanitized app-instance/timestamp evidence;
+  - READY from the same instance does not pass;
+  - READY from a later app instance records restart verification;
+  - gate requires current state to remain READY;
+  - no credentials/session contents are stored.
+- Tested SHA: `0e6b8e3755721954a0d2be8d712f0af88e961e4a`.
+- CI: `37615288655` — SUCCESS.
+- Quality: `112772031746` — SUCCESS.
+- UI visual: `112772307027` — SUCCESS.
+- Windows package: `112772535490` — SUCCESS.
+- pytest: 79 passed.
+- UI artifact: `11479174307`.
+- Windows artifact: `11479739543`.
 
 ### I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard
 - Status: PASS.

@@ -5,13 +5,22 @@
 - Branch: main
 - Factory STEP active: STEP 12 — Integrations & External Services
 - STEP 12 status: IN PROGRESS
-- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING
+- I12-01 — Authorized Google Session / Manual Login Lifecycle: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING
 - I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard: PASS
 - I12-02B1 — Read-Only Google Flow Preflight: PASS
 - I12-02B2-PRECHECK — Pre-Submit Request Guard: PASS
 - I12-02B2-LIVE — Live One-Scene Google Flow Submit Driver: BLOCKED pending real-account session validation
-- Last tested implementation SHA: 827c8f756b44cef94d5edeb5588fc1979cad8b07
-- I12-02B2-PRECHECK CI run: 37605969763 — SUCCESS
+- Last tested implementation SHA: 0e6b8e3755721954a0d2be8d712f0af88e961e4a
+- I12-01-RESTART-PROOF CI run: 37615288655 — SUCCESS
+- Quality job: 112772031746 — SUCCESS
+- UI regression job: 112772307027 — SUCCESS
+- Windows package job: 112772535490 — SUCCESS
+- UI evidence artifact ID: 11479174307
+- UI evidence digest: sha256:5c92598d30204c77723c07ad66faa1673f24d27092eceb040c56768123709245
+- Windows artifact ID: 11479739543
+- Windows artifact size: 435467636 bytes
+- Windows artifact digest: sha256:736b3a7b95ece7dd64a0516f0b147934050bf8ba61b6ae2957e9eef073f56107
+- Previous I12-02B2-PRECHECK CI run: 37605969763 — SUCCESS
 - Quality job: 112741397608 — SUCCESS
 - UI regression job: 112741803066 — SUCCESS
 - Windows package job: 112742072939 — SUCCESS
@@ -37,13 +46,41 @@
 - STEP 10: PASS
 - STEP 11: PASS
 - STEP 12: IN PROGRESS
-  - I12-01: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING
+  - I12-01: AUTOMATED PASS + RESTART-PROOF HARDENED / LIVE REAL-ACCOUNT VALIDATION PENDING
   - I12-02A: PASS
   - I12-02B1: PASS
   - I12-02B2-PRECHECK: PASS
   - I12-02B2-LIVE: BLOCKED pending I12-01 live validation
   - I12-03: PLANNED after live generation submit
   - I12-04: PLANNED after I12-03
+
+## I12-01-RESTART-PROOF hardening delivered
+This safe slice strengthens the manual gate without performing any Google Flow mutation.
+
+Delivered:
+- new `GoogleSessionRestartGate` application contract;
+- `GoogleSessionService.get_restart_gate(...)`;
+- Browser Worker stores a sanitized `restart-proof.json` beside the local profile metadata;
+- first READY observation records only a random app-instance id and timestamp;
+- READY on the same app instance does not satisfy the restart gate;
+- READY observed by a later app instance records `restart_verified_at`;
+- `ready_after_restart` is true only when restart proof exists and the current profile state is still READY;
+- if the session later becomes NEEDS_LOGIN, the gate immediately evaluates false;
+- no password, cookie, token, credential, browser-data, URL query, or session contents are stored in the restart proof;
+- no Flow selector, upload, prompt entry, settings mutation, or Generate click was added.
+
+Automated evidence:
+- Ruff format/lint: PASS;
+- mypy strict: PASS — 61 source files;
+- architecture guard: PASS;
+- pytest: 79 passed;
+- frozen UI regression: 30/30 PASS;
+- visual similarity: 0.6344–0.9643;
+- Chromium staging/smoke: PASS;
+- PyInstaller onedir build: PASS;
+- portable smoke: PASS.
+
+Important: this makes the local restart check machine-verifiable after the user runs it, but CI still cannot authenticate the product owner's real Google account. Therefore the live gate remains pending until a real local profile produces READY before and after an actual app restart.
 
 ## I12-02B2-PRECHECK delivered
 This slice validates the frozen generation contract before any live Browser Worker mutation.
