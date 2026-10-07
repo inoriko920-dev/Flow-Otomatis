@@ -8,12 +8,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
-    QScrollArea,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -448,9 +446,11 @@ def _dialog_screen(fixture: UiFixture) -> QWidget:
         modal_layout.addWidget(_button_row([("Validasi Paket", "primary"), ("Batal", "secondary")]))
     elif fixture.code == "UI-IMG-012A":
         editor = QPlainTextEdit()
-        editor.setPlainText("SCENE_016 | prompt gerakan...
-SCENE_017 | prompt gerakan...
-SCENE_018 | prompt gerakan...")
+        editor.setPlainText(
+            "SCENE_016 | prompt gerakan...\\n"
+            "SCENE_017 | prompt gerakan...\\n"
+            "SCENE_018 | prompt gerakan..."
+        )
         editor.setMinimumHeight(170)
         modal_layout.addWidget(editor)
         modal_layout.addWidget(info_banner("3 scene terbaca", "Bulk TXT adalah fallback. Episode package tetap jalur utama biography.", "info"))
