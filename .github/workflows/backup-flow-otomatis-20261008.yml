@@ -1,0 +1,393 @@
+name: Backup Flow-Otomatis 2026-10-08 WIB
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/backup-flow-otomatis-20261008.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backup:
+    runs-on: windows-2025
+    env:
+      BACKUP_SHA: 0b9e2c4f63a9c0fdab0fe255830964a0e2fb6b39
+      BACKUP_NAME: BACKUP-FLOW-OTOMATIS-2026-10-08_01-35-38_WIB
+      BACKUP_TIMESTAMP_WIB: "2026-10-08 01:35:38 WIB"
+      BUILD_RUN_ID: "37664172842"
+      BUILD_ARTIFACT_NAME: Flow-Otomatis-step12-i12-01-restart-proof-win-x64
+    steps:
+      - name: Checkout backup baseline with full history
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BACKUP_SHA }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch all repository branches and tags
+        shell: pwsh
+        run: |
+          git fetch origin "+refs/heads/*:refs/remotes/origin/*" "+refs/tags/*:refs/tags/*" --prune
+          $refs = git for-each-ref --format="%(refname) %(objectname)" refs/remotes/origin
+          foreach ($line in $refs) {
+            $parts = $line.Split(" ", 2)
+            if ($parts.Count -ne 2) { continue }
+            $ref = $parts[0]
+            $sha = $parts[1]
+            if ($ref -eq "refs/remotes/origin/HEAD") { continue }
+            $name = $ref.Substring("refs/remotes/origin/".Length)
+            if ($name -like "backup/flow-otomatis-*") { continue }
+            git update-ref "refs/heads/$name" $sha
+          }
+          $tempRefs = git for-each-ref --format="%(refname)" "refs/remotes/origin/backup/flow-otomatis-*"
+          foreach ($ref in $tempRefs) {
+            if ($ref) { git update-ref -d $ref }
+          }
+
+      - name: Download latest trusted portable build
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BUILD_ARTIFACT_NAME }}
+          run-id: ${{ env.BUILD_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: downloaded-build
+
+      - name: Build verified single-repo backup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $PWD $env:BACKUP_NAME
+          $app = Join-Path $root "APP_001_FLOW_OTOMATIS"
+          New-Item -ItemType Directory -Force -Path $root,$app,(Join-Path $app "GIT"),(Join-Path $app "SOURCE"),(Join-Path $app "BUILD"),(Join-Path $app "DOCS"),(Join-Path $app "RECOVERY") | Out-Null
+
+          # Repository metadata
+          $repoInfo = @"
+          APP NAME: Flow-Otomatis
+          ORIGINAL REPO: https://github.com/inoriko920-dev/Flow-Otomatis
+          DEFAULT BRANCH: main
+          BACKUP DATE/TIME: $env:BACKUP_TIMESTAMP_WIB
+          MAIN COMMIT: $env:BACKUP_SHA
+          BUILD SOURCE RUN: $env:BUILD_RUN_ID
+          BACKUP SCOPE: THIS REPOSITORY ONLY
+          "@
+          $repoInfo | Set-Content -Encoding UTF8 (Join-Path $app "REPOSITORY_INFO.txt")
+          $env:BACKUP_SHA | Set-Content -Encoding ascii (Join-Path $app "MAIN_COMMIT.txt")
+
+          git for-each-ref --sort=refname --format="%(refname) %(objectname)" refs/heads | Set-Content -Encoding UTF8 (Join-Path $app "BRANCHES.txt")
+          git for-each-ref --sort=refname --format="%(refname) %(objectname)" refs/tags | Set-Content -Encoding UTF8 (Join-Path $app "TAGS.txt")
+          git log --all --date=iso-strict --pretty=format:"%H%x09%ad%x09%an%x09%s" | Set-Content -Encoding UTF8 (Join-Path $app "COMMIT_HISTORY.txt")
+
+          # Human-friendly source snapshot at locked main commit
+          $sourceZip = Join-Path $app "SOURCE/Flow-Otomatis-SOURCE-MAIN.zip"
+          git archive --format=zip --output="$sourceZip" $env:BACKUP_SHA
+          if ((Get-Item $sourceZip).Length -le 1024) { throw "Source snapshot is unexpectedly small" }
+
+          # Full Git bundle: all non-temporary heads + tags
+          $bundle = Join-Path $app "GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          git bundle create "$bundle" --all
+          if ((Get-Item $bundle).Length -le 1024) { throw "Git bundle is unexpectedly small" }
+          git bundle verify "$bundle" 2>&1 | Tee-Object -FilePath (Join-Path $app "GIT/BUNDLE_VERIFY.txt")
+          git bundle list-heads "$bundle" | Set-Content -Encoding UTF8 (Join-Path $app "GIT/BUNDLE_REFS.txt")
+
+          # Trusted build from successful main CI
+          $portable = Get-ChildItem downloaded-build -Recurse -Filter "Flow-Otomatis-portable-win-x64.zip" | Select-Object -First 1
+          if (-not $portable) { throw "Trusted portable build not found in downloaded artifact" }
+          Copy-Item $portable.FullName (Join-Path $app "BUILD/Flow-Otomatis-Windows-Portable.zip")
+          $buildSums = Get-ChildItem downloaded-build -Recurse -Filter "SHA256SUMS.txt" | Select-Object -First 1
+          if ($buildSums) { Copy-Item $buildSums.FullName (Join-Path $app "BUILD/ORIGINAL_BUILD_SHA256SUMS.txt") }
+
+          # Important docs (source ZIP also contains the entire repo)
+          if (Test-Path "docs") { Copy-Item "docs" (Join-Path $app "DOCS/docs") -Recurse -Force }
+          foreach ($name in @("README.md","PROJECT_STATE.md","TASKS.md","pyproject.toml","uv.lock")) {
+            if (Test-Path $name) { Copy-Item $name (Join-Path $app "DOCS/$name") -Force }
+          }
+          if (Test-Path ".github/workflows") { Copy-Item ".github/workflows" (Join-Path $app "DOCS/github-workflows") -Recurse -Force }
+          if (Test-Path "scripts") { Copy-Item "scripts" (Join-Path $app "DOCS/build-scripts") -Recurse -Force }
+
+          # Required secrets: names/purpose only, never values.
+          @"
+          SECRET_REQUIRED_BUT_NOT_BACKED_UP
+
+          Runtime/user secrets intentionally excluded:
+          - Gemini API keys: stored by the installed app in the OS credential store; import again manually after restore.
+          - Google account password / MFA / cookies / tokens / browser-data: never backed up.
+          - GitHub credentials/tokens: never backed up.
+
+          GitHub Actions:
+          - GITHUB_TOKEN is provided by GitHub Actions automatically when workflows run.
+          - If future workflows add repository secrets, recreate them manually in the new repository.
+          "@ | Set-Content -Encoding UTF8 (Join-Path $app "REQUIRED_SECRETS.txt")
+
+          # Recovery guides/scripts
+          @"
+          PETUNJUK PEMULIHAN FLOW-OTOMATIS
+
+          Kondisi awal: GitHub lama sudah tidak dapat diakses.
+
+          1. Ekstrak ZIP backup utama.
+          2. Buka APP_001_FLOW_OTOMATIS.
+          3. Jalankan RECOVERY\VERIFY_BACKUP.ps1.
+          4. Pastikan Git Bundle berstatus valid.
+          5. Buat repository kosong bernama Flow-Otomatis pada akun GitHub baru.
+          6. Jalankan RECOVERY\RESTORE_TO_NEW_GITHUB.ps1.
+          7. Masukkan URL repository GitHub baru ketika diminta.
+          8. Script membuat clone dari Git Bundle dan mengirim semua branch/tag.
+          9. Pasang kembali secret/key yang diperlukan secara manual. Jangan memulihkan password/cookie/token dari backup.
+          10. Jalankan CI/build pada repository baru.
+          11. Cocokkan MAIN_COMMIT.txt, branch/tag, dan checksum.
+
+          SOURCE-MAIN.zip adalah snapshot mudah dibaca manusia.
+          Git Bundle adalah sumber utama untuk memulihkan riwayat Git.
+          "@ | Set-Content -Encoding UTF8 (Join-Path $app "RECOVERY/PETUNJUK_PEMULIHAN.txt")
+
+          @'
+          param()
+          $ErrorActionPreference = "Stop"
+          $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          $app = Split-Path -Parent $here
+          $bundle = Join-Path $app "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          $sums = Join-Path $app "SHA256SUMS.txt"
+          if (-not (Test-Path $bundle)) { throw "Git Bundle tidak ditemukan." }
+          git bundle verify $bundle
+          if ($LASTEXITCODE -ne 0) { throw "Git Bundle gagal diverifikasi." }
+          if (-not (Test-Path $sums)) { throw "SHA256SUMS.txt tidak ditemukan." }
+          $lines = Get-Content $sums | Where-Object { $_ -match "^[0-9a-fA-F]{64}\s+" }
+          foreach ($line in $lines) {
+            $parts = $line -split "\s+", 2
+            $expected = $parts[0].ToLowerInvariant()
+            $relative = $parts[1]
+            $target = Join-Path $app $relative
+            if (-not (Test-Path $target)) { throw "File hilang: $relative" }
+            $actual = (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "Checksum tidak cocok: $relative" }
+          }
+          Write-Host "VERIFY BACKUP: PASS"
+          '@ | Set-Content -Encoding UTF8 (Join-Path $app "RECOVERY/VERIFY_BACKUP.ps1")
+
+          @'
+          param()
+          $ErrorActionPreference = "Stop"
+          $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+          $app = Split-Path -Parent $here
+          $bundle = Join-Path $app "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          & (Join-Path $here "VERIFY_BACKUP.ps1")
+          $newUrl = Read-Host "Masukkan URL repo GitHub BARU (contoh https://github.com/USER/Flow-Otomatis.git)"
+          if ([string]::IsNullOrWhiteSpace($newUrl)) { throw "URL repo baru wajib diisi." }
+          $restore = Join-Path $app "RESTORED_REPO"
+          if (Test-Path $restore) { throw "Folder RESTORED_REPO sudah ada. Hapus/rename dulu agar aman." }
+          git clone $bundle $restore
+          if ($LASTEXITCODE -ne 0) { throw "Clone dari bundle gagal." }
+          Push-Location $restore
+          try {
+            git remote remove origin 2>$null
+            git remote add origin $newUrl
+            Write-Host "Akan push SEMUA branch dan tag ke: $newUrl"
+            $confirm = Read-Host "Ketik PUSH untuk melanjutkan"
+            if ($confirm -ne "PUSH") { Write-Host "Dibatalkan. Tidak ada push."; exit 0 }
+            git push origin --all
+            git push origin --tags
+          } finally {
+            Pop-Location
+          }
+          Write-Host "Restore selesai. Pasang kembali secret secara manual lalu jalankan CI."
+          '@ | Set-Content -Encoding UTF8 (Join-Path $app "RECOVERY/RESTORE_TO_NEW_GITHUB.ps1")
+
+          @'
+          $ErrorActionPreference = "Stop"
+          Write-Host "[1] Flow-Otomatis"
+          $choice = Read-Host "Pilih nomor aplikasi untuk restore"
+          if ($choice -ne "1") { throw "Pilihan tidak valid." }
+          & "$PSScriptRoot\APP_001_FLOW_OTOMATIS\RECOVERY\RESTORE_TO_NEW_GITHUB.ps1"
+          '@ | Set-Content -Encoding UTF8 (Join-Path $root "RESTORE_ALL.ps1")
+
+          @'
+          $ErrorActionPreference = "Stop"
+          & "$PSScriptRoot\APP_001_FLOW_OTOMATIS\RECOVERY\VERIFY_BACKUP.ps1"
+          Write-Host "VERIFY ALL BACKUP: PASS"
+          '@ | Set-Content -Encoding UTF8 (Join-Path $root "VERIFY_ALL_BACKUP.ps1")
+
+          @"
+          BACKUP FLOW-OTOMATIS SAJA
+          =========================
+          Backup ini sengaja hanya mencakup repo/app Flow-Otomatis.
+          Repo/app lain TIDAK dimasukkan.
+
+          Tanggal/Waktu backup: $env:BACKUP_TIMESTAMP_WIB
+          Baseline main: $env:BACKUP_SHA
+
+          Mulai dari:
+          APP_001_FLOW_OTOMATIS\RECOVERY\PETUNJUK_PEMULIHAN.txt
+          "@ | Set-Content -Encoding UTF8 (Join-Path $root "00_README_PERTAMA.txt")
+
+          @"
+          APP NAME: Flow-Otomatis
+          ORIGINAL REPO: inoriko920-dev/Flow-Otomatis
+          BACKUP DATE: $env:BACKUP_TIMESTAMP_WIB
+          MAIN COMMIT: $env:BACKUP_SHA
+          GIT BUNDLE: APP_001_FLOW_OTOMATIS/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle
+          SOURCE SNAPSHOT: APP_001_FLOW_OTOMATIS/SOURCE/Flow-Otomatis-SOURCE-MAIN.zip
+          BUILD: APP_001_FLOW_OTOMATIS/BUILD/Flow-Otomatis-Windows-Portable.zip
+          DOCS: APP_001_FLOW_OTOMATIS/DOCS/
+          RECOVERY SCRIPT: APP_001_FLOW_OTOMATIS/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1
+          BACKUP STATUS: BACKUP_COMPLETE
+          CHECKSUM STATUS: VERIFIED_BY_WORKFLOW
+          "@ | Set-Content -Encoding UTF8 (Join-Path $root "00_MASTER_MANIFEST.txt")
+
+          "NAMA_PROYEK,REPO,DEFAULT_BRANCH,COMMIT_TERBARU,STATUS_SOURCE,STATUS_BUILD,STATUS_DOKUMENTASI,STATUS_BACKUP" | Set-Content -Encoding UTF8 (Join-Path $root "00_MASTER_MANIFEST.csv")
+          "Flow-Otomatis,inoriko920-dev/Flow-Otomatis,main,$env:BACKUP_SHA,OK,OK,OK,BACKUP_COMPLETE" | Add-Content -Encoding UTF8 (Join-Path $root "00_MASTER_MANIFEST.csv")
+
+          @"
+          BACKUP_NAME=$env:BACKUP_NAME
+          BACKUP_TIMESTAMP_WIB=$env:BACKUP_TIMESTAMP_WIB
+          MAIN_COMMIT=$env:BACKUP_SHA
+          BUILD_RUN_ID=$env:BUILD_RUN_ID
+          SCOPE=Flow-Otomatis only
+          "@ | Set-Content -Encoding UTF8 (Join-Path $root "00_BACKUP_INFO.txt")
+
+          # Basic secret pattern gate for actual high-risk credential shapes.
+          $secretMatches = git grep -I -n -E "(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)" $env:BACKUP_SHA -- . 2>$null
+          if ($LASTEXITCODE -eq 0 -and $secretMatches) {
+            $secretMatches | Set-Content -Encoding UTF8 (Join-Path $root "SECRET_SCAN_FAILED.txt")
+            throw "Potential credential pattern found in repository. Backup stopped for safety."
+          }
+          "SECRET SCAN: PASS - no high-risk credential pattern detected in locked source commit." | Set-Content -Encoding UTF8 (Join-Path $root "SECRET_SCAN.txt")
+
+          # Per-app hashes (exclude the hash file itself).
+          $appFiles = Get-ChildItem $app -Recurse -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Sort-Object FullName
+          $appSumLines = foreach ($file in $appFiles) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $rel = [IO.Path]::GetRelativePath($app, $file.FullName).Replace("\","/")
+            "$hash  $rel"
+          }
+          $appSumLines | Set-Content -Encoding ascii (Join-Path $app "SHA256SUMS.txt")
+
+          # Root hashes (exclude root hash file itself).
+          $rootFiles = Get-ChildItem $root -Recurse -File | Where-Object { $_.FullName -ne (Join-Path $root "00_SHA256SUMS.txt") } | Sort-Object FullName
+          $rootSumLines = foreach ($file in $rootFiles) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $rel = [IO.Path]::GetRelativePath($root, $file.FullName).Replace("\","/")
+            "$hash  $rel"
+          }
+          $rootSumLines | Set-Content -Encoding ascii (Join-Path $root "00_SHA256SUMS.txt")
+
+          # Verification before final ZIP.
+          git bundle verify "$bundle"
+          if ($LASTEXITCODE -ne 0) { throw "Final Git Bundle verification failed" }
+          if ((Get-ChildItem $root -Directory | Where-Object { $_.Name -like "APP_*" }).Count -ne 1) { throw "Manifest/folder count mismatch" }
+          if (-not (Test-Path $sourceZip)) { throw "Source snapshot missing" }
+          if ((Get-Item $sourceZip).Length -le 1024) { throw "Source snapshot empty" }
+
+          # Verify all checksums using the generated PowerShell verifier.
+          & (Join-Path $root "VERIFY_ALL_BACKUP.ps1")
+
+          # Final single ZIP and integrity test.
+          $zip = Join-Path $PWD "$env:BACKUP_NAME.zip"
+          @'
+          import os, sys, zipfile, hashlib
+          root, out = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as z:
+              parent = os.path.dirname(root)
+              for base, _, files in os.walk(root):
+                  for name in files:
+                      p = os.path.join(base, name)
+                      z.write(p, os.path.relpath(p, parent))
+          with zipfile.ZipFile(out, "r") as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f"ZIP verification failed at {bad}")
+          h=hashlib.sha256()
+          with open(out,"rb") as f:
+              for b in iter(lambda:f.read(1024*1024),b""):
+                  h.update(b)
+          print(h.hexdigest())
+          '@ | python - "$root" "$zip" | Tee-Object -FilePath "$zip.sha256.txt"
+
+          # Split final ZIP into 3 transport parts and verify recombination.
+          $total = (Get-Item $zip).Length
+          $partSize = [int64][Math]::Ceiling($total / 3.0)
+          $input = [IO.File]::OpenRead($zip)
+          $parts = @()
+          try {
+            for ($i=1; $i -le 3; $i++) {
+              $p = "$zip.{0:D3}" -f $i
+              $parts += $p
+              $out = [IO.File]::Create($p)
+              try {
+                $remaining = [Math]::Min($partSize, $total - $input.Position)
+                $buffer = New-Object byte[] (4MB)
+                while ($remaining -gt 0) {
+                  $read = $input.Read($buffer,0,[int][Math]::Min($buffer.Length,$remaining))
+                  if ($read -le 0) { break }
+                  $out.Write($buffer,0,$read)
+                  $remaining -= $read
+                }
+              } finally { $out.Dispose() }
+            }
+          } finally { $input.Dispose() }
+
+          $recombined = "$zip.recombined"
+          $verifyOut = [IO.File]::Create($recombined)
+          try {
+            foreach ($p in $parts) {
+              $partIn = [IO.File]::OpenRead($p)
+              try { $partIn.CopyTo($verifyOut) } finally { $partIn.Dispose() }
+            }
+          } finally { $verifyOut.Dispose() }
+          $originalHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $recombinedHash = (Get-FileHash $recombined -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($originalHash -ne $recombinedHash) { throw "Transport split recombination mismatch" }
+          Remove-Item $recombined -Force
+
+          @"
+          copy /b "$env:BACKUP_NAME.zip.001"+"$env:BACKUP_NAME.zip.002"+"$env:BACKUP_NAME.zip.003" "$env:BACKUP_NAME.zip"
+          certutil -hashfile "$env:BACKUP_NAME.zip" SHA256
+          pause
+          "@ | Set-Content -Encoding ascii "GABUNG_BACKUP_FLOW_OTOMATIS.bat"
+
+          "FINAL_ZIP=$zip" | Add-Content -Encoding UTF8 $env:GITHUB_ENV
+          "FINAL_SHA256=$originalHash" | Add-Content -Encoding UTF8 $env:GITHUB_ENV
+
+      - name: Upload logical final backup ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-backup-full-20261008-013538-WIB
+          path: |
+            ${{ env.BACKUP_NAME }}.zip
+            ${{ env.BACKUP_NAME }}.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload backup transport part 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-backup-part-001
+          path: ${{ env.BACKUP_NAME }}.zip.001
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload backup transport part 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-backup-part-002
+          path: ${{ env.BACKUP_NAME }}.zip.002
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload backup transport part 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-backup-part-003
+          path: ${{ env.BACKUP_NAME }}.zip.003
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload join helper
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-backup-join-helper
+          path: GABUNG_BACKUP_FLOW_OTOMATIS.bat
+          if-no-files-found: error
+          retention-days: 14
