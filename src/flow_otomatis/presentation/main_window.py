@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    LocalResultsService,
     ProjectLibraryService,
     ScenePlanningService,
 )
@@ -31,6 +32,7 @@ from flow_otomatis.presentation.fixtures import (
     get_fixture,
 )
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
+from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 from flow_otomatis.presentation.theme import (
     RIGHT_DOCK_WIDTH,
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
         episode_import_service: EpisodeImportService | None = None,
         scene_planning_service: ScenePlanningService | None = None,
         project_library_service: ProjectLibraryService | None = None,
+        local_results_service: LocalResultsService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -99,6 +102,8 @@ class MainWindow(QMainWindow):
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
         self._project_library_service = project_library_service
+        self._local_results_service = local_results_service
+        self._last_result_manifest_path: Path | None = None
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
@@ -155,6 +160,12 @@ class MainWindow(QMainWindow):
         """Return the real persisted workspace currently shown, if any."""
 
         return self._current_workspace
+
+    @property
+    def last_result_manifest_path(self) -> Path | None:
+        """Return the most recent local handoff manifest exported by this window."""
+
+        return self._last_result_manifest_path
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -249,6 +260,13 @@ class MainWindow(QMainWindow):
         if item == "Workspace" and self._current_workspace is not None:
             self.show_workspace_state(self._current_workspace)
             return
+        if (
+            item == "Hasil"
+            and self._current_workspace is not None
+            and self._local_results_service is not None
+        ):
+            self.show_results_state()
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -325,6 +343,38 @@ class MainWindow(QMainWindow):
         self._selected_scene_id = workspace.scenes[0].scene_id if workspace.scenes else None
         self.show_workspace_state(workspace)
         return workspace
+
+    def show_results_state(self) -> None:
+        """Render real local Generate/Download facts in the frozen Hasil screen."""
+
+        if self._local_results_service is None:
+            raise InternalInvariantError("Local results service is not configured")
+        if self._current_workspace is None:
+            raise InternalInvariantError("No active workspace")
+        results = self._local_results_service.snapshot(self._current_workspace.episode_id)
+        self._fixture_code = "REAL_RESULTS"
+        self._set_navigation("Hasil")
+        self._set_project_chrome(self._current_workspace, "Hasil")
+        view = build_results_view(
+            results,
+            on_export_manifest=self.export_current_result_manifest,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def export_current_result_manifest(self) -> Path:
+        """Export the current credential-free FLOW_OTOMATIS_RESULT.json."""
+
+        if self._local_results_service is None:
+            raise InternalInvariantError("Local results service is not configured")
+        if self._current_workspace is None:
+            raise InternalInvariantError("No active workspace")
+        path = self._local_results_service.export_manifest(
+            self._current_workspace.episode_id
+        )
+        self._last_result_manifest_path = path
+        return path
 
     def _wire_import_button(self, screen: QWidget) -> None:
         if self._episode_import_service is None:
