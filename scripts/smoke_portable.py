@@ -1,4 +1,4 @@
-"""Smoke-test the packaged Windows foundation from a foreign CWD."""
+"""Smoke-test the packaged Windows application from a foreign CWD."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def smoke(bundle_root: Path) -> None:
 
     with tempfile.TemporaryDirectory(prefix="Flow Otomatis ünicode ") as foreign_cwd:
         completed = subprocess.run(
-            [str(exe.resolve())],
+            [str(exe.resolve()), "--smoke-exit-ms", "500"],
             cwd=foreign_cwd,
             timeout=30,
             check=False,
@@ -46,7 +46,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     smoke(args.bundle_root.resolve())
-    print("Portable foundation smoke passed.")
+    print("Portable application smoke passed.")
     return 0
 
 
