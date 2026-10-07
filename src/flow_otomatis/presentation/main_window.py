@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import partial
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -48,6 +48,15 @@ _NAV_GLYPHS = {
     "Gemini Keys": "◆",
     "Diagnostik": "≡",
     "Pengaturan": "⚙",
+}
+
+_DIALOG_BACKGROUNDS = {
+    "UI-IMG-001C": "UI-IMG-001A",
+    "UI-IMG-012A": "UI-IMG-002A",
+    "UI-IMG-012B": "UI-IMG-002A",
+    "UI-IMG-013A": "UI-IMG-004B",
+    "UI-IMG-014A": "UI-IMG-002B",
+    "UI-IMG-015A": "UI-IMG-007A",
 }
 
 
@@ -182,6 +191,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._status_project)
         layout.addWidget(muted_label("Autosave aktif"))
         return statusbar
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Close a frozen modal state with Escape and restore its background."""
+
+        if event.key() == Qt.Key.Key_Escape and self._fixture_code in _DIALOG_BACKGROUNDS:
+            self.show_fixture(_DIALOG_BACKGROUNDS[self._fixture_code])
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _open_navigation_item(self, item: str, checked: bool = False) -> None:
         del checked
