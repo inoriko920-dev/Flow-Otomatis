@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -66,10 +67,8 @@ class KeyringGeminiKeyVault:
         try:
             self._write_registry([*records, record])
         except Exception:
-            try:
+            with suppress(Exception):
                 self._backend.delete_password(_SERVICE_NAME, key_id)
-            except Exception:
-                pass
             raise
         return self._decode(record)
 

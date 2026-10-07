@@ -1,10 +1,10 @@
 """Application services."""
 
 from flow_otomatis.application.services.episode_import import EpisodeImportService
+from flow_otomatis.application.services.gemini_keys import GeminiKeyService
 from flow_otomatis.application.services.generated_media_download import (
     GeneratedMediaDownloadService,
 )
-from flow_otomatis.application.services.gemini_keys import GeminiKeyService
 from flow_otomatis.application.services.google_flow_preflight import GoogleFlowPreflightService
 from flow_otomatis.application.services.google_sessions import GoogleSessionService
 from flow_otomatis.application.services.local_generation_queue import LocalGenerationQueueService
