@@ -60,6 +60,12 @@ class PathService:
         return self.user_data_root / "Sessions"
 
     @property
+    def settings_root(self) -> Path:
+        """Application-global metadata root; secrets themselves stay in the OS keyring."""
+
+        return self.user_data_root / "Settings"
+
+    @property
     def log_root(self) -> Path:
         """Structured local log root."""
 

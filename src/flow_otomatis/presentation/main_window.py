@@ -6,7 +6,7 @@ from concurrent.futures import Future
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from flow_otomatis.application.ports import GoogleSessionProfile
 from flow_otomatis.application.services import (
     EpisodeImportService,
+    GeminiKeyService,
     GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
@@ -35,12 +36,14 @@ from flow_otomatis.domain.errors import (
     WorkspaceAlreadyExistsError,
     WorkspaceCorruptError,
 )
+from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
     get_fixture,
 )
+from flow_otomatis.presentation.gemini_keys_view import build_gemini_keys_view
 from flow_otomatis.presentation.google_profiles_view import (
     build_google_login_view,
     build_google_profiles_view,
@@ -83,6 +86,39 @@ _NAV_GLYPHS = {
 }
 
 
+class _GeminiHealthSignals(QObject):
+    """Return sanitized Gemini health metadata to the Qt thread."""
+
+    checked = Signal(object)
+    failed = Signal(str)
+
+
+class _GeminiHealthTask(QRunnable):
+    """Run one network health check without blocking Qt."""
+
+    def __init__(
+        self,
+        service: GeminiKeyService,
+        key_id: str,
+        signals: _GeminiHealthSignals,
+    ) -> None:
+        super().__init__()
+        self._service = service
+        self._key_id = key_id
+        self._signals = signals
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            profile = self._service.check_health(self._key_id)
+        except FlowOtomatisError as exc:
+            self._signals.failed.emit(str(exc))
+        except Exception:
+            self._signals.failed.emit("Cek Gemini key gagal tanpa mengekspos secret.")
+        else:
+            self._signals.checked.emit(profile)
+
+
 class _GoogleSessionSignals(QObject):
     """Marshal sanitized Browser Worker outcomes back onto the Qt thread."""
 
@@ -113,6 +149,7 @@ class MainWindow(QMainWindow):
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
+        gemini_key_service: GeminiKeyService | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Flow-Otomatis")
@@ -128,6 +165,7 @@ class MainWindow(QMainWindow):
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
+        self._gemini_key_service = gemini_key_service
         self._active_google_profile_id: str | None = None
         self._last_result_manifest_path: Path | None = None
         self._pending_workspace: WorkspaceState | None = None
@@ -137,6 +175,9 @@ class MainWindow(QMainWindow):
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
         self._google_session_signals.failed.connect(self._show_google_session_error)
+        self._gemini_health_signals = _GeminiHealthSignals(self)
+        self._gemini_health_signals.checked.connect(self._on_gemini_health_checked)
+        self._gemini_health_signals.failed.connect(self._show_gemini_health_error)
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -300,6 +341,9 @@ class MainWindow(QMainWindow):
         if item == "Profil Google" and self._google_session_service is not None:
             self.show_google_profiles()
             return
+        if item == "Gemini Keys" and self._gemini_key_service is not None:
+            self.show_gemini_keys()
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -440,6 +484,80 @@ class MainWindow(QMainWindow):
         path = self._local_results_service.export_manifest(self._current_workspace.episode_id)
         self._last_result_manifest_path = path
         return path
+
+    def show_gemini_keys(self) -> None:
+        """Render real credential-free Gemini key metadata."""
+
+        if self._gemini_key_service is None:
+            self.show_fixture("UI-IMG-006A")
+            return
+        profiles = self._gemini_key_service.list_profiles()
+        self._fixture_code = "REAL_GEMINI_KEYS"
+        self._set_navigation("Gemini Keys")
+        self._project_label.setText("Gemini API")
+        self._project_state_label.setText("Gemini Keys")
+        self._status_project.setText(f"{len(profiles)} key")
+        view = build_gemini_keys_view(
+            profiles,
+            on_import=self._import_gemini_keys,
+            on_check=self._check_gemini_key,
+            on_activate=self._activate_gemini_key,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def _import_gemini_keys(self) -> None:
+        if self._gemini_key_service is None:
+            return
+        raw, accepted = QInputDialog.getMultiLineText(
+            self,
+            "Impor Gemini Keys",
+            "Paste satu key per baris, atau format Label | Key. Maksimal 100 key.",
+        )
+        if not accepted or not raw.strip():
+            return
+        try:
+            summary = self._gemini_key_service.import_text(raw)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Gemini Keys", str(exc))
+            return
+        QMessageBox.information(
+            self,
+            "Gemini Keys",
+            (
+                f"{len(summary.imported)} key disimpan aman. "
+                f"{summary.duplicate_count} duplikat dilewati. "
+                f"{summary.rejected_count} baris ditolak."
+            ),
+        )
+        self.show_gemini_keys()
+
+    def _check_gemini_key(self, key_id: str) -> None:
+        if self._gemini_key_service is None:
+            return
+        task = _GeminiHealthTask(
+            self._gemini_key_service,
+            key_id,
+            self._gemini_health_signals,
+        )
+        QThreadPool.globalInstance().start(task)
+
+    def _activate_gemini_key(self, key_id: str) -> None:
+        if self._gemini_key_service is None:
+            return
+        try:
+            self._gemini_key_service.set_active(key_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Gemini Keys", str(exc))
+            return
+        self.show_gemini_keys()
+
+    def _on_gemini_health_checked(self, _profile: GeminiKeyProfile) -> None:
+        self.show_gemini_keys()
+
+    def _show_gemini_health_error(self, message: str) -> None:
+        QMessageBox.warning(self, "Gemini Keys", message)
 
     def show_google_profiles(self) -> None:
         """Render real credential-free Google profile/session state."""
