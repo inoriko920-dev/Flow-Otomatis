@@ -14,3 +14,9 @@
 - ADR-012 ACCEPTED: no global undo; previews + transactions + audit.
 - ADR-013 PROVISIONAL: optional paid official API only after explicit scope.
 - ADR-014 PROVISIONAL: exact dependency versions after Windows compatibility spike.
+- ADR-015 ACCEPTED FOR A01: atomic workspace create rejects duplicate identity; legitimate updates remain explicit update semantics.
+- ADR-016 ACCEPTED FOR A03: coherent request revision/fingerprint plus durable job owner/lease and transactional orphan recovery.
+- ADR-017 ACCEPTED FOR A04: all Playwright/CDP lifecycle stays on one Browser Worker owner; Qt communicates through non-blocking command/result boundaries.
+
+## Current-auth clarification
+ADR-006 remains applicable to automated browser-adapter work, but it does not override the later STEP 12 normal-Chrome authentication decision recorded in PROJECT_STATE and the current handoff. Human Google sign-in uses installed normal Chrome with no Playwright/CDP attachment; automation attaches only after authentication.

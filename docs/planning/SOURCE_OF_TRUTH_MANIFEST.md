@@ -20,6 +20,17 @@ Mandatory planning/reference DOCX files physically committed to the repository:
 | docs/planning/07_STEP_07_CODE_CONSTITUTION_REPOSITORY_ARCHITECTURE_FLOW_OTOMATIS_FACTORY_V2.docx | 62314 | ded551edca9e557aff637d7989bc3c2adf2d5bae6ef14593304138190b2bdb4b | VERIFIED |
 | docs/planning/FLOW_OTOMATIS_SYNC_REVISION_SPEC_FOR_100_FAMOUS_PEOPLE.docx | 61194 | b3c6c416c91fee917e693faadfce3eb4fde72d872798d77ebdbed5e263134956 | VERIFIED |
 
+## STEP 12 audit remediation source of truth
+The ASTRA audit handed to SOL on 7 October 2026 is committed at:
+- `docs/planning/audits/00_ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-07.docx`
+- bytes: 48486
+- SHA-256: `1011693e1e67673a4af49378ca2009e93f596a74f563276ae060ebcaae0ca210`
+- audit baseline: `e6724a0a5c3d68789149ed5c7eb094d44c9f0967`
+- implementation packages: A00–A05 inside STEP 12
+- live Generate gate remains BLOCKED until the existing real-account restart validation passes.
+
+The audit does not supersede the STEP 00–07 planning or the frozen UI reference. It is an implementation-remediation plan for the current STEP 12 baseline.
+
 ## Software Factory
 Complete TXT guidance from the Software Factory V2 package is mirrored at:
 - `docs/software_factory/SOFTWARE_FACTORY_V2_TEXT_GUIDE.md`
@@ -34,4 +45,4 @@ The repository copy is image-compressed for repository efficiency while preservi
 Earlier STEP 04 planning versions are retained under `docs/planning/archive/` and are not active source-of-truth.
 
 ## Gate
-S08-T01 is PASS after binary fetch verification on the commit that contains these files.
+S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 gates and does not reopen S08-T01.
