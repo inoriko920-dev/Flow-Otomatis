@@ -481,3 +481,40 @@ I12-02B2-LIVE remains BLOCKED by the independent real-account restart validation
 ### Audit next exact action
 After the product owner says `lanjutkan`, execute only A05: run the audit's combined acceptance matrix and fresh official quality/regression/visual/Windows portable gates, record all closed/open risks and fresh evidence, then finalize the audit handoff. A05 PASS verifies the local remediation track only; it must not declare Flow live ready.
 
+## STEP 12 audit remediation track — A05 FINAL
+- A05 status: PASS.
+- Audit remediation A00–A05 status: COMPLETE.
+- Fresh tested SHA: `7c1545c775fede2442a89d54d828e32813b9c8a5`.
+- Fresh official CI run: `37656131625` — SUCCESS.
+- Quality job: `112911424702` — SUCCESS.
+- UI visual job: `112912268379` — SUCCESS.
+- Windows package job: `112912812398` — SUCCESS.
+- Runtime: CPython 3.14.7 x64, uv 0.12.23.
+- Ruff format/lint: PASS.
+- mypy: PASS — 64 source files.
+- architecture guard: PASS.
+- pytest: PASS — 110 passed, 1904 warnings.
+- frozen UI regression: PASS — 30/30 fixtures, similarity 0.6344–0.9643.
+- UI artifact: `11499155505`, 3316911 bytes, SHA-256 `8997ba4dfe5894a662f6e86719a4cad8c1dc25227ae709f1e138f9476b841749`.
+- Chromium smoke: PASS.
+- portable application smoke: PASS.
+- Windows artifact: `11500180694`, 435501172 bytes, SHA-256 `9378857debe5a7812db9702d9e1ea9f54211cd8f029ceda0a6f96732519f57ca`.
+- Acceptance matrix T01–T12: PASS.
+- Audit findings F01–F06: CLOSED.
+
+### Boundary after A05
+The audit remediation is complete, but STEP 12 product work remains IN PROGRESS because the independent real-account gate has not been satisfied.
+
+Still required before I12-02B2-LIVE:
+1. open the latest Windows build on the user's machine;
+2. complete Google login manually in installed normal Chrome;
+3. close the login Chrome window;
+4. run session recheck and obtain READY;
+5. fully close Flow-Otomatis;
+6. reopen it and verify the same profile again;
+7. confirm restart validation is Lulus.
+
+No password, MFA code, cookie, token, or browser-data should be shared.
+
+A05 does not authorize live Generate. I12-02B2-LIVE remains BLOCKED until the real-account restart validation passes and the product owner explicitly continues.
+

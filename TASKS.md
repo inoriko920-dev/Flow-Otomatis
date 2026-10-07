@@ -174,7 +174,13 @@ Evidence:
   - duplicate same-profile operations are blocked while busy and shutdown waits are bounded;
   - slow-probe Qt heartbeat regression PASS;
   - official main CI `37654708047`: 110 tests PASS, mypy 64 source files, architecture PASS, UI 30/30 PASS, Chromium/portable smoke PASS.
-- A05 — combined verification/build/handoff: READY, not started.
+- A05 — combined verification/build/handoff: PASS.
+  - fresh tested SHA: `7c1545c775fede2442a89d54d828e32813b9c8a5`;
+  - acceptance matrix T01–T12 PASS;
+  - official fresh CI `37656131625`: 110 tests PASS, mypy 64 source files, architecture PASS, UI 30/30 PASS, Chromium/portable smoke PASS;
+  - audit findings F01–F06 CLOSED;
+  - audit remediation A00–A05 COMPLETE.
+- Next product gate is not another audit package: manual real-account Google login/restart validation remains required before I12-02B2-LIVE.
 
 Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by the existing real-account restart validation.
 

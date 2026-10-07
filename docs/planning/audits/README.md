@@ -184,3 +184,26 @@ Evidence:
 
 All six audit findings F01–F06 are now locally closed. Next package is A05 only: fresh combined verification/build/handoff. A05 does not authorize live Flow.
 
+## Current A05 final state
+A05: **PASS**.
+
+Audit remediation A00–A05: **COMPLETE**.
+
+Fresh verification:
+- tested SHA: `7c1545c775fede2442a89d54d828e32813b9c8a5`;
+- CI `37656131625`: SUCCESS;
+- quality `112911424702`: Python 3.14.7, uv 0.12.23, Ruff PASS, mypy 64 PASS, architecture PASS, pytest 110 PASS;
+- UI `112912268379`: 30/30 PASS, similarity 0.6344–0.9643;
+- UI artifact `11499155505`, SHA-256 `8997ba4dfe5894a662f6e86719a4cad8c1dc25227ae709f1e138f9476b841749`;
+- Windows `112912812398`: Chromium smoke PASS, portable build/smoke PASS;
+- Windows artifact `11500180694`, 435501172 bytes, SHA-256 `9378857debe5a7812db9702d9e1ea9f54211cd8f029ceda0a6f96732519f57ca`.
+
+Acceptance matrix T01–T12: PASS.
+Findings F01–F06: CLOSED.
+
+Evidence:
+- `A05_COMBINED_VERIFICATION_RUN_2026-10-08.md`
+- `../../handoff/current/HANDOFF_STEP_12_AUDIT_A05_FINAL.md`
+
+This closes only the local audit-remediation track. Real-account restart validation remains pending and live Google Flow generation remains BLOCKED.
+
