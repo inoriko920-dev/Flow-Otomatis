@@ -133,9 +133,7 @@ class MainWindow(QMainWindow):
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
         self._google_session_signals = _GoogleSessionSignals(self)
-        self._google_session_signals.profile_ready.connect(
-            self._on_google_session_profile_ready
-        )
+        self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
         self._google_session_signals.failed.connect(self._show_google_session_error)
 
@@ -522,9 +520,7 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None or self._active_google_profile_id is None:
             self.show_google_profiles()
             return
-        future = self._google_session_service.check_profile_async(
-            self._active_google_profile_id
-        )
+        future = self._google_session_service.check_profile_async(self._active_google_profile_id)
         self._watch_google_profile_future(future, "recheck", "Bantuan Login")
 
     def _check_google_profile(self, profile_id: str) -> None:

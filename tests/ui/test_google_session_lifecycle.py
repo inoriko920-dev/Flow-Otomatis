@@ -122,7 +122,6 @@ def test_google_login_view_shows_restart_gate_pass(qtbot) -> None:
     assert "Lulus" in labels
 
 
-
 class SlowFixtureSessionPort(FixtureSessionPort):
     def __init__(self) -> None:
         super().__init__()
@@ -159,8 +158,10 @@ def test_slow_session_probe_keeps_qt_heartbeat_responsive(qtbot) -> None:
 
     port.release.set()
     qtbot.waitUntil(
-        lambda: "Sesi berhasil diverifikasi"
-        in [label.text() for label in window.findChildren(QLabel)],
+        lambda: (
+            "Sesi berhasil diverifikasi"
+            in [label.text() for label in window.findChildren(QLabel)]
+        ),
         timeout=1500,
     )
 
