@@ -50,7 +50,9 @@ def _workspace() -> WorkspaceState:
     )
 
 
-def _service(tmp_path: Path) -> tuple[
+def _service(
+    tmp_path: Path,
+) -> tuple[
     LocalResultsService,
     SqliteGenerationJobRepository,
 ]:
