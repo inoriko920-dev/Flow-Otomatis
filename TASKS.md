@@ -17,69 +17,63 @@ Status: IN PROGRESS.
 
 ### I12-01 — Authorized Google Session / Manual Login Lifecycle
 - Status: AUTOMATED PASS / LIVE MANUAL VALIDATION PENDING.
-- Automated CI baseline remains PASS.
-- Real user-owned Google login/restart persistence must still be tested on the packaged Windows app.
+- Real Google account login/restart persistence still requires product-owner validation.
 
 ### I12-02A — Deterministic Submit Contract & Ambiguous-Submit Guard
 - Status: PASS.
-- Tested implementation SHA: `90fafb83821ff7ec82c3253d046293b780220edb`.
-- CI run: `37603714336` — SUCCESS.
-- Quality job: `112734004875` — SUCCESS.
-- UI visual job: `112734322641` — SUCCESS.
-- Windows package job: `112734665287` — SUCCESS.
+- One-submit contract and ATTENTION_REQUIRED anti-duplicate behavior proven.
+
+### I12-02B1 — Read-Only Google Flow Preflight
+- Status: PASS.
+- Tested implementation SHA: `8ebd5a5e048c1a3c606c2ace4ddf17c8ef510780`.
+- CI run: `37604743253` — SUCCESS.
+- Quality: `112737380299` — SUCCESS.
+- UI visual: `112737696541` — SUCCESS.
+- Windows package: `112737987743` — SUCCESS.
 
 Delivered:
-- one-submit Google Flow driver contract;
-- explicit ACCEPTED / SAFE_FAILURE / AUTH_REQUIRED / CANCELLED / AMBIGUOUS evidence;
-- no automatic provider retry;
-- stable remote id required before GENERATED;
-- ATTENTION_REQUIRED durable job state;
-- ambiguous/auth outcomes block the queue;
-- second queued Scene is not submitted while attention is unresolved;
-- Hasil UI/metrics understand ATTENTION_REQUIRED;
-- no live selectors or Google Flow mutation implemented.
+- official Flow read-only navigation target;
+- REACHABLE / AUTH_REQUIRED / UNAVAILABLE / UNKNOWN / ERROR;
+- existing local profile validation;
+- no upload, prompt typing, selector locking, or generation click;
+- shared persistent Playwright context pool for session + Flow preflight;
+- no UI redesign.
 
-Automated evidence:
+Evidence:
 - Ruff format/lint: PASS.
-- mypy strict: PASS — 56 source files.
+- mypy strict: PASS — 60 source files.
 - architecture guard: PASS.
-- pytest: 53 passed.
+- pytest: 59 passed.
 - UI regression: 30/30 PASS.
-- similarity: 0.6344–0.9643 at threshold 0.55.
+- similarity: 0.6344–0.9643.
 - Chromium stage/smoke: PASS.
 - PyInstaller onedir: PASS.
-- portable application smoke: PASS.
-- UI evidence artifact:
-  - ID: `11473099652`
-  - digest: `34de8d0b0ddd910c40017b46c7e66a4fd37a3ac9e6107d720891296eb5253726`
+- portable smoke: PASS.
+- UI artifact:
+  - ID: `11473953895`
+  - digest: `37de328dbe47abd5ba8a9114c9a0999d3e1be8c46d46534cd9a729499f69465b`
 - Windows artifact:
-  - ID: `11473888042`
-  - size: `435454484` bytes
-  - digest: `0d5eabc603acba99c0e7d5c09e3adcec51135e7a0bf8c37bdde97ad4ac332c99`
+  - ID: `11474421936`
+  - size: `435464521` bytes
+  - digest: `0cf17a7590251cfa775b502401eddaaf5b3a1bfef1f445229844387b13bced16`
 
-### I12-02B — Live Google Flow Playwright Driver
-- Status: BLOCKED pending successful I12-01 real-account validation + next explicit `lanjutkan`.
-- First live slice:
-  - one Scene only;
-  - use existing GenerationRequest;
-  - reuse one authorized user-owned profile;
-  - current verified Flow UI selectors only;
-  - exactly one mutating submit attempt;
-  - timeout/cancel classification;
-  - ambiguous outcome → ATTENTION_REQUIRED;
-  - never silently resubmit.
+### I12-02B2 — Live One-Scene Google Flow Submit Driver
+- Status: BLOCKED pending successful I12-01 real-account validation.
+- Start only after next explicit `lanjutkan` following successful manual validation.
+- Exactly one mutating attempt.
+- No silent retry.
+- Ambiguous outcome → ATTENTION_REQUIRED.
+- No download/result detection in this slice.
 
 ### I12-03 — Live Result Detection & Download Adapter
-- Status: PLANNED after I12-02B.
-- Keep Generate and Download separate.
+- Status: PLANNED after I12-02B2.
 
 ### I12-04 — Gemini AI Agent / Key Integration
 - Status: PLANNED after I12-03.
-- Keyring-backed secrets, masked UI, bounded permissions.
 
 ## STEP 12 safety boundary
 - No CAPTCHA/MFA bypass.
 - No credential/session export.
-- No automatic account/key rotation designed to evade quotas/rate limits/free-credit limits.
-- No silent retry of potentially mutating generation submissions.
-- Do not guess live Flow selectors.
+- No automatic account/key rotation to evade limits.
+- No guessed live generation selectors.
+- No silent retry after ambiguous mutation.
