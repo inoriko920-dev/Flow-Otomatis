@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from flow_otomatis.application.ports.google_session import (
@@ -11,6 +13,9 @@ from flow_otomatis.application.ports.google_session import (
 )
 from flow_otomatis.application.services import GoogleSessionService
 from flow_otomatis.presentation.main_window import MainWindow
+from flow_otomatis.workers.browser.google_session_commands import (
+    ThreadedGoogleSessionCommands,
+)
 
 
 class FixtureSessionPort:
@@ -115,3 +120,49 @@ def test_google_login_view_shows_restart_gate_pass(qtbot) -> None:
     labels = [label.text() for label in window.findChildren(QLabel)]
     assert "Restart berhasil diverifikasi" in labels
     assert "Lulus" in labels
+
+
+
+class SlowFixtureSessionPort(FixtureSessionPort):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def check_profile(self, profile_id: str) -> GoogleSessionProfile:
+        assert profile_id == self.profile.profile_id
+        self.started.set()
+        assert self.release.wait(timeout=2.0)
+        return super().check_profile(profile_id)
+
+
+def test_slow_session_probe_keeps_qt_heartbeat_responsive(qtbot) -> None:
+    port = SlowFixtureSessionPort()
+    commands = ThreadedGoogleSessionCommands(port)
+    service = GoogleSessionService(port, commands=commands)
+    window = MainWindow(google_session_service=service)
+    qtbot.addWidget(window)
+    window.show_google_login(port.profile)
+
+    heartbeat: list[int] = []
+    timer = QTimer(window)
+    timer.setInterval(10)
+    timer.timeout.connect(lambda: heartbeat.append(len(heartbeat) + 1))
+    timer.start()
+
+    _button(window, "Cek Ulang Sesi").click()
+    assert port.started.wait(timeout=1.0)
+
+    qtbot.wait(120)
+    assert len(heartbeat) >= 3
+    assert window.fixture_code == "REAL_GOOGLE_LOGIN"
+
+    port.release.set()
+    qtbot.waitUntil(
+        lambda: "Sesi berhasil diverifikasi"
+        in [label.text() for label in window.findChildren(QLabel)],
+        timeout=1500,
+    )
+
+    assert window.fixture_code == "REAL_GOOGLE_LOGIN"
+    assert service.shutdown(timeout_s=1.0) is True
