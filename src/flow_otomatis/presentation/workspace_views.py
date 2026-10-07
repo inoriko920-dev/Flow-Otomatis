@@ -238,7 +238,10 @@ def build_workspace_right_panel(
     display_answer = (
         "Sedang menganalisis status project…"
         if agent_busy
-        else (agent_answer or "Saya siap membantu membaca status project dan mengusulkan tindakan yang aman.")
+        else (
+            agent_answer
+            or "Saya siap membantu membaca status project dan mengusulkan tindakan yang aman."
+        )
     )
     if answer_label is not None:
         answer_label.setText(display_answer[:2400])

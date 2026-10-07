@@ -73,11 +73,7 @@ def test_dynamic_agent_answer_is_async_and_keeps_qt_heartbeat(qtbot) -> None:
     ]
     assert inputs
     agent_input = inputs[0]
-    send = next(
-        button
-        for button in window.findChildren(QPushButton)
-        if button.text() == "Kirim"
-    )
+    send = next(button for button in window.findChildren(QPushButton) if button.text() == "Kirim")
 
     heartbeat: list[int] = []
     timer = QTimer(window)
@@ -92,8 +88,7 @@ def test_dynamic_agent_answer_is_async_and_keeps_qt_heartbeat(qtbot) -> None:
 
     qtbot.waitUntil(
         lambda: any(
-            "Scene ini siap berdasarkan state lokal"
-            in label.text()
+            "Scene ini siap berdasarkan state lokal" in label.text()
             for label in window.findChildren(QLabel)
         ),
         timeout=1500,
