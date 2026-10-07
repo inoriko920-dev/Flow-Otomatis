@@ -902,7 +902,10 @@ class MainWindow(QMainWindow):
 
     def _ask_gemini_agent(self, question: str) -> None:
         if self._gemini_agent_service is None:
-            self._agent_answer = "AI Agent belum dikonfigurasi. Tambahkan dan health-check Gemini key terlebih dahulu."
+            self._agent_answer = (
+                "AI Agent belum dikonfigurasi. "
+                "Tambahkan dan health-check Gemini key terlebih dahulu."
+            )
             self._render_workspace_right_panel()
             return
         if self._current_workspace is None or self._selected_scene_id is None:
