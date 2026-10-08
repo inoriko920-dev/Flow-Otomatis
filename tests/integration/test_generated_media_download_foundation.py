@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from threading import Barrier
 from pathlib import Path
 
 import pytest
@@ -9,11 +11,12 @@ from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadRequest,
     MediaDownloadAmbiguousError,
     MediaDownloadAuthenticationRequiredError,
+    MediaDownloadProviderError,
 )
 from flow_otomatis.application.services.generated_media_download import (
     GeneratedMediaDownloadService,
 )
-from flow_otomatis.domain.errors import InternalInvariantError
+from flow_otomatis.domain.errors import InternalInvariantError, StorageError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.result import DownloadState
@@ -238,3 +241,130 @@ def test_google_flow_provider_rejects_success_at_wrong_path(tmp_path: Path) -> N
         provider.download(request)
 
     assert not (tmp_path / "final.mp4").exists()
+
+
+def test_t18_collision_appearing_during_download_never_overwrites_final(tmp_path: Path) -> None:
+    class CollisionDriver(FakeDownloadDriver):
+        def download_one(
+            self, profile_id: str, remote_result_id: str, destination_path: str, *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            final = Path(destination_path).parent / "SCENE_001__take_01.mp4"
+            final.write_bytes(b"already-owned-final")
+            return evidence
+
+    driver = CollisionDriver()
+    root, jobs, downloads, service = _setup(tmp_path, driver)
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    with pytest.raises(MediaDownloadProviderError, match="appeared"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert final.read_bytes() == b"already-owned-final"
+    partials = list(final.parent.glob(final.name + ".*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001").state == DownloadState.FAILED
+    assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
+
+
+def test_t19_unsupported_no_clobber_primitive_fails_without_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, _downloads, service = _setup(tmp_path, driver)
+    from flow_otomatis.workers.browser import google_flow_download
+
+    def forbid_hardlink(*_args, **_kwargs):
+        raise OSError("filesystem does not support hard links")
+
+    monkeypatch.setattr(google_flow_download.os, "link", forbid_hardlink)
+    with pytest.raises(MediaDownloadAmbiguousError, match="Atomic no-overwrite"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert not final.exists()
+    assert len(list(final.parent.glob(final.name + ".*.part"))) == 1
+    assert len(driver.calls) == 1
+
+
+def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: Path) -> None:
+    class ConcurrentDriver(FakeDownloadDriver):
+        def __init__(self) -> None:
+            super().__init__()
+            self.barrier = Barrier(2)
+
+        def download_one(
+            self, profile_id: str, remote_result_id: str, destination_path: str, *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            self.barrier.wait(timeout=10)
+            return evidence
+
+    driver = ConcurrentDriver()
+    root, jobs, downloads, service = _setup(tmp_path, driver)
+
+    def attempt():
+        try:
+            return service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+        except MediaDownloadProviderError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(attempt)
+        second = pool.submit(attempt)
+        outcomes = [first.result(timeout=20), second.result(timeout=20)]
+
+    assert sum(isinstance(item, Exception) for item in outcomes) == 1
+    assert sum(getattr(item, "state", None) == DownloadState.DOWNLOADED for item in outcomes) == 1
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final.is_file()
+    assert final.read_bytes() == b"fake-video"
+    assert len(driver.calls) == 2
+    assert len(set(call[2] for call in driver.calls)) == 2
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert recorded.output_path == str(final)
+    assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
+
+
+def test_t21_file_publish_success_db_failure_requires_manual_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = FakeDownloadDriver()
+    root, jobs, downloads, service = _setup(tmp_path, driver)
+    real_save = downloads.save
+
+    def interrupted_persistence(record):
+        if record.state == DownloadState.DOWNLOADED:
+            raise StorageError("synthetic commit failure")
+        return real_save(record)
+
+    monkeypatch.setattr(downloads, "save", interrupted_persistence)
+    with pytest.raises(StorageError, match="synthetic"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final.is_file()
+    assert final.read_bytes() == b"fake-video"
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+    assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
+
+
+def test_conditional_failure_cannot_replace_historical_downloaded_record(tmp_path: Path) -> None:
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    failed = __import__("dataclasses").replace(
+        original, state=DownloadState.FAILED, output_path=None, error_message="rival failed"
+    )
+    downloads.save_failure_if_unconfirmed(failed)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
