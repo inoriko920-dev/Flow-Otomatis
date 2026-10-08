@@ -9,7 +9,11 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from scripts.verify_portable_artifact import PortableArtifactError, verify_portable_artifact
+from scripts.verify_portable_artifact import (
+    PortableArtifactError,
+    _check_member,
+    verify_portable_artifact,
+)
 
 _SHA = "a" * 40
 _REQUIRED_FILES = {
@@ -113,7 +117,6 @@ def test_portable_integrity_rejects_incomplete_bundle(tmp_path: Path, removed: s
         "Flow-Otomatis/../../outside.txt",
         "Flow-Otomatis/CON.txt",
         "Flow-Otomatis/SCENE:alternate.txt",
-        "Flow-Otomatis/bad\\win.txt",
         "Flow-Otomatis/path. /video.mp4",
         "/Flow-Otomatis/absolute.txt",
         "unrelated/other.txt",
@@ -176,3 +179,12 @@ def test_portable_integrity_rejects_checksum_for_different_zip(tmp_path: Path) -
     checksum.write_text(f"{'0' * 64}  OTHER.zip\n", encoding="ascii")
     with pytest.raises(PortableArtifactError, match="name exactly"):
         verify_portable_artifact(archive, checksum, expected_git_sha=_SHA)
+
+
+def test_portable_path_validator_rejects_raw_windows_backslash() -> None:
+    # ZipInfo normalizes native backslashes to "/" during normal Windows ZIP
+    # decoding; exercise the canonical name guard with an unnormalized entry.
+    member = zipfile.ZipInfo("Flow-Otomatis/placeholder.txt")
+    member.filename = r"Flow-Otomatis\bad.txt"
+    with pytest.raises(PortableArtifactError, match="Unsafe"):
+        _check_member(member, set())
