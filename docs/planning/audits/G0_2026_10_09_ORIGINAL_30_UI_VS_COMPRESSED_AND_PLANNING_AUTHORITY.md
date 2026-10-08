@@ -75,3 +75,9 @@ All listed DOCX/ZIP local files passed ZIP CRC inspection. This audit makes **no
 3. Identify exact authoritative E12-00, master V1.1, E12-01 original planning DOCX versions; require original binary archiving, not reconstructed text substitution. Do not infer approval from `lanjutkan`.
 4. Review ADR T06 and provider G1/G5/G6 as independent gating actions, keeping fake tests distinct from real provider actions.
 5. **No coding / schema migration / live Generate / multi-account dispatch / credit usage / merge until all independent gates PASS**.
+
+## 6. Focused E12-00 two-variant semantic comparison — review clarification
+
+Further **direct Python OOXML comparison** of the 47,457-byte working-file candidate vs the 47,452-byte G0 ZIP candidate found both Word packages have 19 entries, and **17/19 uncompressed internal entries match exactly**. Only `word/document.xml` and `word/header1.xml` differ. Extracting all 279 `w:t` text runs in each shows changes **only** in the authored time stamp: **`08 October 2026, 15:20 WIB`** (working-file variant) versus **`08 October 2026, 15:21 WIB`** (G0 ZIP variant), in the main document's cover/date and policy-source sentence, plus running header. No other textual changes were observed in the actual Word XML diff. Both packages pass ZIP CRC. Thus **the apparent E12-00 binary conflict is a one-minute timestamp provenance variance, not evidence of competing substantive E12-00 policy content**.
+
+This narrows G0 review: the original binary version for archival may be chosen by the owner/ASTRA based on provenance (the G0 ZIP is the later 15:21 WIB handoff), while keeping both SHA proofs documented. **This comparison does not eliminate the other G0 original planning file archival and old-30-UI authority issues.**
