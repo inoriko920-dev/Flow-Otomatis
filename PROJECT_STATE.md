@@ -728,3 +728,10 @@ Gemini does not depend on the Google Flow login gate:
 - One upload commit added exactly **25 `docs/ui/` paths** (the 24 binaries and JSON manifest), no app source/code or existing UI reference altered; CI on upload commit **SUCCESS**; `main` unchanged; PR #25 remains draft and not merged.
 - **E12-02 user visual approval: PASS; final DOCX: PASS; G4 approved binary archive: PASS.** Earlier log entries saying `0/24` refer to the pre-upload situation and are superseded. Archive evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`.
 - Strict **G0 still BLOCKED** (authority parity and missing original planning docs), **G1 UNKNOWN/BLOCKED**, **G5 live account credits/tariff UNVERIFIED**, **G6 READY-after-restart UNVERIFIED**, **ADR T06 pending owner approval**. No app coding, merge, live Generate/Download or credit consumption authorized by this G4 success.
+
+
+## 2026-10-09 — Strict G0 30-UI original-versus-compressed audit
+- **G4 approved 24/24 UI binary archive remains PASS; no repeat upload needed**; PR #25 committed original 30-image DOCX SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f` at `docs/ui/original_uncompressed/` without overwriting compressed `main` copy.
+- Independent DOCX ZIP central-directory comparison: both references have 30 images, but original 30 **PNG**, 46,192,516 uncompressed media bytes, and main compressed 30 **JPEG**, 304,570 bytes; **4/17 non-media archive elements have different CRC/size**, including `word/document.xml` (original 117,201 bytes vs compressed 38,809). **Exact text/layout/visual parity NOT established; strict G0 remains BLOCKED pending owner authority decision**.
+- E12-00 original planning DOCX candidate has two distinct local byte variants (**47,457 vs 47,452 bytes**). Master V1.1 authoritative original candidate 79,528 bytes and E12-01 original candidates not found as exact Git blobs. Reconstructed copies do not prove original binary provenance. New G0 report `docs/planning/audits/G0_2026_10_09_ORIGINAL_30_UI_VS_COMPRESSED_AND_PLANNING_AUTHORITY.md`.
+- **No merge/coding/live Generate**. Other G1/G5/G6/T06 gates are independent.
