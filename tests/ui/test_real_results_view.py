@@ -115,3 +115,81 @@ def test_real_hasil_view_exports_handoff_manifest(tmp_path: Path, qtbot) -> None
 
     assert window.last_result_manifest_path is not None
     assert window.last_result_manifest_path.is_file()
+
+
+def test_t17_missing_video_displays_unavailable_and_blocks_export(tmp_path: Path, qtbot) -> None:
+    root = tmp_path / "projects"
+    workspaces = SqliteWorkspaceRepository(root)
+    jobs = SqliteGenerationJobRepository(root)
+    downloads = SqliteDownloadResultRepository(root)
+    results = LocalResultsService(workspaces, jobs, downloads, ResultManifestWriter(root))
+    now = datetime.now(UTC)
+    scene = WorkspaceScene(
+        scene_id="SCENE_001",
+        image_file="SCENE_001.png",
+        image_exists=True,
+        motion_prompt="Slow pan.",
+        target_duration_s=4.0,
+        recommended_flow_duration_s=4,
+        selected_flow_duration_s=4,
+        readiness=SceneReadiness.READY,
+        trim_target_s=4.0,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+    )
+    workspace = WorkspaceState(
+        schema_version="1.0",
+        episode_id="EP402_MISSING",
+        project_name="Missing Result UI",
+        source_package_path="source.zip",
+        created_at=now,
+        imported_at=now,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(scene,),
+    )
+    workspaces.save(workspace)
+    job = GenerationJob(
+        job_id="EP402_MISSING:SCENE_001:GENERATE",
+        episode_id="EP402_MISSING",
+        scene_id="SCENE_001",
+        target_duration_s=4.0,
+        flow_duration_s=4,
+        state=GenerationJobState.QUEUED,
+        created_at=now,
+        updated_at=now,
+        image_file=scene.image_file,
+        motion_prompt=scene.motion_prompt,
+        model=scene.model,
+        resolution=scene.resolution,
+        aspect_ratio=scene.aspect_ratio,
+        request_fingerprint="fixture",
+    )
+    jobs.ensure_jobs((job,))
+    assert jobs.claim_next(workspace.episode_id, "owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:still-here", "owner")
+    video = tmp_path / "video.mp4"
+    video.write_bytes(b"video")
+    results.record_downloaded(workspace.episode_id, scene.scene_id, str(video))
+    video.unlink()
+
+    window = MainWindow(local_results_service=results)
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    window.show_results_state()
+    visible = _visible_text(window)
+    assert "Tidak Tersedia" in visible
+    assert "0/1" in visible
+    assert window.fixture_code == "REAL_RESULTS"
+    assert window.last_result_manifest_path is None
+    # The frozen layout keeps its button; R03 must not wire a handoff action.
+    matching = [
+        button
+        for button in window.findChildren(QPushButton)
+        if button.text() == "Tandai Siap untuk Editing"
+    ]
+    for button in matching:
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert window.last_result_manifest_path is None

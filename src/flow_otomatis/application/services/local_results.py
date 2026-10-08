@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.result_manifest import ResultManifestWriterPort
@@ -60,7 +61,14 @@ class LocalResultsService:
                     generate_state=job.state if job is not None else None,
                     remote_result_id=job.remote_result_id if job is not None else None,
                     download_state=(
-                        download.state if download is not None else DownloadState.NOT_DOWNLOADED
+                        (
+                            DownloadState.UNAVAILABLE
+                            if download.state == DownloadState.DOWNLOADED
+                            and not is_available_output(download.output_path)
+                            else download.state
+                        )
+                        if download is not None
+                        else DownloadState.NOT_DOWNLOADED
                     ),
                     output_path=download.output_path if download is not None else None,
                     take=download.take if download is not None else 1,
@@ -98,8 +106,8 @@ class LocalResultsService:
                 "Download cannot be marked successful before Generate is GENERATED"
             )
         local_output = Path(output_path).expanduser().resolve()
-        if not local_output.is_file():
-            raise InternalInvariantError("Download output file does not exist locally")
+        if not is_available_output(str(local_output)):
+            raise InternalInvariantError("Download output must be a readable nonempty regular file")
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flow_otomatis.domain.result import ProjectResults
+from flow_otomatis.application.file_integrity import is_available_output
+from flow_otomatis.domain.result import DownloadState, ProjectResults
 
 
 class ResultManifestWriter:
@@ -22,6 +24,14 @@ class ResultManifestWriter:
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
         temporary = target.with_suffix(".json.tmp")
 
+        # A file may vanish after snapshot(): recheck during export as well.
+        verified_scenes = tuple(
+            replace(scene, download_state=DownloadState.UNAVAILABLE)
+            if scene.download_state == DownloadState.DOWNLOADED
+            and not is_available_output(scene.output_path)
+            else scene
+            for scene in results.scenes
+        )
         payload = {
             "schema_version": "1.0",
             "episode_id": results.episode_id,
@@ -32,7 +42,7 @@ class ResultManifestWriter:
                 "resolution": results.resolution,
                 "aspect_ratio": results.aspect_ratio,
             },
-            "scene_count": len(results.scenes),
+            "scene_count": len(verified_scenes),
             "scenes": [
                 {
                     "scene_id": scene.scene_id,
@@ -52,7 +62,7 @@ class ResultManifestWriter:
                         scene.updated_at.isoformat() if scene.updated_at is not None else None
                     ),
                 }
-                for scene in results.scenes
+                for scene in verified_scenes
             ],
         }
         temporary.write_text(

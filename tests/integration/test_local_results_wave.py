@@ -214,3 +214,95 @@ def test_migration_preserves_generated_result_and_existing_download(tmp_path: Pa
     assert snapshot.downloaded_count == 1
     assert snapshot.scenes[0].remote_result_id == "remote:kept"
     assert snapshot.scenes[0].output_path == str(output.resolve())
+
+
+def _generated_result_with_file(tmp_path: Path):
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    claimed = jobs.claim_next("EP400_RESULTS", "r03-owner", lease_seconds=60)
+    assert claimed is not None
+    jobs.mark_generated(job.job_id, "remote:R03", "r03-owner")
+    path = tmp_path / "SCENE_001.mp4"
+    path.write_bytes(b"real-local-test-video")
+    service.record_downloaded("EP400_RESULTS", "SCENE_001", str(path))
+    return service, path
+
+
+def test_t14_missing_video_is_effectively_unavailable_without_erasing_history(
+    tmp_path: Path,
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    before = service.snapshot("EP400_RESULTS")
+    assert before.handoff_ready
+    video.unlink()
+    after = service.snapshot("EP400_RESULTS")
+    assert after.generated_count == 1
+    assert after.downloaded_count == 0
+    assert after.attention_count == 1
+    assert not after.handoff_ready
+    assert after.scenes[0].remote_result_id == "remote:R03"
+    assert after.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert after.scenes[0].output_path == str(video.resolve())
+
+    recorded = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert recorded.output_path == str(video.resolve())
+
+
+@pytest.mark.parametrize("invalid_kind", ["empty", "directory", "unreadable"])
+def test_t15_effective_download_requires_readable_nonempty_regular_file(
+    tmp_path: Path, invalid_kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    if invalid_kind == "empty":
+        video.write_bytes(b"")
+    elif invalid_kind == "directory":
+        video.unlink()
+        video.mkdir()
+    else:
+        original_open = Path.open
+
+        def reject_open(self: Path, *args, **kwargs):
+            if self == video:
+                raise PermissionError("simulated file-access denial")
+            return original_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", reject_open)
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+
+
+def test_t16_manifest_checks_availability_after_snapshot_and_before_export(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    cached = service.snapshot("EP400_RESULTS")
+    assert cached.handoff_ready
+    video.unlink()
+    writer = ResultManifestWriter(tmp_path / "projects")
+    exported = writer.write(cached)
+    direct = json.loads(exported.read_text(encoding="utf-8"))
+    assert direct["schema_version"] == "1.0"
+    assert direct["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert direct["scenes"][0]["generate_status"] == "GENERATED"
+    assert direct["scenes"][0]["remote_result_id"] == "remote:R03"
+    again = service.export_manifest("EP400_RESULTS")
+    payload = json.loads(again.read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert payload["scenes"][0]["output_path"] == str(video.resolve())
+
+
+def test_manifest_compatibility_v1_never_false_reports_downloaded(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    video.write_bytes(b"")
+    payload = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "1.0"
+    assert payload["scene_count"] == 1
+    assert payload["scenes"][0]["download_status"] != "DOWNLOADED"
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert payload["scenes"][0]["remote_result_id"] == "remote:R03"
+    assert payload["scenes"][0]["output_path"] == str(video.resolve())
