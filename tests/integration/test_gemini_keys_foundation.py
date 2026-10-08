@@ -123,6 +123,7 @@ def test_active_secret_requires_valid_health_when_requested(tmp_path: Path) -> N
     assert active.key_id == profile.key_id
     assert secret == raw
 
+
 class BlockingHealth:
     def __init__(self) -> None:
         self.entered = Event()
@@ -137,13 +138,15 @@ class BlockingHealth:
 
 @pytest.mark.parametrize("target", ["First", "Second"])
 def test_t01_t02_health_completion_never_changes_newer_manual_selection(
-    tmp_path: Path, target: str,
+    tmp_path: Path,
+    target: str,
 ) -> None:
     health = BlockingHealth()
     repo, _secrets, _checker, service = _service(tmp_path, health)
     service.import_text(f"First | {'A' * 40}\nSecond | {'B' * 40}")
-    first, second = (next(p for p in service.list_profiles() if p.label == name)
-                     for name in ("First", "Second"))
+    first, second = (
+        next(p for p in service.list_profiles() if p.label == name) for name in ("First", "Second")
+    )
     checked = first if target == "First" else second
 
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -214,4 +217,3 @@ def test_t04_late_old_health_result_cannot_replace_newer_completion(tmp_path: Pa
     assert saved is not None
     assert saved.status is GeminiKeyStatus.INVALID
     assert saved.detail == "result-1"
-

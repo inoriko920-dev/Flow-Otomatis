@@ -99,6 +99,7 @@ def test_dynamic_agent_answer_is_async_and_keeps_qt_heartbeat(qtbot) -> None:
     )
     assert window.fixture_code == "REAL_WORKSPACE"
 
+
 class OrderedFakeAgentService:
     def __init__(self) -> None:
         self.lock = Lock()
@@ -139,7 +140,8 @@ def _two_scenes() -> WorkspaceState:
 
 @pytest.mark.parametrize("old_question", ["normal", "fail"])
 def test_t05_t06_stale_agent_completion_cannot_replace_next_scene_or_unlock_busy(
-    qtbot, old_question: str,
+    qtbot,
+    old_question: str,
 ) -> None:
     service = OrderedFakeAgentService()
     a = ("EP_AGENT_UI", "SCENE_001")
@@ -200,9 +202,7 @@ def test_t07_same_scene_id_in_other_project_does_not_receive_old_answer(qtbot) -
         assert window._agent_busy
         assert window._agent_answer is None
         service.release[b].set()
-        qtbot.waitUntil(
-            lambda: window._agent_answer == "ANSWER EP_OTHER SCENE_001", timeout=2500
-        )
+        qtbot.waitUntil(lambda: window._agent_answer == "ANSWER EP_OTHER SCENE_001", timeout=2500)
     finally:
         service.release[a].set()
         service.release[b].set()
@@ -228,4 +228,3 @@ def test_t08_close_window_during_agent_request_does_not_touch_destroyed_receiver
         qtbot.wait(60)
     finally:
         service.release[key].set()
-

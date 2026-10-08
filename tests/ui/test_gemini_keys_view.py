@@ -64,6 +64,7 @@ def test_real_gemini_keys_view_never_displays_raw_secret(tmp_path: Path, qtbot) 
     assert "••••••••••" in visible
     assert raw_key not in visible
 
+
 class PausedHealth:
     def __init__(self) -> None:
         self.entered = Event()
@@ -95,8 +96,10 @@ def test_gemini_keys_qt_health_completion_keeps_manual_active_key(tmp_path: Path
         health.release.set()
 
     qtbot.waitUntil(
-        lambda: repo.get(first.key_id) is not None
-        and repo.get(first.key_id).status is GeminiKeyStatus.VALID,
+        lambda: (
+            repo.get(first.key_id) is not None
+            and repo.get(first.key_id).status is GeminiKeyStatus.VALID
+        ),
         timeout=3000,
     )
     qtbot.waitUntil(
@@ -106,4 +109,3 @@ def test_gemini_keys_qt_health_completion_keeps_manual_active_key(tmp_path: Path
     active = [p.label for p in service.list_profiles() if p.is_active]
     assert active == ["Second"]
     assert window.findChild(QTableWidget) is not None
-
