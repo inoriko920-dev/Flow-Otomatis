@@ -106,3 +106,29 @@ def test_invalid_sqlite_is_reported_without_overwriting_source(
         repository.list_for_episode("EP_DAMAGED")
 
     assert _digest(path) == checksum
+
+
+@pytest.mark.parametrize("column", ["updated_at", "take"])
+def test_malformed_download_row_is_typed_and_source_is_unchanged(
+    tmp_path: Path,
+    column: str,
+) -> None:
+    projects_root = tmp_path / "projects"
+    database = _database(projects_root)
+    repository = SqliteDownloadResultRepository(projects_root)
+    repository.save(
+        DownloadRecord(
+            episode_id="EP_LEGACY",
+            scene_id="SCENE_001",
+            state=DownloadState.FAILED,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(f"UPDATE download_results SET {column} = ?", ("invalid",))
+    before = _digest(database)
+    with pytest.raises(StorageError):
+        repository.get("EP_LEGACY", "SCENE_001")
+    with pytest.raises(StorageError):
+        repository.list_for_episode("EP_LEGACY")
+    assert _digest(database) == before

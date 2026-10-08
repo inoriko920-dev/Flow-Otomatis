@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from flow_otomatis.domain.errors import StorageError
+from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
@@ -105,6 +105,8 @@ class SqliteDownloadResultRepository:
                 return self._row_to_record(row) if row is not None else None
         except sqlite3.Error as exc:
             raise StorageError(f"Could not read download result: {exc}") from exc
+        except (ValueError, TypeError, IndexError, OverflowError) as exc:
+            raise WorkspaceCorruptError(episode_id) from exc
 
     def list_for_episode(self, episode_id: str) -> tuple[DownloadRecord, ...]:
         db_path = self._db_path(episode_id)
@@ -126,6 +128,8 @@ class SqliteDownloadResultRepository:
                 return tuple(self._row_to_record(row) for row in rows)
         except sqlite3.Error as exc:
             raise StorageError(f"Could not list download results: {exc}") from exc
+        except (ValueError, TypeError, IndexError, OverflowError) as exc:
+            raise WorkspaceCorruptError(episode_id) from exc
 
     def _connect(self, episode_id: str) -> sqlite3.Connection:
         db_path = self._db_path(episode_id)

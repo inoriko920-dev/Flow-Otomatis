@@ -399,7 +399,25 @@ class MainWindow(QMainWindow):
             and self._current_workspace is not None
             and self._local_results_service is not None
         ):
-            self.show_results_state()
+            previous_navigation = next(
+                (
+                    name
+                    for name, button in self._nav_buttons.items()
+                    if name != "Hasil" and button.isChecked()
+                ),
+                "Hasil",
+            )
+            try:
+                self.show_results_state()
+            except FlowOtomatisError:
+                # Keep the current view usable when persisted result history fails.
+                self._set_navigation(previous_navigation)
+                QMessageBox.warning(
+                    self,
+                    "Hasil Tidak Dapat Dibuka",
+                    "Data hasil project tidak dapat dibaca. Periksa penyimpanan atau "
+                    "pulihkan data yang rusak dari backup, lalu coba kembali.",
+                )
             return
         if item == "Profil Google" and self._google_session_service is not None:
             self.show_google_profiles()
@@ -527,18 +545,31 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Local results service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        self._invalidate_agent_context()
         results = self._local_results_service.snapshot(self._current_workspace.episode_id)
+        self._invalidate_agent_context()
         self._fixture_code = "REAL_RESULTS"
         self._set_navigation("Hasil")
         self._set_project_chrome(self._current_workspace, "Hasil")
         view = build_results_view(
             results,
-            on_export_manifest=self.export_current_result_manifest,
+            on_export_manifest=self._export_result_manifest_from_ui,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
+
+    def _export_result_manifest_from_ui(self) -> None:
+        """Keep expected storage/export failures inside the Qt command boundary."""
+
+        try:
+            self.export_current_result_manifest()
+        except FlowOtomatisError, OSError:
+            QMessageBox.warning(
+                self,
+                "Ekspor Hasil Gagal",
+                "Hasil belum berhasil diekspor. Periksa data project, ruang kosong, "
+                "dan izin folder tujuan, lalu coba kembali.",
+            )
 
     def export_current_result_manifest(self) -> Path:
         """Export the current credential-free FLOW_OTOMATIS_RESULT.json."""
@@ -547,6 +578,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Local results service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
+        self._last_result_manifest_path = None
         path = self._local_results_service.export_manifest(self._current_workspace.episode_id)
         self._last_result_manifest_path = path
         return path
