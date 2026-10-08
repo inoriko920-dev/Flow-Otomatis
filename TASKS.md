@@ -386,3 +386,10 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] Strict G0 additionally requires other original DOCX authority evidence; archiving 30-UI uncompressed original alone does not automatically finish G0.
 - [ ] No coding/merge, provider action, or credit use before ALL gates PASS.
 - Handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`.
+
+
+## E12-02 corrected PR25 ZIP V2 — 2026-10-08
+- [x] Discontinue V1 uploader (PowerShell Git argument passing problem). Build V2 `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_V2_DIVERIFIKASI_2026-10-08.zip`, SHA-256 `e51789935bc414e62597403e19a0871d21af65612e06f1fecc581216d9a87c09`.
+- [x] Verify 24/24 binary exact hashes unchanged, ZIP CRC, expected branch/destinations; local isolated Git commit rehearsal 25/25 docs-only paths, 24/24 blob comparisons PASS.
+- [ ] **Push V2 from a genuinely authenticated Windows/Git session**, verify GitHub remote head and exact 24 uploaded binaries; local PowerShell Windows run and real GitHub push NOT YET TESTED.
+- [ ] Gate G4 binary archive not PASS until actual uploaded commit+SHA evidence. G0 strict and other implementation gates remain blocked. No merge or coding.
