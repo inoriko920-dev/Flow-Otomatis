@@ -236,3 +236,13 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - R04: official combined regression/UI/portable verification after R01–R03; NOT STARTED.
 - This follow-up does not undo the prior A00–A05 completion. Live real-account restart gate remains BLOCKED pending owner validation.
 - SOL must stop after R00 and wait for explicit permission before R01.
+
+### STEP 12 ASTRA 8 October R01 — CLOSED (B01+B02)
+- B01 Gemini health/selection race: CLOSED locally; PATCH-only metadata health writes + request ordering, no activation overwrites/upserts.
+- B02 Agent stale-context response: CLOSED locally; immutable request identity, scene/episode/generation gate, window-close safety and per-task signal ownership.
+- Tests T01–T08: PASS (deterministic SQLite and Qt regression).
+- Code PR #14: https://github.com/inoriko920-dev/Flow-Otomatis/pull/14 (merged).
+- Tested code SHA: `9c704e8fee54fd653acdf9f86ac12038d364a8e0`; merged SHA: `eee37612e3a02a1468b49b53a9721d8b0004cc48`.
+- Official PR CI `37721917858`: all jobs SUCCESS; 137 tests PASS, Ruff/mypy/architecture PASS; UI frozen 30/30 PASS; Windows Chromium/portable PASS.
+- Next package ONLY after explicit user permission: R02 (B03 + B06, T09–T13 and T22–T25).
+- B03, B04, B05, B06 remain OPEN; R03/R04 NOT STARTED. Live Google Flow remains BLOCKED.

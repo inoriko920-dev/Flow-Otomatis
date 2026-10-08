@@ -566,3 +566,13 @@ Gemini does not depend on the Google Flow login gate:
 - Static code evidence: `docs/planning/audits/B01_B06_SOL_R00_CODE_EVIDENCE_2026-10-08.md`.
 - Next authorized package after user instruction: R01 B01+B02 only; no leap to R02.
 - Live Flow session/one-Scene mutation remains BLOCKED behind real login, READY and verified restart.
+
+## 8 October 2026 — SOL R01 Gemini fixes closed
+- R01 B01+B02: **PASS / LOCALLY CLOSED** (test/CI-backed), no live provider claim.
+- Source-of-truth: `docs/planning/audits/ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`, ADR-018.
+- Implementation PR #14 merged into main at `eee37612e3a02a1468b49b53a9721d8b0004cc48`.
+- Exact CI-tested code SHA `9c704e8fee54fd653acdf9f86ac12038d364a8e0`; run `37721917858` SUCCESS.
+- Python 3.14.7, Ruff, mypy, architecture, 137 pytest PASS, frozen UI 30/30 PASS, Chromium/Windows portable smoke PASS.
+- Artifacts and T01–T08 evidence: `docs/planning/audits/B01_B02_R01_EVIDENCE_2026-10-08.md`.
+- R02 B03+B06 is next and NOT STARTED; B04/B05 reserved for R03. R04 NOT STARTED.
+- I12-02B2-LIVE and I12-03-LIVE remain BLOCKED until manual Google login READY + verified app restart and later authorized live flow.

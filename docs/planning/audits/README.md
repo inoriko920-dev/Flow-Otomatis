@@ -217,3 +217,10 @@ Separate from the completed F01–F06/A00–A05 work above.
 - B01–B06: ALL OPEN; R01–R04 not started. R01 is next (Gemini consistency only).
 - The separate reproduction_results.json/reproduce_findings.py referred to in ASTRA's DOCX were not provided and are not falsely claimed as committed.
 - Flow live stays BLOCKED.
+
+## SOL R01 closed — B01/B02, 8 October 2026
+- Verified implementation and evidence: `B01_B02_R01_EVIDENCE_2026-10-08.md`.
+- HANDOFF to R02: `../../handoff/current/HANDOFF_STEP_12_BUG_R01_TO_R02_2026-10-08.md`.
+- T01–T08 satisfied through real SQLite/Qt deterministic tests and CI. 137 tests passed; all required CI quality/UI/portable jobs passed.
+- The new B03/B04/B05/B06 findings are still open; prior historical F01–F06/A00–A05 remain closed.
+- No Flow live auth/Generate/Download tested or authorized by R01.
