@@ -1,5 +1,15 @@
 # Flow-Otomatis
 
+## Verified update — 8 October 2026
+- STEP 12 ASTRA bug audit B01–B06: **OFFLINE PASS** (R00–R04).
+- Independent release integrity hardening: **PASS**, PR #18 merged `baff19bb7c28612837d24001b9db9ee4a84251e5`.
+- Full official `main` CI `37728080637`: **217 pytest passed**, **30/30** frozen UI, Chromium/portable EXE smoke plus packaged ZIP SHA-256/CRC/source/path verification PASS.
+- Portable ZIP now includes `THIRD_PARTY_NOTICES.txt` after correcting its build order; verifier checks 1,049 packaged files.
+- Manual Google login reported working by product owner; **READY after full app restart remains unverified**. Live Generate/Download is not implemented/accepted as ready.
+- Latest evidence: `docs/planning/audits/STEP12_PORTABLE_RELEASE_INTEGRITY_EVIDENCE_2026-10-08.md`.
+- Last CI artifact is temporary (expires 22 October 2026 UTC); not an off-platform backup.
+
+
 Flow-Otomatis is a Windows 11 desktop application for deterministic scene-based Google Flow production orchestration.
 
 ## Software Factory status

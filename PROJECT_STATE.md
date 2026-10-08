@@ -609,3 +609,13 @@ Gemini does not depend on the Google Flow login gate:
 - All 6 B01–B06 CLOSED for **offline foundation only**. Historical F01–F06/A00–A05 remain closed.
 - **Still BLOCKED:** real user Google login, READY and restart-validation Lulus, I12-02B2-LIVE one-Scene Generate, I12-03-LIVE output download. These were NOT run by R04.
 - Caveats: limited CI artifact retention; external strict-enum v1.0 manifest consumers not independently verified for UNAVAILABLE; atomic hardlinks may fail on unsupported filesystems and must fail safely.
+
+## 8 October 2026 — Independent Portable Distribution QA complete
+- User confirmed Google **login works**; restart proof `Validasi restart: Lulus` not yet supplied. Live Flow Generate/Download remains BLOCKED.
+- Scope approved by user to continue non-login work: strengthen release ZIP verification only, **PASS**.
+- PR #18 merged `baff19bb7c28612837d24001b9db9ee4a84251e5`, official main CI `37728080637` SUCCESS: **217 tests**, 30/30 frozen UI, Chromium and Windows portable build/smoke, **real ZIP SHA/CRC/source/path verifier PASS**.
+- The new checker caught a real build-order bug: dependency inventory `THIRD_PARTY_NOTICES.txt` used to be generated before cleaning `dist`, causing the distributable ZIP to miss it. Builder now generates the notice after cleaning and requires it.
+- ZIP 1,049 files, inner SHA256 `b58bba7b18517f67e6db5a79b299f3bd170a20c5536ab8f11c7d9ed4bfc3a6b2`; source `baff19bb7c28612837d24001b9db9ee4a84251e5`.
+- Windows GitHub Actions artifact ID `11528593129`, outer-wrapper SHA256 `17e9c36b2f6db95f99ba5fb9fa3a0e4234dd5c188191c12f625cb1cd105a9431`; expires 22 Oct 2026 UTC.
+- Evidence: `docs/planning/audits/STEP12_PORTABLE_RELEASE_INTEGRITY_EVIDENCE_2026-10-08.md`.
+- Latest handoff: `docs/handoff/current/HANDOFF_STEP12_PORTABLE_QA_TO_MANUAL_GATE_2026-10-08.md`. R00–R04 offline audit unchanged, no live provider actions.
