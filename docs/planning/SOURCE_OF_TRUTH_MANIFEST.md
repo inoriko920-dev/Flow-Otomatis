@@ -108,3 +108,12 @@ S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 
 - GitHub Windows artifact `11530112083` (outer sha256 `789bb3c1afd5106580180f9b288e4067665b203e5477519ff291f6a8c02e9056`), inner ZIP sha256 `480ef6a8c08036990cf458b8f0c0ec2971aa47a031b29ea12112a461c3f357b6`, expires 22 Oct 2026 UTC.
 - Evidence `docs/planning/audits/STEP12_DOWNLOAD_HISTORY_READONLY_EVIDENCE_2026-10-08.md`; handoff `docs/handoff/current/HANDOFF_STEP12_DOWNLOAD_READONLY_2026-10-08.md`.
 - User's Google login works per report; READY after full app restart unverified. No Google Flow live test authorized/performed.
+
+
+## 2026-10-08 — Flow-Otomatis E12 text-first planning alternative (not final DOCX parity)
+User authorized publishing TXT/MD instead of requiring manual DOCX upload. Draft PR #23 mirrors:
+- V1.0 parent archive: `docs/planning/step12/MASTER_PLAN_FLOW_OTOMATIS_V1_0_ARCHIVE_READABLE_COPY_2026-10-08.md`.
+- V1.1 authoritative **content for planning review**: `docs/planning/step12/MASTER_PLAN_FLOW_OTOMATIS_V1_1_READABLE_COPY_2026-10-08.md` and `..._RECONSTRUCTED_2026-10-08.txt`.
+- E12-00 audit text: `docs/planning/audits/E12_00_BASELINE_GOVERNANCE_READABLE_COPY_2026-10-08.md` and `...RECONSTRUCTED_2026-10-08.txt`.
+- Reconstructed `.docx` files are **not original approved binary/visual reference**; see `docs/planning/audits/E12_00_TEXT_EQUIVALENCE_AND_G0_LIMITS_2026-10-08.md`.
+This addition does not supersede the frozen 30-reference UI DOCX or existing Software Factory pre-coding gates. The strict G0 DOCX authority gate remains BLOCKED. Planning review may continue; coding cannot.
