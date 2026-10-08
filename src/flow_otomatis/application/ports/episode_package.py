@@ -33,3 +33,10 @@ class EpisodePackagePort(Protocol):
     def load(self, source_path: Path) -> PackageSnapshot:
         """Load one ZIP or manifest JSON without extracting unsafe archive content."""
         ...
+
+class EpisodeImageVerifierPort(Protocol):
+    """Read original approved image bytes through the canonical package boundary."""
+
+    def image_digest(self, source_path: Path, scene_id: str, image_file: str) -> str:
+        """Return SHA-256 of a nonempty source image, or fail closed."""
+        ...
