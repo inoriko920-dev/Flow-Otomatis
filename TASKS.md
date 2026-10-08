@@ -424,3 +424,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Diff old PR head vs upload commit: 25 **added** files strictly under `docs/ui/`, no app code, original compressed reference untouched, PR DRAFT/unmerged; CI upload commit SUCCESS.
 - [x] Mark **G4 UI binary archival PASS** with evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`. **No more manual upload required.**
 - [ ] Strict G0 original planning-doc authority parity, G1 provider terms, G5 live credit, G6 verified READY after restart, ADR-020..023 T06 signoff and all remaining gates still need independent resolution; **coding and merge remain on hold**.
+
+
+## 2026-10-09 — G0 original authority parity: real mismatch
+- [x] Independently check original frozen 30-UI DOCX (ZIP CRC PASS; 30 PNG) against `main` compressed reference (30 JPEG); GitHub ZIP central metadata confirms four non-media entries differ, including main document XML and image relationships. Original is already safely archived unchanged in PR #25.
+- [x] Confirm old 24/24 G4 approved assets uploaded and CI SUCCESS; do not request duplicate upload.
+- [x] Inventory missing **authoritative original E12 planning DOCX**, distinguish original variants vs reconstructed copies; identify two distinct local E12-00 files (47,457 vs 47,452 bytes) requiring source-authority decision.
+- [ ] **G0 strict BLOCKED** until approved source variant, visual authority selection and original planning-doc archival/evidence. See `docs/planning/audits/G0_2026_10_09_ORIGINAL_30_UI_VS_COMPRESSED_AND_PLANNING_AUTHORITY.md`.
+- [ ] G1 provider permission, G5 live credit account-specific evidence, G6 session READY proof, and E12-01 T06 decision independently pending; no coding or merge.
