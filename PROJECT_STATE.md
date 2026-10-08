@@ -709,3 +709,9 @@ Gemini does not depend on the Google Flow login gate:
 - Cross-ADR consistency review (ADR-020..023) prepared with 4-page review-only DOCX locally; report published in `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
 - F01 contract status naming `SAFE_FAILURE` vs `FAILED_SAFE` differs within ADR-022; F02 a stored prior READY proof is not a present READY after restart; F03 snapshot TTL/provider evidence unknown. All are recommendations, not decisions.
 - **D01–D06 owner signoff T06 PENDING**, existing ADR statuses PROPOSED. UI 22/22 visually approved; E12-02 GitHub 24 binary files still missing; G4/G0/G1/G3/G5/G6 prevent coding and live use.
+
+
+## 2026-10-08 — Official Google Flow G1/G5 public documentation reviewed
+- Primary source `https://support.google.com/flow/answer/16526234?co=GENIE.Platform%3DDesktop&hl=en` currently lists **Gemini Omni Flash 720p prices 7/10/12/15 credits for 4/6/8/10s per generated video**; documentation also describes 50 daily baseline credits, but no account-specific balance/eligibility verified. Stale indexed localized results differ, and Google warns prices can change. Use dated public reference for simulation only, require fresh per-account actual quote before submit.
+- Model durations and 720p profile confirmed by `https://support.google.com/flow/answer/16352836?hl=en`; official ToS `https://policies.google.com/terms?hl=id` does **NOT prove authorization for the proposed simultaneous multi-account browser automation**, so G1 **UNKNOWN/BLOCKED**. No Google Flow account was accessed.
+- Research report in `docs/planning/audits/E12_2026_10_08_GOOGLE_FLOW_OFFICIAL_G1_G5_TARIFF_EVIDENCE.md`; 2-page companion DOCX created locally, **not uploaded as binary**. G5 **PARTIAL PUBLIC EVIDENCE / NOT PASS**. UI visual signoff 22/22 PASS, PR #25 binary archive 0/24, G4 pending, G0 strict/ADR T06/G6 blocked. Do not begin app coding or live actions.
