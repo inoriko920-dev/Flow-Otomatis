@@ -342,3 +342,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
 - [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
 - [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.
+
+## 2026-10-09 — G0 owner approval of original reference precedence
+- [x] **G0-A owner PASS:** original uncompressed **30 PNG UI Word** in unmerged PR #25 chosen as canonical visual authority; compressed JPEG copy retained historical only, no equivalence claim; overrides remain binding.
+- [x] **G0-B owner PASS:** original **E12-00 15:21 WIB handoff** chosen; 15:20 source retained for provenance.
+- [x] **G0-C owner PASS (reference-only):** exact original Master Plan V1.1 as planning-review source and E12-01 ADR V1.1 as review source; **separate implementation signoff/T06 remain pending**.
+- [x] Physical binaries preserved and independently verified: PR #25 24/24 and PR #27 6/6. Signed G0 decision: `docs/planning/decisions/G0_2026_10_09_OWNER_APPROVAL_OF_CANONICAL_REFERENCES.md`.
+- [ ] G0 overall source-of-truth integration/review-main visibility and independent pre-code gates; **never auto-merge or code**.
+- [ ] E12-01 T06 explicit content/contract signoff; G1 permitted automation evidence; G5 actual per-account credits; G6 READY-after-restart proof, all still unverified/blocked as applicable.
