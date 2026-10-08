@@ -83,7 +83,7 @@ class GoogleFlowDownloadProvider:
         if not remote_result_id:
             raise MediaDownloadProviderError("Remote result identifier is empty.")
 
-        final_path = Path(request.destination_path).expanduser().resolve()
+        final_path = Path(request.destination_path).expanduser().absolute()
         if os.path.lexists(final_path):
             raise MediaDownloadProviderError(
                 "Final download path already exists and will not be overwritten."

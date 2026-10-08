@@ -120,9 +120,8 @@ class GeneratedMediaDownloadService:
         return record
 
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
-        return (
-            self._projects_root / episode_id / "downloads" / f"{scene_id}__take_{take:02d}.mp4"
-        ).resolve()
+        directory = (self._projects_root / episode_id / "downloads").resolve()
+        return directory / f"{scene_id}__take_{take:02d}.mp4"
 
     @staticmethod
     def _validate_segment(name: str, value: str) -> None:
