@@ -1,3 +1,5 @@
+> **2026-10-09 LATEST STATUS:** This is an **8 October proposal snapshot**. The historical `C10 UI NOT STARTED`, `G4 archive PENDING` and old `G0 authority BLOCKED` statements below are superseded for those **specific subgates**: the owner accepted 22 new designs and 24/24 binary archive on **Draft PR #25**, and explicitly approved G0-A/B/C canonical source selection on **Draft PR #27** (six original planning DOCX 6/6 archived). **T06 D01–D06 CONTENT is still PENDING; no architecture/adoption/coding authorization.** Latest six-decision cross-module review: `docs/planning/step12/E12_01_T06_SIX_DECISION_OWNER_REVIEW_2026-10-09.md`. G1/G5/G6 and overall pre-code integration remain blocked/pending. All referenced PRs remain unmerged.
+
 # E12-01 — ASTRA Architecture Decision Matrix / Handoff
 **State: PLANNING PACKAGE PREPARED / ADR-020–023 PROPOSED. NOT APPROVED FOR CODING.**
 Repository `inoriko920-dev/Flow-Otomatis`; reference main before planning `978dbb31ce2024da0c70280f260f421e2687382b`. Scope: E12-01 ONLY, no source/UI/schema/browser mutation.
