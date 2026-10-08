@@ -9,7 +9,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from scripts import build_portable
 from scripts.verify_portable_artifact import verify_portable_artifact
 
