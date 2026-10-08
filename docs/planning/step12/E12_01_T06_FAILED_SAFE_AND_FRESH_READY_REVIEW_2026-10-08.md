@@ -1,3 +1,5 @@
+> **2026-10-09 LATEST STATUS:** This 8 October errata records **planned fake-only tests**, not executed tests or T06 owner approval. The previously stated `G4 binary archive PENDING` is now superseded by **G4 24/24 PASS on Draft PR #25**, and G0 reference-selection has **owner-approved PASS on Draft PR #27**. This does not close T06 or overall G0 pre-code integration. For the six architecture decisions, see `docs/planning/step12/E12_01_T06_SIX_DECISION_OWNER_REVIEW_2026-10-09.md`. G1 provider permission UNKNOWN, G5 account credit UNVERIFIED, G6 restart READY UNVERIFIED; **NO CODE/MERGE/LIVE.**
+
 # E12-01 T06 — ADR errata + fake acceptance contract (REVIEW ONLY)
 
 Date: **2026-10-08 WIB**. Branch: `docs/e12-01-t06-safety-clarifications-20261008` based on main `5b74d686d44ff67f7473fe46d8fcb7a9904618bf`.
