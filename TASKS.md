@@ -408,3 +408,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Capture 2-page ASTRA-only research DOCX locally and Markdown evidence on PR #25: `docs/planning/audits/E12_2026_10_08_GOOGLE_FLOW_OFFICIAL_G1_G5_TARIFF_EVIDENCE.md`.
 - [ ] G1 official permission for mutating browser/multi-account automation **UNKNOWN/BLOCKED**; no provider proof collected. G5 real per-account price and balance **UNVERIFIED**, nominal public reference only. Reconfirm current quote, outputs and eligibility before any live action.
 - [ ] Approved 22 V2 image ZIP + DOCX + original 30-UI DOCX remain outside GitHub until authenticated Windows upload. G4 archive pending, G0 strict/ADR T06/G6 pending. NO CODE, NO MERGE, NO LIVE CREDIT USE.
+
+
+## 2026-10-08 — V3 Git Bash archival kit tested with isolated local bare remote
+- [x] **Use V3 only** `FLOW_OTOMATIS_E12_02_PR25_UPLOAD_GIT_BASH_V3_TESTED_2026-10-08.zip`; ZIP 100,352,438 bytes, SHA256 `0abd520d45a0952e4fbc35205171cc39f5d90ea733a5239cfad69f3da57ccf76`; CRC PASS; 24/24 original approved binary checksums and 22 PNG dimensions PASS.
+- [x] True local Git E2E rehearsal: clone, stage 25 docs-only paths, commit, push to isolated bare remote, compare remote HEAD and 24/24 original Git blob hashes — **PASS**. Idempotent second run without commit — PASS; modified-source SHA256 rejection — PASS.
+- [ ] Windows Git Bash/GitHub-auth push **NOT DONE**; all 24 approved binary files still absent from PR #25 until independently checked. G4 archive PENDING. V1 and V2 upload kits deprecated.
+- [ ] Strict G0, G1/G5/G6 and ADR T06 remain blocked/pending; **NO CODING / NO MERGE / NO LIVE CREDITS**.
+- [x] Canonical handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V3_GIT_BASH_LOCAL_REMOTE_PASS_2026-10-08.md`.
