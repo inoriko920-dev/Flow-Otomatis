@@ -306,3 +306,88 @@ def test_manifest_compatibility_v1_never_false_reports_downloaded(tmp_path: Path
     assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
     assert payload["scenes"][0]["remote_result_id"] == "remote:R03"
     assert payload["scenes"][0]["output_path"] == str(video.resolve())
+
+
+def test_late_local_download_failure_preserves_confirmed_video_and_handoff(
+    tmp_path: Path,
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    before = repository.get("EP400_RESULTS", "SCENE_001")
+    assert before is not None
+    assert before.state == DownloadState.DOWNLOADED
+    assert before.output_path == str(video.resolve())
+
+    returned = service.record_download_failed(
+        "EP400_RESULTS",
+        "SCENE_001",
+        "late failure from older attempt",
+    )
+    after = repository.get("EP400_RESULTS", "SCENE_001")
+
+    assert returned == before
+    assert after == before
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.downloaded_count == 1
+    assert snapshot.handoff_ready is True
+    assert snapshot.scenes[0].download_state == DownloadState.DOWNLOADED
+    assert json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))[
+        "scenes"
+    ][0]["download_status"] == "DOWNLOADED"
+
+
+def test_local_download_failure_without_success_is_persisted(
+    tmp_path: Path,
+) -> None:
+    service, _jobs = _service(tmp_path)
+    failed = service.record_download_failed(
+        "EP400_RESULTS", "SCENE_001", "network error"
+    )
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    assert failed.state == DownloadState.FAILED
+    assert failed.error_message == "network error"
+    assert repository.get("EP400_RESULTS", "SCENE_001") == failed
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+    assert snapshot.scenes[0].download_state == DownloadState.FAILED
+
+
+def test_local_failure_from_second_service_cannot_clobber_success(
+    tmp_path: Path,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    service, video = _generated_result_with_file(tmp_path)
+    projects_root = tmp_path / "projects"
+    second = LocalResultsService(
+        SqliteWorkspaceRepository(projects_root),
+        SqliteGenerationJobRepository(projects_root),
+        SqliteDownloadResultRepository(projects_root),
+        ResultManifestWriter(projects_root),
+    )
+    started = Event()
+    release = Event()
+
+    def delayed_failure() -> DownloadRecord:
+        started.set()
+        assert release.wait(timeout=10)
+        return second.record_download_failed(
+            "EP400_RESULTS", "SCENE_001", "late rival failure"
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(delayed_failure)
+        assert started.wait(timeout=10)
+        # Confirmed video already exists before late failure commits.
+        release.set()
+        recorded = future.result(timeout=15)
+
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert recorded.output_path == str(video.resolve())
+    assert SqliteDownloadResultRepository(projects_root).get(
+        "EP400_RESULTS", "SCENE_001"
+    ) == recorded
+    assert service.snapshot("EP400_RESULTS").handoff_ready is True
+

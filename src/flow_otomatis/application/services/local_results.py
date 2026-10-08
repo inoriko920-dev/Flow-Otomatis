@@ -134,8 +134,10 @@ class LocalResultsService:
             updated_at=datetime.now(UTC),
             error_message=error_message[:500],
         )
-        self._download_repository.save(record)
-        return record
+        # An out-of-order failure must not erase a confirmed local video.
+        # Use the repository's atomic conditional write, not a read-then-save.
+        self._download_repository.save_failure_if_unconfirmed(record)
+        return self._download_repository.get(episode_id, scene_id) or record
 
     def export_manifest(self, episode_id: str) -> Path:
         """Write the current credential-free local result snapshot."""
