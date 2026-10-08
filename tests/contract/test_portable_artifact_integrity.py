@@ -9,7 +9,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from scripts.verify_portable_artifact import PortableArtifactError, verify_portable_artifact
 
 _SHA = "a" * 40
