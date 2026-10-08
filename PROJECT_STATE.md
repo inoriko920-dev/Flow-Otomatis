@@ -636,3 +636,11 @@ Gemini does not depend on the Google Flow login gate:
 - Windows artifact ID `11529054245`, SHA256 (outer archive) `a3254d36eafc023647908f790ecc693fdb43e01793fd096aeea502cdb5ecf1c5`; inner ZIP SHA256 `07bd9418bd37eea491e58484650b5e674df18773b0e711343ad187c629bdfb5c`. Artifact expires 22 Oct 2026 UTC.
 - Evidence: `docs/planning/audits/STEP12_LOCAL_DOWNLOAD_FAILURE_HISTORY_EVIDENCE_2026-10-08.md`; handoff: `docs/handoff/current/HANDOFF_STEP12_LOCAL_DOWNLOAD_HISTORY_SAFE_2026-10-08.md`.
 - Manual Google login reported working but post-restart READY proof absent; all live Google Flow operations still blocked.
+
+## 8 October 2026 — SOL SQLite Download History Read-Only QA COMPLETE / PASS
+- Confirmed legacy-project bug: `SqliteDownloadResultRepository.get` / `list_for_episode` previously created missing download_results table on reads. Both now open `mode=ro` and inspect `sqlite_master`; no DDL, legacy DB mutation or accidental creation. Explicit write logic unchanged.
+- Real SQLite regressions: missing DB, legacy no-table checksum/no-journal, existing download history checksum, corrupt DB byte preservation all PASS.
+- PR #21 merged code `936279f71d1a2863a5b9a0f61923d9b226c1b0a2`; official merged-main CI `37732145080` SUCCESS: **227 pytest**, Ruff/mypy/architecture, frozen UI **30/30**, staged Chromium + Windows portable smoke and ZIP checksum/CRC/source verifier PASS.
+- GitHub Windows artifact `11530112083` (outer sha256 `789bb3c1afd5106580180f9b288e4067665b203e5477519ff291f6a8c02e9056`), inner ZIP sha256 `480ef6a8c08036990cf458b8f0c0ec2971aa47a031b29ea12112a461c3f357b6`, expires 22 Oct 2026 UTC.
+- Evidence `docs/planning/audits/STEP12_DOWNLOAD_HISTORY_READONLY_EVIDENCE_2026-10-08.md`; handoff `docs/handoff/current/HANDOFF_STEP12_DOWNLOAD_READONLY_2026-10-08.md`.
+- User's Google login works per report; READY after full app restart unverified. No Google Flow live test authorized/performed.
