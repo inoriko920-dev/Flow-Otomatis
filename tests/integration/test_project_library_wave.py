@@ -124,3 +124,67 @@ def test_invalid_persisted_types_raise_typed_corruption_without_repair(
     assert scan.workspaces == ()
     assert [(item.episode_id, item.kind) for item in scan.issues] == [(episode_id, "CORRUPT")]
     assert _sha256(db_path) == before
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("imported_at", "2026-10-07T10:00:00"),
+        ("created_at", "2026-10-07T10:00:00"),
+        ("imported_at", ""),
+        ("created_at", ""),
+        ("imported_at", "not-a-date"),
+    ],
+)
+def test_t22_t23_naive_empty_and_invalid_timestamps_are_isolated_read_only(
+    tmp_path: Path,
+    field: str,
+    invalid: str,
+) -> None:
+    root = tmp_path / "projects"
+    repository = SqliteWorkspaceRepository(root)
+    now = datetime.now(UTC)
+    repository.save(_workspace("EP600_HEALTHY", now))
+    repository.save(_workspace("EP601_BAD", now - timedelta(minutes=5)))
+    damaged = _db_path(root, "EP601_BAD")
+    with sqlite3.connect(damaged) as conn:
+        conn.execute(f"UPDATE project SET {field} = ?", (invalid,))
+        conn.commit()
+    before = _sha256(damaged)
+
+    scan = repository.scan_recent()
+    assert [item.episode_id for item in scan.workspaces] == ["EP600_HEALTHY"]
+    assert [(item.episode_id, item.kind) for item in scan.issues] == [
+        ("EP601_BAD", "CORRUPT")
+    ]
+    with pytest.raises(WorkspaceCorruptError):
+        repository.load("EP601_BAD")
+    assert _sha256(damaged) == before
+
+
+def test_t24_offsets_sort_by_absolute_instant_not_wall_clock(tmp_path: Path) -> None:
+    repo = SqliteWorkspaceRepository(tmp_path / "projects")
+    early = datetime.fromisoformat("2026-10-08T17:00:00+09:00")
+    late = datetime.fromisoformat("2026-10-08T12:00:00+02:00")
+    assert early < late
+    repo.save(_workspace("EP602_EARLY", early))
+    repo.save(_workspace("EP603_LATE", late))
+    assert [item.episode_id for item in repo.scan_recent().workspaces] == [
+        "EP603_LATE",
+        "EP602_EARLY",
+    ]
+
+
+def test_t25_naive_load_and_scan_preserve_db_byte_checksum(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    repo.save(_workspace("EP604_NAIVE", datetime.now(UTC)))
+    db = _db_path(root, "EP604_NAIVE")
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE project SET imported_at = '2026-10-07T10:00:00'")
+        conn.commit()
+    before = db.read_bytes()
+    with pytest.raises(WorkspaceCorruptError):
+        repo.load("EP604_NAIVE")
+    assert repo.scan_recent().issues[0].kind == "CORRUPT"
+    assert db.read_bytes() == before
+
