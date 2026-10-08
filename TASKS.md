@@ -298,3 +298,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - Windows artifact ID `11529730338` sha256 `ccf0aa7d64ddb967d5732952970aa7785f140fa8f579f4906659869b4d9b7272`, expires 2026-10-22; internal portable ZIP sha256 `242beb868acf5d2e190ba0f746963d607b1493aea258b34213d84fa2714da97d`.
 - Evidence `docs/planning/audits/STEP12_MANIFEST_ATOMIC_EXPORT_EVIDENCE_2026-10-08.md`; handoff `docs/handoff/current/HANDOFF_STEP12_MANIFEST_EXPORT_SAFE_2026-10-08.md`.
 - User reported Google manual login possible; READY-after-app-restart proof not supplied. Flow live remains BLOCKED, no live actions tested.
+
+## 8 October 2026 — SOL LocalResults late failure regression COMPLETE / PASS
+- Fixed a missed R03 history-protection path: `LocalResultsService.record_download_failed` now uses existing atomic `save_failure_if_unconfirmed`, not unconditional `save`, and returns effective persisted state. Confirmed DOWNLOADED history, output path and editing handoff survive late FAILED reports.
+- New real SQLite/Workspace/Qt-compatible integration regressions: normal failed outcome, delayed failure after successful download, and cross-service delayed failure. No port/schema/architecture/UI change.
+- PR #20 merged code `8149309540233a3a9255b6a2610cfb2554937ed1`, official tested main CI `37730824287` **SUCCESS**: Ruff/mypy/architecture PASS, **223 tests**, **30/30 frozen UI**, staged Chromium + Windows portable build/smoke + verified ZIP PASS.
+- Windows artifact ID `11529054245`, SHA256 (outer archive) `a3254d36eafc023647908f790ecc693fdb43e01793fd096aeea502cdb5ecf1c5`; inner ZIP SHA256 `07bd9418bd37eea491e58484650b5e674df18773b0e711343ad187c629bdfb5c`. Artifact expires 22 Oct 2026 UTC.
+- Evidence: `docs/planning/audits/STEP12_LOCAL_DOWNLOAD_FAILURE_HISTORY_EVIDENCE_2026-10-08.md`; handoff: `docs/handoff/current/HANDOFF_STEP12_LOCAL_DOWNLOAD_HISTORY_SAFE_2026-10-08.md`.
+- Manual Google login reported working but post-restart READY proof absent; all live Google Flow operations still blocked.
