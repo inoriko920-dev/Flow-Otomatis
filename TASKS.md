@@ -400,3 +400,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Produce 4-page DOCX review (conversation artifact) and GitHub Markdown audit `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
 - [ ] **T06 is PENDING owner ASTRA decisions D01–D06; ADRs remain PROPOSED.** This does not authorize coding.
 - [ ] PR25 GitHub approved binary archive still 0/24, G4 pending. G0 strict BLOCKED; G1/G3/G5/G6 continue pending. No merge/live work.
+
+
+## 2026-10-08 — Official Google Flow pricing/policy primary-source review
+- [x] Retrieve official Google Flow Help and Google Terms source URLs; reference **Omni Flash 720p: 4s 7 credits, 6s 10, 8s 12, 10s 15 per generated video**, not per request, subject to change and recheck.
+- [x] Document 50 daily base credits as Google public allowance **only**, NOT a verified actual balance or multi-account dispatch entitlement; mixed/stale localized tariff indexed results require provider UI recheck.
+- [x] Capture 2-page ASTRA-only research DOCX locally and Markdown evidence on PR #25: `docs/planning/audits/E12_2026_10_08_GOOGLE_FLOW_OFFICIAL_G1_G5_TARIFF_EVIDENCE.md`.
+- [ ] G1 official permission for mutating browser/multi-account automation **UNKNOWN/BLOCKED**; no provider proof collected. G5 real per-account price and balance **UNVERIFIED**, nominal public reference only. Reconfirm current quote, outputs and eligibility before any live action.
+- [ ] Approved 22 V2 image ZIP + DOCX + original 30-UI DOCX remain outside GitHub until authenticated Windows upload. G4 archive pending, G0 strict/ADR T06/G6 pending. NO CODE, NO MERGE, NO LIVE CREDIT USE.
