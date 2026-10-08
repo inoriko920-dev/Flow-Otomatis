@@ -416,3 +416,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] Windows Git Bash/GitHub-auth push **NOT DONE**; all 24 approved binary files still absent from PR #25 until independently checked. G4 archive PENDING. V1 and V2 upload kits deprecated.
 - [ ] Strict G0, G1/G5/G6 and ADR T06 remain blocked/pending; **NO CODING / NO MERGE / NO LIVE CREDITS**.
 - [x] Canonical handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V3_GIT_BASH_LOCAL_REMOTE_PASS_2026-10-08.md`.
+
+
+## 2026-10-08 — E12-02 owner-approved UI archive completed on GitHub (latest, supersedes 0/24 tasks)
+- [x] Authenticated Windows Git Bash V3 push of exact **22 UI PNG + FINAL DOCX + G0 original uncompressed DOCX** to Draft PR #25 review branch.
+- [x] Verify GitHub REST tree **24/24 exact Git blob IDs / file sizes** against local source ZIP, approved source SHA256 manifest PASS; commit `6fc332e10ee0109e200c152724a4deeb5978aa3c`.
+- [x] Diff old PR head vs upload commit: 25 **added** files strictly under `docs/ui/`, no app code, original compressed reference untouched, PR DRAFT/unmerged; CI upload commit SUCCESS.
+- [x] Mark **G4 UI binary archival PASS** with evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`. **No more manual upload required.**
+- [ ] Strict G0 original planning-doc authority parity, G1 provider terms, G5 live credit, G6 verified READY after restart, ADR-020..023 T06 signoff and all remaining gates still need independent resolution; **coding and merge remain on hold**.
