@@ -668,3 +668,10 @@ Gemini does not depend on the Google Flow login gate:
 - Proposed global single-DB reservation+attempt authority, per-project outbox projection, per-account signed-in actor isolation, immutable credit/budget evidence, ambiguity-safe submit/recovery. No `src/`, UI, SQLite schema or live behavior changed.
 - E12-01 T01–T05 planning drafts prepared; T06 ASTRA/owner decision and acceptance of cross-module architecture PENDING. G0 original Word doc visual parity BLOCKED, G1 policy UNKNOWN, G5 price/credit UNKNOWN, G6 READY-after-restart PENDING; no production coding.
 - Next wave E12-02 is **UI prompt only**, with hard STOP after prompts until all final UI images reviewed and consolidated in one DOCX. Do not start E12-02 in this wave.
+
+
+## 2026-10-08 — E12-02 UI V2 integrity proof on review PR #25 (NOT FINAL)
+- All 22 standalone screenshots UIX-01-A .. UIX-09-B exist **as conversation artifacts**; V2 ZIP 59,313,950 bytes contains 22/22 distinct 1920×1080 PNG whose hashes/sizes match ZIP manifest. DOCX REVIEW 29,670,945 bytes embeds byte-identical 22/22 PNG; CRC PASS.
+- Source-of-truth review SHA-256 checklist committed on the documentation-only branch as `docs/ui/review/E12_02_V2_22_IMAGE_MANIFEST_AND_OWNER_SIGNOFF_PENDING_2026-10-08.md`. The screenshots and V2 DOCX **have not been uploaded to GitHub**.
+- **OWNER SIGNOFF NOT RECEIVED:** all images remain DRAFT; final UI reference DOCX not issued; G4 remains BLOCKED. Generic 'lanjutkan' is not signoff. Draft PR #25 MUST NOT be misrepresented as final UI authority or code readiness.
+- Existing 30 frozen UI refs unchanged; 12/12 in UIX-09-B is one batch of 60, not all project scenes. Simulated prices, balances and live results are not real. No code change or Google Flow action.
