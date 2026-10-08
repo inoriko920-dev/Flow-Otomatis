@@ -104,6 +104,39 @@ class SqliteGeminiKeyRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save Gemini key metadata: {exc}") from exc
 
+    def update_health(
+        self,
+        key_id: str,
+        status: GeminiKeyStatus,
+        checked_at: datetime,
+        detail: str,
+    ) -> GeminiKeyProfile | None:
+        """Update health of a still-existing key without upsert or activation changes."""
+
+        if not self._db_path.is_file():
+            return None
+        try:
+            with self._connect() as connection:
+                connection.row_factory = sqlite3.Row
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                updated = connection.execute(
+                    """
+                    UPDATE gemini_keys
+                    SET status = ?, last_checked_at = ?, detail = ?
+                    WHERE key_id = ?
+                    """,
+                    (status.value, checked_at.isoformat(), detail[:300], key_id),
+                )
+                if updated.rowcount != 1:
+                    return None
+                row = connection.execute(
+                    "SELECT * FROM gemini_keys WHERE key_id = ?", (key_id,)
+                ).fetchone()
+                return self._row(row) if row is not None else None
+        except sqlite3.Error as exc:
+            raise StorageError(f"Could not update Gemini key health: {exc}") from exc
+
     def set_active(self, key_id: str) -> GeminiKeyProfile:
         try:
             with self._connect() as connection:

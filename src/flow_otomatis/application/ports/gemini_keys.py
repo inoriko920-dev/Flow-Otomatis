@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from flow_otomatis.domain.gemini import GeminiKeyProfile, GeminiKeyStatus
@@ -26,6 +27,16 @@ class GeminiKeyRepositoryPort(Protocol):
     def find_by_fingerprint(self, fingerprint: str) -> GeminiKeyProfile | None: ...
 
     def save(self, profile: GeminiKeyProfile) -> None: ...
+
+    def update_health(
+        self,
+        key_id: str,
+        status: GeminiKeyStatus,
+        checked_at: datetime,
+        detail: str,
+    ) -> GeminiKeyProfile | None:
+        """Patch only existing key health fields; never change active selection."""
+        ...
 
     def set_active(self, key_id: str) -> GeminiKeyProfile: ...
 

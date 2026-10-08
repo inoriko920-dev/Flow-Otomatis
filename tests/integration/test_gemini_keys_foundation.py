@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from threading import Event, Lock
 
 import pytest
 
@@ -120,3 +122,98 @@ def test_active_secret_requires_valid_health_when_requested(tmp_path: Path) -> N
     active, secret = service.get_active_secret()
     assert active.key_id == profile.key_id
     assert secret == raw
+
+
+class BlockingHealth:
+    def __init__(self) -> None:
+        self.entered = Event()
+        self.release = Event()
+
+    def check(self, api_key: str) -> GeminiKeyHealthEvidence:
+        assert api_key
+        self.entered.set()
+        assert self.release.wait(5), "health barrier was never released"
+        return GeminiKeyHealthEvidence(status=GeminiKeyStatus.VALID, detail="checked")
+
+
+@pytest.mark.parametrize("target", ["First", "Second"])
+def test_t01_t02_health_completion_never_changes_newer_manual_selection(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    health = BlockingHealth()
+    repo, _secrets, _checker, service = _service(tmp_path, health)
+    service.import_text(f"First | {'A' * 40}\nSecond | {'B' * 40}")
+    first, second = (
+        next(p for p in service.list_profiles() if p.label == name) for name in ("First", "Second")
+    )
+    checked = first if target == "First" else second
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(service.check_health, checked.key_id)
+        assert health.entered.wait(5)
+        service.set_active(second.key_id)
+        health.release.set()
+        result = pending.result(timeout=5)
+
+    assert result.status is GeminiKeyStatus.VALID
+    assert result.is_active is (target == "Second")
+    assert [p.key_id for p in repo.list_profiles() if p.is_active] == [second.key_id]
+
+
+def test_t03_deleted_key_is_not_resurrected_by_health_completion(tmp_path: Path) -> None:
+    health = BlockingHealth()
+    repo, _secrets, _checker, service = _service(tmp_path, health)
+    service.import_text(f"Deleted | {'A' * 40}")
+    key_id = service.list_profiles()[0].key_id
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(service.check_health, key_id)
+        assert health.entered.wait(5)
+        service.delete(key_id)
+        health.release.set()
+        with pytest.raises(FlowOtomatisError, match="dihapus"):
+            pending.result(timeout=5)
+
+    assert repo.get(key_id) is None
+    assert repo.list_profiles() == ()
+
+
+class ReversedHealth:
+    def __init__(self) -> None:
+        self.lock = Lock()
+        self.count = 0
+        self.started = [Event(), Event()]
+        self.release = [Event(), Event()]
+
+    def check(self, api_key: str) -> GeminiKeyHealthEvidence:
+        assert api_key
+        with self.lock:
+            index = self.count
+            self.count += 1
+        self.started[index].set()
+        assert self.release[index].wait(5), "health barrier was never released"
+        status = GeminiKeyStatus.VALID if index == 0 else GeminiKeyStatus.INVALID
+        return GeminiKeyHealthEvidence(status=status, detail=f"result-{index}")
+
+
+def test_t04_late_old_health_result_cannot_replace_newer_completion(tmp_path: Path) -> None:
+    health = ReversedHealth()
+    repo, _secrets, _checker, service = _service(tmp_path, health)
+    service.import_text(f"Only | {'A' * 40}")
+    key_id = service.list_profiles()[0].key_id
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        older = pool.submit(service.check_health, key_id)
+        assert health.started[0].wait(5)
+        newer = pool.submit(service.check_health, key_id)
+        assert health.started[1].wait(5)
+        health.release[1].set()
+        assert newer.result(timeout=5).status is GeminiKeyStatus.INVALID
+        health.release[0].set()
+        assert older.result(timeout=5).status is GeminiKeyStatus.INVALID
+
+    saved = repo.get(key_id)
+    assert saved is not None
+    assert saved.status is GeminiKeyStatus.INVALID
+    assert saved.detail == "result-1"
