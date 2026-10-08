@@ -69,3 +69,7 @@
 1. Review D01–D06 and obtain explicit owner signoff **only for the architecture design**, if desired.
 2. If approved, record owner date/decision in ADR-020..023 (approved planning, **still NOT CODE-READY**), preserve original Word + approved UI, and recheck gate matrix. Before any code require all independent pre-code gates and explicit start authority.
 3. If provider automation is unapproved, retain **manual/official API workflow** and fake credit planning; do not implement quota evasion or parallel live browsers.
+
+## 6. DOCX handoff (rendered, local conversation artifact, not yet archived in PR)
+
+Companion Word file `FLOW_OTOMATIS_T06_REVIEW_6_KEPUTUSAN_ARSITEKTUR_2026-10-09.docx` was generated for a detailed 8-page handoff in the ChatGPT working environment. **File size 44,358 bytes**, **SHA-256 `f973968f262597aa6b19065c6709072bd900125de2fcccb0c8fc7cd6ff208c88`**. Valid OOXML/ZIP CRC **PASS**; all **D01–D06** section headings present; rendered to eight page images and visually checked for table/layout clipping. The DOCX reflects this Markdown's six proposed decisions, test plans, and STOP conditions, but it is **a separately authored companion**, not claimed byte-identical text nor uploaded to GitHub. **Do not call its GitHub archival complete until the exact DOCX is present as a verified Git blob.** The existing original E12-01 V1.1 DOCX is already preserved in Draft PR #27, independently of this new review note.
