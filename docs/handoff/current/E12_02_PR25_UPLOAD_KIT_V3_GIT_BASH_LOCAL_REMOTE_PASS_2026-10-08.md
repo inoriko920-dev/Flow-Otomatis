@@ -44,3 +44,8 @@ Immutable binaries remain exactly:
 - G4 uploaded binaries: **PENDING (0/24)**; G4 overall **NOT PASS**.
 - Strict G0 **BLOCKED**; G1 provider automatic multi-account permission **UNKNOWN/BLOCKED**; G5 actual account credits/price **UNVERIFIED**; G6 READY after restart **UNVERIFIED**; E12-01 architecture T06 **PENDING**.
 - **NO app coding, PR merge, migration, browser Generate/Download, or credit spend until all implementation gates PASS.**
+
+
+## 2026-10-08 — REAL GITHUB UPLOAD COMPLETE (supersedes all pending status above)
+The user ran V3 on Windows 11 and obtained `PASS GITHUB PUSH: 24/24 git blob cocok`. GitHub PR #25 branch upload commit **`6fc332e10ee0109e200c152724a4deeb5978aa3c`** independently confirmed. GitHub tree has 24/24 matching SHA-1 content object hashes, sizes and paths; `docs/ui/final/E12_02_APPROVED_BINARY_ARCHIVE_MANIFEST.json` is present. Exactly 25 added docs/UI files in one commit, CI SUCCESS, `main` unchanged, PR #25 draft/unmerged.
+**G4 UI binary archival = PASS**. Full verification table and evidence: `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`. Prior `0/24` and 'no real push' text above is **historical and superseded**. All non-UI implementation gates remain independently pending; STOP code/merge/live.
