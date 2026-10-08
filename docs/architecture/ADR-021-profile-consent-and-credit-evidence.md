@@ -1,5 +1,8 @@
 # ADR-021 — Profile Consent, Provider Policy and Credit Evidence (E12-01)
-Status: **PROPOSED / PROVIDER POLICY G1 NOT VERIFIED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+Status: **OWNER-APPROVED ARCHITECTURE DESIGN — T06 D03/D05 PASS; G1/G5/G6 BLOCKED/UNVERIFIED; NO LIVE AUTHORIZATION** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+
+> **2026-10-09 OWNER SIGNOFF — T06 architecture DESIGN ONLY.** The owner explicitly agreed to D01–D06 after being asked to approve their final design. Full scope and gate consequences: `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. D03 provider-permitted account consent and verified fresh per-account credits are design requirements; D05 current-process account/worker READY is a separate requirement. Owner's design choice is NOT proof Google Flow permits automation or live concurrent accounts; manual balance stays simulation-only. This does **not** grant permission to code, merge PRs, migrate existing databases, operate Google Flow or spend credits. Any references below to "candidate"/"proposed" describe the historical draft that was accepted as an architecture design, not a claim of implemented behavior.
+
 Relates to ADR-017, I12-01 normal Chrome login, ADR-020, frozen Omni Flash 1.1 / 720p / 16:9 project profile.
 
 ## Principle
