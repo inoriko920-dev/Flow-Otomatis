@@ -367,3 +367,13 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Downloadable ZIP created locally with DOCX+22 PNG+checksums; CRC/SHA pass; ZIP SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da`.
 - [ ] **BLOCKED: upload exact 22 PNG and DOCX binary files into GitHub**. GitHub branch currently contains only the approved text manifest. Do not claim full artifact archive or G4 overall PASS until uploaded SHA-256 values verified in repo.
 - [ ] G0 strict, G1 provider, G5 tariff, G6 restart READY, E12-01 ADR T06 remain independently pending. **NO CODING, NO MERGE, NO LIVE CREDIT USE**.
+
+
+## E12-02 continuation 2026-10-08 — G0 and G4 exact-file gap verified
+- [x] Read-only verified final approved 22-PNG ZIP (27 entries / CRC PASS); owner approval and final DOCX evidence persist.
+- [x] GitHub final approved 22-UI DOCX **NOT** present as binary; 22 PNG **NOT** present as binaries; **G4 overall PENDING**, despite 22/22 visual signoff PASS.
+- [x] G0 source parity investigation: original 30-image Word reference exists locally (41,006,814 bytes; SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`); GitHub main has intentional compressed DOCX 329,255 bytes (Git blob `6e93a7e654e84ba2dd37af1fbc31c68ce3107f26`). **NOT byte-identical; pixel equivalence UNVERIFIED.**
+- [ ] **G0 strict BLOCKED:** independently preserve original exact bytes in GitHub or prove/approve compressed visual equivalence; do not overwrite existing reference silently.
+- [ ] **G4 archive PENDING:** authenticated binary upload of all 22 PNG+final DOCX, verify exact SHA-256.
+- [ ] G1/G5/G6/ADR-T06 still PENDING; **NO CODE / LIVE ACTIONS / MERGE**.
+- Full details `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`.
