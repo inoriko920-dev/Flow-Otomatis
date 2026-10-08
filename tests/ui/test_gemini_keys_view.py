@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
+
 
 from PySide6.QtWidgets import QTableWidget
 
@@ -61,3 +63,47 @@ def test_real_gemini_keys_view_never_displays_raw_secret(tmp_path: Path, qtbot) 
     assert "Gemini Utama" in visible
     assert "••••••••••" in visible
     assert raw_key not in visible
+
+class PausedHealth:
+    def __init__(self) -> None:
+        self.entered = Event()
+        self.release = Event()
+
+    def check(self, api_key: str) -> GeminiKeyHealthEvidence:
+        assert api_key
+        self.entered.set()
+        assert self.release.wait(5)
+        return GeminiKeyHealthEvidence(status=GeminiKeyStatus.VALID, detail="checked")
+
+
+def test_gemini_keys_qt_health_completion_keeps_manual_active_key(tmp_path: Path, qtbot) -> None:
+    health = PausedHealth()
+    repo = SqliteGeminiKeyRepository(tmp_path / "gemini.sqlite3")
+    service = GeminiKeyService(repo, MemorySecrets(), health)
+    service.import_text(f"First | {'A' * 40}\nSecond | {'B' * 40}")
+    first = next(p for p in service.list_profiles() if p.label == "First")
+    second = next(p for p in service.list_profiles() if p.label == "Second")
+    window = MainWindow(gemini_key_service=service)
+    qtbot.addWidget(window)
+    window.show_gemini_keys()
+
+    window._check_gemini_key(first.key_id)
+    try:
+        assert health.entered.wait(5)
+        window._activate_gemini_key(second.key_id)
+    finally:
+        health.release.set()
+
+    qtbot.waitUntil(
+        lambda: repo.get(first.key_id) is not None
+        and repo.get(first.key_id).status is GeminiKeyStatus.VALID,
+        timeout=3000,
+    )
+    qtbot.waitUntil(
+        lambda: next(p for p in service.list_profiles() if p.label == "Second").is_active,
+        timeout=3000,
+    )
+    active = [p.label for p in service.list_profiles() if p.is_active]
+    assert active == ["Second"]
+    assert window.findChild(QTableWidget) is not None
+

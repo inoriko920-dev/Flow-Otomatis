@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import Lock
 
 from flow_otomatis.application.ports.gemini_keys import (
     GeminiKeyHealthPort,
@@ -38,6 +39,8 @@ class GeminiKeyService:
         self._repository = repository
         self._secret_store = secret_store
         self._health = health
+        self._health_lock = Lock()
+        self._health_request_versions: dict[str, int] = {}
 
     def list_profiles(self) -> tuple[GeminiKeyProfile, ...]:
         return self._repository.list_profiles()
@@ -91,29 +94,34 @@ class GeminiKeyService:
         )
 
     def check_health(self, key_id: str) -> GeminiKeyProfile:
-        """Check one key and persist only a sanitized health result."""
+        """Patch health only; newest request wins without changing manual selection."""
 
-        profile = self._required_profile(key_id)
+        self._required_profile(key_id)
+        with self._health_lock:
+            version = self._health_request_versions.get(key_id, 0) + 1
+            self._health_request_versions[key_id] = version
+
         secret = self._secret_store.get_secret(key_id)
         if not secret:
-            updated = replace(
-                profile,
-                status=GeminiKeyStatus.ERROR,
-                last_checked_at=datetime.now(UTC),
-                detail="Secret key tidak ditemukan di penyimpanan aman OS.",
-            )
-            self._repository.save(updated)
-            return updated
+            status = GeminiKeyStatus.ERROR
+            detail = "Secret key tidak ditemukan di penyimpanan aman OS."
+        else:
+            evidence = self._health.check(secret)
+            status = evidence.status
+            detail = evidence.detail[:300]
 
-        evidence = self._health.check(secret)
-        updated = replace(
-            profile,
-            status=evidence.status,
-            last_checked_at=datetime.now(UTC),
-            detail=evidence.detail[:300],
-        )
-        self._repository.save(updated)
-        return updated
+        checked_at = datetime.now(UTC)
+        with self._health_lock:
+            if self._health_request_versions[key_id] != version:
+                current = self._repository.get(key_id)
+                if current is None:
+                    raise FlowOtomatisError("Gemini key sudah dihapus saat Cek Health.")
+                return current
+
+            updated = self._repository.update_health(key_id, status, checked_at, detail)
+            if updated is None:
+                raise FlowOtomatisError("Gemini key sudah dihapus saat Cek Health.")
+            return updated
 
     def set_active(self, key_id: str) -> GeminiKeyProfile:
         """Select one key manually; never rotate automatically."""
