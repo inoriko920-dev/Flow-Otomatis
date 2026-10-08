@@ -697,3 +697,9 @@ Gemini does not depend on the Google Flow login gate:
 - Built self-contained Git-for-Windows archival kit with 24 exact-source binaries and a manifest: ZIP **100,450,016 bytes**, SHA256 `df0593d23792af1f17ddfa420032e469be0ad1775585c78311ddaf4bb0ea5860`; ZIP CRC and SHA 24/24 PASS. Offline Git simulation staged 25 paths exclusively under `docs/ui/`, PASS.
 - Includes exact original 30-image G0 authority DOCX 41,006,814 bytes, explicitly at a new provenance path rather than replacing repo's 329,255-byte compressed version. Upload kit binaries still **LOCAL ONLY**, not GitHub; Windows auth/push not exercised here. **G4 binary archival PENDING; G0 strict still BLOCKED; G1/G5/G6, ADR T06 unchanged.**
 - GitHub review-branch textual handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`. No code, merge, or remote Generate.
+
+
+## 2026-10-08 — E12-02 PR25 corrected V2 upload kit (supersedes V1, remote pending)
+- **DO NOT USE V1** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_2026-10-08.zip`: PowerShell `RunGit` calls lack explicit array parameter binding. Use **V2** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_V2_DIVERIFIKASI_2026-10-08.zip`, 100,355,921 bytes, SHA-256 `e51789935bc414e62597403e19a0871d21af65612e06f1fecc581216d9a87c09`.
+- V2 exact original binary source unchanged, 24/24 SHA PASS; ZIP CRC PASS; 5 corrected Git invocation sites; strict GitHub path allowlist; 24 original Git blob checks. Local isolated Git rehearsal PASS (25 docs-only staged paths, 24/24 Git blob comparisons). **Windows PowerShell execution and actual remote GitHub push NOT TESTED; all 24 binaries still NOT IN GITHUB.**
+- V2 audit handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V2_CORRECTED_REMOTE_PENDING_2026-10-08.md`. PR #25 remains DRAFT, no merge/code. G4 archival PENDING, G0/G1/G5/G6 and ADR T06 unchanged.
