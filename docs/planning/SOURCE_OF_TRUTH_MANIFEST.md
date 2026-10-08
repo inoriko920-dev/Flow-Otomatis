@@ -57,3 +57,11 @@ S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 
 - Next AI handoff: `docs/handoff/current/HANDOFF_STEP_12_BUG_R00_TO_R01_2026-10-08.md`.
 - The original, separate ASTRA Python/JSON reproducibility attachments were not provided. Not present.
 - The STEP 00–07 docs, final UI 30-state authority, and 7 October audit A00–A05 remain intact.
+
+## STEP 12 R03 B04/B05 closure (8 October 2026)
+- Original planning authority remains `docs/planning/audits/ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`.
+- R03 evidence: `docs/planning/audits/B04_B05_R03_EVIDENCE_2026-10-08.md`.
+- R03 ADR-019: `docs/architecture/ADR-019-step12-r03-results-availability-and-no-clobber.md`.
+- Current handoff: `docs/handoff/current/HANDOFF_STEP_12_BUG_R03_TO_R04_2026-10-08.md`.
+- CI tested `17dc2be0c7e4c69a99ab5129ea311492a182ecc4`, code merged `1f82675eb6282a3f5070c4320c5898a4304dd516`, 165 pytest/UI 30/Windows portable PASS.
+- R04 combined verification not run. Historic F01–F06 and new B01–B06 locally closed, no Flow live claim.

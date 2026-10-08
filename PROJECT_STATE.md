@@ -586,3 +586,12 @@ Gemini does not depend on the Google Flow login gate:
 - Audit evidence: `docs/planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`.
 - Next: **R03 B04 and B05**, not started and not authorized until user says "lanjutkan".
 - Live account READY/restart validation and Google Flow live remain BLOCKED; R02 tested no real provider mutation.
+
+## 8 October 2026 — SOL R03 B04+B05 complete
+- R03 scope-only PR #16 MERGED code `1f82675eb6282a3f5070c4320c5898a4304dd516`; CI-tested `17dc2be0c7e4c69a99ab5129ea311492a182ecc4` in GitHub Actions run `37724196252` SUCCESS all 3 jobs.
+- Python 3.14.7 locked uv, Ruff, mypy, architecture, 165 pytest PASS; UI visual 30/30 PASS; Chromium smoke/Windows portable ZIP and smoke PASS.
+- Effective output status UNAVAILABLE does not mutate existing DownloadRecord. Manifest v1.0 does not falsely call missing/unreadable outputs DOWNLOADED; historical remote_result_id preserved.
+- Download publication: attempt-owned unique .part, atomically no-clobber hardlink on same volume; collision preserves old final, no os.replace fallback; unsupported filesystems stop safely.
+- SQLite conditional failure save prevents concurrent losing attempt overwriting historical DOWNLOADED; DB persistence failure after filesystem publish is a manual reconciliation gate, not auto-retry.
+- See `docs/planning/audits/B04_B05_R03_EVIDENCE_2026-10-08.md` and `docs/architecture/ADR-019-step12-r03-results-availability-and-no-clobber.md`.
+- B01–B06 closed by OFFLINE test evidence. R04 NOT STARTED. Live Google login/restart and live Generate/Download remain BLOCKED pending owner action.

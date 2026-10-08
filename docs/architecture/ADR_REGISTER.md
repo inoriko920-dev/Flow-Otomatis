@@ -24,3 +24,5 @@ ADR-006 remains applicable to automated browser-adapter work, but it does not ov
 - ADR-018 ACCEPTED FOR R01–R03 PLANNING (8 Oct 2026): B01–B06 field-limited health, Agent context identity, content-aware ZIP/folder pre-submit validation, effective output availability, Windows atomic no-clobber publication, and timezone-aware project decoding. No code implemented in R00.
 
 - ADR-016 R02 ADDENDUM IMPLEMENTED + VERIFIED (8 Oct 2026): approved-image source SHA-256 folded into existing prepared request fingerprint; old digestless queued revisions fail closed; no schema migration. See R02 evidence.
+
+- ADR-019 ACCEPTED + IMPLEMENTED R03 (8 Oct 2026): effective download availability and export recheck, v1 UNAVAILABLE status semantics, atomic NTFS hardlink no-clobber with unique partial and conditional SQLite failure updates; manual recovery on publish-success/DB-failure. See R03 evidence, no live Flow acceptance.

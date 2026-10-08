@@ -231,3 +231,11 @@ Separate from the completed F01–F06/A00–A05 work above.
 - PR #15 merged at `3a9f445ee9e814a78cd8c7085396f7d4c518259a`; tested SHA `ddf9580bbc3ab2d081c02080892536d416bd2503`, CI `37723155562` SUCCESS, 153 tests, UI 30/30, Windows smoke/build PASS.
 - B03/B06 CLOSED locally. B04/B05 remain OPEN. Historic A00–A05 F01–F06 and R01 B01/B02 closed as before.
 - No Google Flow live generation/download or real-account validation was performed.
+
+## SOL R03 — B04/B05 closed locally, 8 October 2026
+- Verified code PR #16, merge `1f82675eb6282a3f5070c4320c5898a4304dd516`, tested head `17dc2be0c7e4c69a99ab5129ea311492a182ecc4`.
+- Evidence `B04_B05_R03_EVIDENCE_2026-10-08.md`.
+- Compatibility/atomic publication authority `../../architecture/ADR-019-step12-r03-results-availability-and-no-clobber.md`.
+- Next-AI handoff `../../handoff/current/HANDOFF_STEP_12_BUG_R03_TO_R04_2026-10-08.md`.
+- Official CI `37724196252`: 165 tests PASS, frozen UI 30/30 PASS, portable Windows + smoke PASS.
+- B01–B06 closed only at offline/packaged boundaries; Google Flow live untested, real-account/restart gate BLOCKED.

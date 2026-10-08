@@ -255,3 +255,13 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - Code merge SHA `3a9f445ee9e814a78cd8c7085396f7d4c518259a`; CI-tested SHA `ddf9580bbc3ab2d081c02080892536d416bd2503`, official CI `37723155562`: **153 passed**, Ruff/mypy/architecture PASS, frozen UI 30/30 PASS, Chromium and Windows portable PASS.
 - Evidence: `docs/planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`.
 - Next ONLY after explicit user "lanjutkan": **R03 B04+B05** (local result availability and no-clobber downloads). B04 and B05 OPEN. R04 NOT STARTED. Flow live BLOCKED.
+
+### STEP 12 follow-up — SOL R03 COMPLETE / PASS (8 October 2026)
+- B04: CLOSED locally. Real output file readability + nonempty regular-file checks at Hasil snapshot and again in manifest writer; effective UNAVAILABLE blocks editing handoff without deleting historical DownloadRecord.
+- B05: CLOSED locally. One unpredictable owned .part per attempt; Windows same-volume atomic os.link no-overwrite publication; collision never clobbers output and retains partial evidence. Losing concurrent FAILED upserts cannot erase successful record. Published final with failed DB save stays untouched and requires explicit manual reconciliation.
+- T14–T21 plus supplementary race, compatibility and no-retry cases PASS.
+- PR #16 merged to main (`1f82675eb6282a3f5070c4320c5898a4304dd516`), CI tested `17dc2be0c7e4c69a99ab5129ea311492a182ecc4`.
+- CI https://github.com/inoriko920-dev/Flow-Otomatis/actions/runs/37724196252: 165 tests, Ruff/mypy/architecture PASS, frozen UI 30/30 PASS, staged Chromium and Windows portable build/smoke PASS.
+- Evidence `docs/planning/audits/B04_B05_R03_EVIDENCE_2026-10-08.md`; ADR-019.
+- New ASTRA B01–B06 now CLOSED **locally** in R01–R03, not equivalent to real-account/Flow live acceptance.
+- Next step: R04 combined regression + source-hash/artifact audit, NOT STARTED; only after explicit user "lanjutkan".
