@@ -1,0 +1,57 @@
+{
+  "project": "inoriko920-dev/Flow-Otomatis",
+  "branch": "docs/g0-original-planning-binaries-20261009",
+  "pr": 27,
+  "purpose": "Preserve six original candidate DOCX byte-identically; not a new owner signoff",
+  "date": "2026-10-09 WIB",
+  "items": [
+    {
+      "id": "E12_00_1520",
+      "source": "PAYLOAD/E12_00_ASTRA_BASELINE_GOVERNANCE_1520_WIB_SOURCE_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/E12_00_ASTRA_BASELINE_GOVERNANCE_1520_WIB_SOURCE_2026-10-08.docx",
+      "bytes": 47457,
+      "sha256": "2df71a84b3f33ba3e04114f0508764d9de7d798fa6926b1aa5dfbfbd7f0f5452",
+      "git_blob_sha1": "e9dbf7df40e92cd9b72bcaf56ef015c1a7d3122c"
+    },
+    {
+      "id": "E12_00_1521",
+      "source": "PAYLOAD/E12_00_ASTRA_BASELINE_GOVERNANCE_1521_WIB_HANDOFF_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/E12_00_ASTRA_BASELINE_GOVERNANCE_1521_WIB_HANDOFF_2026-10-08.docx",
+      "bytes": 47452,
+      "sha256": "9cc648b90a4c802558f6cea4435770396c926abcb6796897d958424e595ba05e",
+      "git_blob_sha1": "98c0a544d5659207713a7b2333825d7706b83bb3"
+    },
+    {
+      "id": "MASTER_V1_1",
+      "source": "PAYLOAD/MASTER_PLAN_FLOW_OTOMATIS_V1_1_IMPLEMENTATION_READY_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/MASTER_PLAN_FLOW_OTOMATIS_V1_1_IMPLEMENTATION_READY_2026-10-08.docx",
+      "bytes": 79528,
+      "sha256": "ace281206f8f7089643a51328486f6e949c706f1a9c8710fc5f500c664f04f71",
+      "git_blob_sha1": "4f706be5b6027317e8379db87049ca0a8713961e"
+    },
+    {
+      "id": "E12_01_ADR",
+      "source": "PAYLOAD/E12_01_ASTRA_ARCHITECTURE_ADR_FLOW_OTOMATIS_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/E12_01_ASTRA_ARCHITECTURE_ADR_FLOW_OTOMATIS_2026-10-08.docx",
+      "bytes": 50750,
+      "sha256": "9b3dd7cc9758f135c66541effa878b56a708c9b272d6698a4b92b2d585efc74d",
+      "git_blob_sha1": "17f47cc5e47396d07b39b0c36c7d27e2a90beeba"
+    },
+    {
+      "id": "E12_01_ADR_REVIEW",
+      "source": "PAYLOAD/E12_01_ASTRA_ARCHITECTURE_ADR_V1_1_GITHUB_REVIEW_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/E12_01_ASTRA_ARCHITECTURE_ADR_V1_1_GITHUB_REVIEW_2026-10-08.docx",
+      "bytes": 54229,
+      "sha256": "0eab21d9664a31d187bb6c168ae47766462ed896e494b95021d10874855d58a3",
+      "git_blob_sha1": "24b8d815e7eedf56e5c54d150a06fe6e1c214152"
+    },
+    {
+      "id": "E12_02_PROMPT",
+      "source": "PAYLOAD/E12_02_ASTRA_UI_PROMPT_PACK_22_GAMBAR_2026-10-08.docx",
+      "repo": "docs/planning/originals/2026-10-08/E12_02_ASTRA_UI_PROMPT_PACK_22_GAMBAR_2026-10-08.docx",
+      "bytes": 49815,
+      "sha256": "b8224da4460bb66df3cebba15fc1a4bbdb49c2a293ac80396b2eddbc720fa8ec",
+      "git_blob_sha1": "61cc9bcae36eac9c4621b7df5d270dff18707a98"
+    }
+  ]
+}
