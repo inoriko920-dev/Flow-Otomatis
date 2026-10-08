@@ -14,6 +14,7 @@ class DownloadState(str):
     NOT_DOWNLOADED = "NOT_DOWNLOADED"
     DOWNLOADED = "DOWNLOADED"
     FAILED = "FAILED"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +70,7 @@ class ProjectResults:
         return sum(
             scene.generate_state
             in {GenerationJobState.FAILED, GenerationJobState.ATTENTION_REQUIRED}
-            or scene.download_state == DownloadState.FAILED
+            or scene.download_state in {DownloadState.FAILED, DownloadState.UNAVAILABLE}
             for scene in self.scenes
         )
 

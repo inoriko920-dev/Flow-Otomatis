@@ -33,6 +33,7 @@ def _download_text(state: str) -> str:
         DownloadState.NOT_DOWNLOADED: "Belum",
         DownloadState.DOWNLOADED: "Tersimpan",
         DownloadState.FAILED: "Gagal",
+        DownloadState.UNAVAILABLE: "Tidak Tersedia",
     }.get(state, state)
 
 
