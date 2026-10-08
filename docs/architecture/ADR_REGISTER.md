@@ -26,3 +26,5 @@ ADR-006 remains applicable to automated browser-adapter work, but it does not ov
 - ADR-016 R02 ADDENDUM IMPLEMENTED + VERIFIED (8 Oct 2026): approved-image source SHA-256 folded into existing prepared request fingerprint; old digestless queued revisions fail closed; no schema migration. See R02 evidence.
 
 - ADR-019 ACCEPTED + IMPLEMENTED R03 (8 Oct 2026): effective download availability and export recheck, v1 UNAVAILABLE status semantics, atomic NTFS hardlink no-clobber with unique partial and conditional SQLite failure updates; manual recovery on publish-success/DB-failure. See R03 evidence, no live Flow acceptance.
+
+- ADR-018 final R04 closeout (8 Oct 2026): contracts B01–B06 implemented and OFFLINE CI VERIFIED on main `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`, run `37725495137`; real-account/Flow live separate BLOCKED. See final R04 evidence.

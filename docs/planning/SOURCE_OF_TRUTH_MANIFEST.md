@@ -65,3 +65,11 @@ S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 
 - Current handoff: `docs/handoff/current/HANDOFF_STEP_12_BUG_R03_TO_R04_2026-10-08.md`.
 - CI tested `17dc2be0c7e4c69a99ab5129ea311492a182ecc4`, code merged `1f82675eb6282a3f5070c4320c5898a4304dd516`, 165 pytest/UI 30/Windows portable PASS.
 - R04 combined verification not run. Historic F01–F06 and new B01–B06 locally closed, no Flow live claim.
+
+## STEP 12 R04 final verified source-of-truth addendum (8 October 2026)
+- ASTRA original unchanged: `docs/planning/audits/ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`, SHA256 `5481a09b85219615169c285d6bfd42bcc7398bcf881a73a604f2e7a351444fda`.
+- R04 combined case matrix `docs/planning/audits/STEP12_R04_COMBINED_ACCEPTANCE_MATRIX_2026-10-08.md`.
+- Final audit/evidence `docs/planning/audits/B01_B06_R04_FINAL_EVIDENCE_2026-10-08.md`.
+- R04 final handoff `docs/handoff/current/HANDOFF_STEP_12_BUG_R04_FINAL_2026-10-08.md`.
+- Code merge verified `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`, independent official main CI `37725495137` SUCCESS 192 tests, frozen UI 30/30, Windows portable/Chromium PASS; docs-only status commit excluded from tested implementation SHA.
+- R00–R04 offline audit is **COMPLETE**. Manual real Google READY/restart and later live Flow are separate BLOCKED product gates.

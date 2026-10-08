@@ -45,3 +45,6 @@ Extend existing canonical application service/ports, persistence, filesystem and
 R01 T01–T08 → R02 T09–T13/T22–T25 → R03 T14–T21 → R04 combined.
 Original ASTRA harness code was not provided with the uploaded DOCX. Static source confirmation alone cannot close any bug.
 No Flow live selector/login/Generate/Download or frozen UI redesign is authorized.
+
+## R04 closure addendum (8 October 2026)
+All six B01–B06 corrective contracts have implementations merged and OFFLINE regression/Windows CI PASS after R01, R02 and R03. R04 PR #17 and official main run `37725495137` verify the combined tree `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218` with 192 tests, 30-state frozen UI and Windows portable smoke/build. This addendum supersedes the initial top-line "NOT IMPLEMENTED" planning status only for the offline implementation portions. Real-account restart and live Flow mutation are not covered and remain BLOCKED. Evidence: `../planning/audits/B01_B06_R04_FINAL_EVIDENCE_2026-10-08.md`.

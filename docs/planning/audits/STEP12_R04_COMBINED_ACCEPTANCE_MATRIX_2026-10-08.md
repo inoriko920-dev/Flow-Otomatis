@@ -1,6 +1,6 @@
 # STEP 12 — SOL R04 Combined Acceptance Matrix
 Date: 8 October 2026 WIB
-Stage: R04 PLANNED / PENDING OFFICIAL COMBINED CI
+Stage: R04 COMPLETE / OFFICIAL MAIN CI PASS
 Repo: `inoriko920-dev/Flow-Otomatis`
 Base main SHA: `c23f00383438f95021514e5e24ef496e618e20c7`
 Authority: `ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`, ADR-016/018/019, R01–R03 evidence.
@@ -44,11 +44,13 @@ This R04 changes no production feature and no frozen UI. A small contract test m
 - Original standalone ASTRA reproduction scripts were not provided; test references are direct repository regression tests, not a recreated original harness.
 - Manifest v1.0 `UNAVAILABLE` has not been certified against external strict-enum consumers. R04 does not silently change that contract.
 
-## CI gating checklist (fill only from exact R04 run)
-- [ ] inventory T01–T25 mapped and executed by the official test suite
-- [ ] frozen dependency sync, Ruff format/lint, mypy and architecture PASS
-- [ ] pytest full suite PASS and actual number recorded
-- [ ] 30 actual UI compositions compared to frozen reference PASS
-- [ ] Windows staged Chromium smoke, portable build and executable smoke PASS
-- [ ] artifact IDs, SHA-256, size, expiration, source SHA recorded
-- [ ] docs/handoff and project status updated; stop before any live Google workflow
+## CI gating checklist — verified from exact merged-main R04 run
+- [x] inventory T01–T25 mapped and executed by the official test suite
+- [x] frozen dependency sync, Ruff format/lint, mypy and architecture PASS
+- [x] pytest full suite PASS and actual number recorded
+- [x] 30 actual UI compositions compared to frozen reference PASS
+- [x] Windows staged Chromium smoke, portable build and executable smoke PASS
+- [x] artifact IDs, SHA-256, size, expiration, source SHA recorded
+- [x] docs/handoff and project status updated; stop before any live Google workflow
+
+Official checked `main` SHA: `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`; full CI run `37725495137`, SUCCESS all 3 jobs. Pytest 192 passed, frozen UI 30/30 PASS, Windows Chromium/portable build/smoke PASS; artifact SHA and retention are recorded in `B01_B06_R04_FINAL_EVIDENCE_2026-10-08.md`. Later evidence-only commit is not a new source-code test run.

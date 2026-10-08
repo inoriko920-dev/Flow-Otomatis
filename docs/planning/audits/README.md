@@ -239,3 +239,11 @@ Separate from the completed F01–F06/A00–A05 work above.
 - Next-AI handoff `../../handoff/current/HANDOFF_STEP_12_BUG_R03_TO_R04_2026-10-08.md`.
 - Official CI `37724196252`: 165 tests PASS, frozen UI 30/30 PASS, portable Windows + smoke PASS.
 - B01–B06 closed only at offline/packaged boundaries; Google Flow live untested, real-account/restart gate BLOCKED.
+
+## SOL R04 FINAL — combined ASTRA B01–B06 closure (8 October 2026)
+- R00–R04 finished **PASS / OFFLINE**, B01–B06 CLOSED locally, live product acceptance still BLOCKED.
+- R04 acceptance matrix: `STEP12_R04_COMBINED_ACCEPTANCE_MATRIX_2026-10-08.md`.
+- Final evidence: `B01_B06_R04_FINAL_EVIDENCE_2026-10-08.md`.
+- Final handoff: `../../handoff/current/HANDOFF_STEP_12_BUG_R04_FINAL_2026-10-08.md`.
+- Merged code `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`, fresh official main CI `37725495137`: 192 pytest, 30/30 UI and Windows portable PASS; artifact digests in evidence.
+- No more ASTRA bug remediation package scheduled. Next manual account READY/restart gate; Google Flow live not tested.

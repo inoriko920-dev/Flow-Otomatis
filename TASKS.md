@@ -265,3 +265,17 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - Evidence `docs/planning/audits/B04_B05_R03_EVIDENCE_2026-10-08.md`; ADR-019.
 - New ASTRA B01–B06 now CLOSED **locally** in R01–R03, not equivalent to real-account/Flow live acceptance.
 - Next step: R04 combined regression + source-hash/artifact audit, NOT STARTED; only after explicit user "lanjutkan".
+
+## 8 October 2026 — SOL R04 FINAL Combined Audit PASS
+- R04: **PASS / COMPLETE** for offline/CI-backed verification of new ASTRA findings B01–B06.
+- PR #17 https://github.com/inoriko920-dev/Flow-Otomatis/pull/17 merged as `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`.
+- PR gate source `e557a2219350871205d32330c3a0d027bb9e9824`, official CI run `37725045658`: SUCCESS.
+- Exact **main tested source SHA** `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`, main push CI `37725495137`: SUCCESS, all 3 jobs.
+- Windows Python 3.14.7 + uv frozen; Ruff format/lint, mypy 81 files, architecture PASS; **192 pytest passed** including T01–T25 explicit audit-inventory tests and existing behavioral tests.
+- 30/30 frozen UI, Chromium staged smoke, portable ZIP build, executable portable smoke PASS.
+- Main Windows artifact `11527552603` (435,725,819 bytes), sha256 `0ae8a7451acab9c7ed141df0248cb3090831c047ce37f3d14ea00a822942c1dd`, expires 2026-10-22T04:06:30Z.
+- Main UI artifact `11527787528` (3,316,911 bytes), sha256 `9092dcc7acf074d496aeb57e6c11a1adb409ba25dc29443dcd585f5c526982dd`, expires 2026-10-22T04:03:15Z.
+- Evidence `docs/planning/audits/B01_B06_R04_FINAL_EVIDENCE_2026-10-08.md`; final handoff `docs/handoff/current/HANDOFF_STEP_12_BUG_R04_FINAL_2026-10-08.md`.
+- All 6 B01–B06 CLOSED for **offline foundation only**. Historical F01–F06/A00–A05 remain closed.
+- **Still BLOCKED:** real user Google login, READY and restart-validation Lulus, I12-02B2-LIVE one-Scene Generate, I12-03-LIVE output download. These were NOT run by R04.
+- Caveats: limited CI artifact retention; external strict-enum v1.0 manifest consumers not independently verified for UNAVAILABLE; atomic hardlinks may fail on unsupported filesystems and must fail safely.
