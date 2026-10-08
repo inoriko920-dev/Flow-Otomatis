@@ -122,9 +122,7 @@ def _workspace_with_source(tmp_path: Path, *, zip_source: bool = False) -> Works
     manifest_path = package_root / "FLOW_OTOMATIS_IMPORT.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     for scene in workspace.scenes:
-        (package_root / scene.image_file).write_bytes(
-            f"image-bytes-{scene.scene_id}".encode()
-        )
+        (package_root / scene.image_file).write_bytes(f"image-bytes-{scene.scene_id}".encode())
     return replace(workspace, source_package_path=str(manifest_path))
 
 
@@ -488,6 +486,7 @@ def test_failed_schema_migration_rolls_back_all_added_columns(tmp_path: Path) ->
     assert "owner_id" not in columns
     assert meta is None
 
+
 def test_t09_folder_image_deleted_after_prepare_blocks_submit(tmp_path: Path) -> None:
     _root, workspace_repo, _jobs, provider, service = _setup(tmp_path)
     service.prepare_queue("EP300_QUEUE")
@@ -561,7 +560,7 @@ def test_t12_unreadable_image_maps_to_pre_submit_attention(tmp_path: Path, monke
     service.prepare_queue("EP300_QUEUE")
     workspace = repo.load("EP300_QUEUE")
     assert workspace is not None
-    image = (Path(workspace.source_package_path).parent / workspace.scenes[0].image_file)
+    image = Path(workspace.source_package_path).parent / workspace.scenes[0].image_file
     original_open = Path.open
 
     def deny_image_open(self: Path, *args, **kwargs):
@@ -621,8 +620,9 @@ def test_legacy_fingerprint_without_image_bytes_never_submits(tmp_path: Path) ->
         "aspect_ratio": scene.aspect_ratio,
     }
     old_digest = hashlib.sha256(
-        json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"),
-                   ensure_ascii=False).encode()
+        json.dumps(
+            legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
     ).hexdigest()
     assert old_digest != prepared[0].request_fingerprint
     assert len(_scene_fingerprint(workspace.episode_id, scene, "1" * 64)) == 64
@@ -647,4 +647,3 @@ def test_prepare_requires_canonical_verifier(tmp_path: Path) -> None:
     with pytest.raises(Exception, match="verifier"):
         service.prepare_queue("EP300_QUEUE")
     assert jobs.list_for_episode("EP300_QUEUE") == ()
-

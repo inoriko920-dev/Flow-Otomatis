@@ -152,9 +152,7 @@ class LocalGenerationQueueService:
                 self._owner_id,
             )
 
-        stale_reason = self._stale_reason(
-            episode_id, workspace.source_package_path, scene, job
-        )
+        stale_reason = self._stale_reason(episode_id, workspace.source_package_path, scene, job)
         if stale_reason is not None:
             return self._job_repository.mark_attention(
                 job.job_id,
@@ -259,7 +257,7 @@ class LocalGenerationQueueService:
             return f"Scene {scene.scene_id} image is no longer available."
         try:
             current_digest = self._image_digest(source_package_path, scene)
-        except (PackageValidationError, PackageSecurityError, InternalInvariantError):
+        except PackageValidationError, PackageSecurityError, InternalInvariantError:
             return (
                 f"Scene {scene.scene_id}: gambar hilang atau tidak bisa diverifikasi. "
                 "Persiapkan antrean kembali sebelum Generate."

@@ -151,8 +151,10 @@ def test_project_hub_surfaces_corruption_and_keeps_healthy_project_openable(
     assert window.current_workspace is not None
     assert window.current_workspace.episode_id == "EP201_HEALTHY"
 
+
 def test_project_hub_naive_timestamp_issue_keeps_healthy_project_openable(
-    tmp_path: Path, qtbot,
+    tmp_path: Path,
+    qtbot,
 ) -> None:
     root = tmp_path / "projects"
     repo = SqliteWorkspaceRepository(root)
@@ -176,7 +178,8 @@ def test_project_hub_naive_timestamp_issue_keeps_healthy_project_openable(
 
     table = next(item for item in window.findChildren(QTableWidget) if item.columnCount() == 5)
     healthy_row = next(
-        row for row in range(table.rowCount())
+        row
+        for row in range(table.rowCount())
         if table.item(row, 1) is not None and table.item(row, 1).text() == "EP605_GOOD"
     )
     table.setCurrentCell(healthy_row, 0)
@@ -188,4 +191,3 @@ def test_project_hub_naive_timestamp_issue_keeps_healthy_project_openable(
     assert window.current_workspace is not None
     assert window.current_workspace.episode_id == "EP605_GOOD"
     assert hashlib.sha256(bad_db.read_bytes()).hexdigest() == before
-

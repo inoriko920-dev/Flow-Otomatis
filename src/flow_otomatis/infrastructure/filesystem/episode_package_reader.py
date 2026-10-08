@@ -50,11 +50,7 @@ class EpisodePackageReader:
             (item for item in snapshot.scenes if item.scene.scene_id == scene_id),
             None,
         )
-        if (
-            evidence is None
-            or evidence.scene.image_file != image_file
-            or not evidence.image_exists
-        ):
+        if evidence is None or evidence.scene.image_file != image_file or not evidence.image_exists:
             raise PackageValidationError(
                 f"Scene {scene_id}: approved image is unavailable or changed",
                 code="IMAGE_NOT_AVAILABLE",
@@ -84,9 +80,7 @@ class EpisodePackageReader:
             else:
                 manifest_path = snapshot.source_path
                 package_root = self._infer_directory_root(manifest_path)
-                image_path = self._resolve_disk_ref(
-                    package_root, manifest_path.parent, image_file
-                )
+                image_path = self._resolve_disk_ref(package_root, manifest_path.parent, image_file)
                 if not image_path.is_file():
                     raise PackageValidationError(
                         f"Scene {scene_id}: source image file is missing",

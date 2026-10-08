@@ -125,6 +125,7 @@ def test_invalid_persisted_types_raise_typed_corruption_without_repair(
     assert [(item.episode_id, item.kind) for item in scan.issues] == [(episode_id, "CORRUPT")]
     assert _sha256(db_path) == before
 
+
 @pytest.mark.parametrize(
     ("field", "invalid"),
     [
@@ -153,9 +154,7 @@ def test_t22_t23_naive_empty_and_invalid_timestamps_are_isolated_read_only(
 
     scan = repository.scan_recent()
     assert [item.episode_id for item in scan.workspaces] == ["EP600_HEALTHY"]
-    assert [(item.episode_id, item.kind) for item in scan.issues] == [
-        ("EP601_BAD", "CORRUPT")
-    ]
+    assert [(item.episode_id, item.kind) for item in scan.issues] == [("EP601_BAD", "CORRUPT")]
     with pytest.raises(WorkspaceCorruptError):
         repository.load("EP601_BAD")
     assert _sha256(damaged) == before
@@ -187,4 +186,3 @@ def test_t25_naive_load_and_scan_preserve_db_byte_checksum(tmp_path: Path) -> No
         repo.load("EP604_NAIVE")
     assert repo.scan_recent().issues[0].kind == "CORRUPT"
     assert db.read_bytes() == before
-

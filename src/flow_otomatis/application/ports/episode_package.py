@@ -34,6 +34,7 @@ class EpisodePackagePort(Protocol):
         """Load one ZIP or manifest JSON without extracting unsafe archive content."""
         ...
 
+
 class EpisodeImageVerifierPort(Protocol):
     """Read original approved image bytes through the canonical package boundary."""
 
