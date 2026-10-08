@@ -675,3 +675,11 @@ Gemini does not depend on the Google Flow login gate:
 - Source-of-truth review SHA-256 checklist committed on the documentation-only branch as `docs/ui/review/E12_02_V2_22_IMAGE_MANIFEST_AND_OWNER_SIGNOFF_PENDING_2026-10-08.md`. The screenshots and V2 DOCX **have not been uploaded to GitHub**.
 - **OWNER SIGNOFF NOT RECEIVED:** all images remain DRAFT; final UI reference DOCX not issued; G4 remains BLOCKED. Generic 'lanjutkan' is not signoff. Draft PR #25 MUST NOT be misrepresented as final UI authority or code readiness.
 - Existing 30 frozen UI refs unchanged; 12/12 in UIX-09-B is one batch of 60, not all project scenes. Simulated prices, balances and live results are not real. No code change or Google Flow action.
+
+
+## 2026-10-08 — E12-02 OWNER APPROVED; FINAL DOCX VERIFIED; binary archive pending
+**Supersedes the earlier E12-02 notes saying “owner signoff pending”** while retaining their historical audit findings. User explicitly accepted all 22 V2 UI images including differences in illustration and simulation/example values. Exact hashes in `docs/ui/final/E12_02_APPROVED_22_UI_MANIFEST_AND_HANDOFF_2026-10-08.md`.
+- **FINAL DOCX**: `FLOW_OTOMATIS_E12_02_REFERENSI_UI_FINAL_22_DESAIN_DISETUJUI_2026-10-08.docx`, 27 rendered pages, 22/22 byte-identical embedded approved PNG, SHA-256 `9a84372cbb10ad5e2db2d070c1d20319759aabee11ff85324a1193544ec6f1dd` (downloadable conversation artifact, NOT in GitHub).
+- **FINAL ZIP**: `FLOW_OTOMATIS_E12_02_22_UI_FINAL_APPROVED_DOCX_PNG_2026-10-08.zip`, 22 original PNG + DOCX + checksums, ZIP integrity PASS, SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da` (conversation artifact, NOT in GitHub).
+- **G4 visual signoff: PASS; G4 binary archive: PENDING, hence G4 overall cannot yet be marked PASS.** GitHub connector writes documentation but cannot directly read the local binary contents for upload; the local Git remote was unreachable. Avoid claiming binary upload. PR #25 stays DRAFT and unmerged, no production code.
+- Other gates G0/G1/G5/G6 and ADR T06 remain blocked/unverified. User expressly forbids coding until all gates PASS.
