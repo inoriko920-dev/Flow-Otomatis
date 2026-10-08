@@ -1,5 +1,8 @@
 # ADR-022 — Durable Submit Boundaries, Ambiguity and Recovery (E12-01)
-Status: **PROPOSED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+Status: **OWNER-APPROVED ARCHITECTURE DESIGN — T06 D02/D04/D06 PASS; TESTS NOT RUN / NO CODE AUTHORIZED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+
+> **2026-10-09 OWNER SIGNOFF — T06 architecture DESIGN ONLY.** The owner explicitly agreed to D01–D06 after being asked to approve their final design. Full scope and gate consequences: `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. D04 canonical submit boundary is SUBMIT_STARTED before mutation, SUBMIT_UNCERTAIN retains original-account hold, and only account-bound conclusive no-acceptance proof allows FAILED_SAFE. D02 immutable identity and D06 no-loss rollback remain binding; new fake failure/recovery tests have NOT run. This does **not** grant permission to code, merge PRs, migrate existing databases, operate Google Flow or spend credits. Any references below to "candidate"/"proposed" describe the historical draft that was accepted as an architecture design, not a claim of implemented behavior.
+
 References: ADR-016 coherent request + lease, ADR-019 no-clobber download and existing `GenerationJobState` enum.
 
 ## Context / compatibility
