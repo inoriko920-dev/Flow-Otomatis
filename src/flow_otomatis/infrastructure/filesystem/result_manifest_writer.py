@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,7 +24,6 @@ class ResultManifestWriter:
         output_dir = self._projects_root / results.episode_id / "exports"
         output_dir.mkdir(parents=True, exist_ok=True)
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
-        temporary = target.with_suffix(".json.tmp")
 
         # A file may vanish after snapshot(): recheck during export as well.
         verified_scenes = tuple(
@@ -65,9 +66,30 @@ class ResultManifestWriter:
                 for scene in verified_scenes
             ],
         }
-        temporary.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, target)
+        # A fixed .json.tmp name races with another exporter. Each attempt owns
+        # a private temporary beside the final manifest for atomic same-volume
+        # publication. The existing final is never touched before publication.
+        serialized = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                dir=output_dir,
+                prefix=".FLOW_OTOMATIS_RESULT.",
+                suffix=".json.tmp",
+                delete=False,
+            ) as output:
+                temporary = Path(output.name)
+                output.write(serialized)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, target)
+        finally:
+            # Never delete a competing export's file or the previously
+            # published manifest when write/flush/replace fails.
+            if temporary is not None:
+                with suppress(OSError):
+                    temporary.unlink(missing_ok=True)
         return target
