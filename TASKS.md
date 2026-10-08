@@ -331,3 +331,14 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Differences recorded: 42 original V1.1 Word tables and 9 original E12-00 tables are flattened in text reconstructions; no byte-identity or visual parity claimed. See `docs/planning/audits/E12_00_TEXT_EQUIVALENCE_AND_G0_LIMITS_2026-10-08.md`.
 - [ ] **G0 strict BLOCKED**: original DOCX preservation/equivalence approval not completed. Do not begin SOL coding/Generate or edit frozen UI.
 - [ ] NEXT: E12-01 ASTRA ADR-020–023 planning review only; keep policy/credits/login/live gates blocked independently.
+
+
+## 8 October 2026 — ASTRA E12-01 Decision & ADR Review (PLANNING ONLY)
+- [x] T01 ADR-020 draft: global reservation, cross-project spend safety, outbox and transaction authority.
+- [x] T02 ADR-021 draft: authorized profile, policy checks, observable credit freshness, budget limits.
+- [x] T03 schema/migration candidate: existing schema v2 and result manifest v1 compatibility, create-only coordinator, no-loss rollback.
+- [x] T04 ADR-022 draft: submit boundary, held UNKNOWN, remote ID, download/recovery contracts.
+- [x] T05 ADR-023 draft: actor/thread ownership, scoped leases/fences, fake-first multi-profile scheduling.
+- [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
+- [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
+- [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.

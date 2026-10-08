@@ -660,3 +660,11 @@ Gemini does not depend on the Google Flow login gate:
 - V1.1 original has 17 waves/90 task cards/15 extra tests and 42 native Word tables; GitHub text preserves all enumerated work/tests, but reconstructed DOCX does **NOT** preserve the original binary/layout. Parent V1.0 archive covers 30 page markers/45 tests.
 - E12-00 text-only documentation review: COMPLETE. **Strict G0 remains BLOCKED** until authority/original Word formatting exception is explicitly resolved. Production coding and UI additions prohibited; E12-01 may continue only as ASTRA planning.
 - STEP 12 real Flow Generate/Download and multi-account policy remains BLOCKED/UNVERIFIED; no user-credit expenditure. Prior official CI record (233 tests/30 UI/Windows build) refers to earlier code and was not re-run for this docs-only PR.
+
+
+## 8 October 2026 — E12-01 ASTRA architecture package on review branch (NOT IMPLEMENTED)
+- Baseline main: `978dbb31ce2024da0c70280f260f421e2687382b` (PR #23 docs-only merged, G0 strict still BLOCKED).
+- New E12-01 documents in `docs/architecture/ADR-020...` through `ADR-023...` and `docs/planning/step12/E12_01_ADR_DECISION_MATRIX_AND_HANDOFF_2026-10-08.md`; status **PROPOSED, waiting signoff**.
+- Proposed global single-DB reservation+attempt authority, per-project outbox projection, per-account signed-in actor isolation, immutable credit/budget evidence, ambiguity-safe submit/recovery. No `src/`, UI, SQLite schema or live behavior changed.
+- E12-01 T01–T05 planning drafts prepared; T06 ASTRA/owner decision and acceptance of cross-module architecture PENDING. G0 original Word doc visual parity BLOCKED, G1 policy UNKNOWN, G5 price/credit UNKNOWN, G6 READY-after-restart PENDING; no production coding.
+- Next wave E12-02 is **UI prompt only**, with hard STOP after prompts until all final UI images reviewed and consolidated in one DOCX. Do not start E12-02 in this wave.

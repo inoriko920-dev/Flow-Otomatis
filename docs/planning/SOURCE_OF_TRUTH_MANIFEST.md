@@ -117,3 +117,10 @@ User authorized publishing TXT/MD instead of requiring manual DOCX upload. Draft
 - E12-00 audit text: `docs/planning/audits/E12_00_BASELINE_GOVERNANCE_READABLE_COPY_2026-10-08.md` and `...RECONSTRUCTED_2026-10-08.txt`.
 - Reconstructed `.docx` files are **not original approved binary/visual reference**; see `docs/planning/audits/E12_00_TEXT_EQUIVALENCE_AND_G0_LIMITS_2026-10-08.md`.
 This addition does not supersede the frozen 30-reference UI DOCX or existing Software Factory pre-coding gates. The strict G0 DOCX authority gate remains BLOCKED. Planning review may continue; coding cannot.
+
+
+## E12-01 proposals — not yet implemented (8 Oct 2026 WIB)
+- Candidate ADR-020/021/022/023 in `docs/architecture/`; reviewed source owner inventory and decision matrix: `docs/planning/step12/E12_01_ADR_DECISION_MATRIX_AND_HANDOFF_2026-10-08.md`.
+- Local E12-01 Word authoring reference: `E12_01_ASTRA_ARCHITECTURE_ADR_FLOW_OTOMATIS_2026-10-08.docx` (not yet verified as an original DOCX in this repository); Markdown ADRs are the searchable planning proposals, **not code-ready authority**.
+- `PROJECT_STATE.md`, `TASKS.md`, `AGENTS.md`, frozen UI 30-state DOCX and overrides, Master Plan V1.0/V1.1 and prior ADRs remain higher-order constraints.
+- E12-01 T06 approval outstanding; G0 original DOCX visual parity and external provider G1 remain BLOCKED. No claim of UI implementation or live Flow behavior.
