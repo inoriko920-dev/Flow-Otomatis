@@ -318,7 +318,8 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 
 ## 8 October 2026 — Hasil error recovery audit
 - Fixed Hasil navigation and export callbacks leaking expected errors into Qt, plus untyped Download timestamp/take decode failures.
-- Local regression: baseline 227 tests; patched full suite 233 PASS. Ruff/architecture PASS. Windows CI and build pending.
+- COMPLETE / PASS: baseline 227 tests; patched full suite 233 PASS locally and on Windows. Official PR CI `37733697262` all jobs SUCCESS: Ruff/mypy/architecture, 30/30 frozen UI, Chromium/portable smoke and ZIP integrity verification PASS.
 - Prior export file preserved on publication failure; UI reports a safe Indonesian message and permits explicit retry. Read-only history semantics retained.
 - Evidence/handoff: `docs/planning/audits/STEP12_RESULTS_ERROR_RECOVERY_2026-10-08.md`.
+- PR #22 merged as `1c7ade1922e45b987a45f495fb0784588a3c1291`; merged source tree equals verified PR head `a0041755e3635795c489702a67353aa2df1a63ab`.
 - STEP 12 and live Google restart/Generate/Download gates unchanged.
