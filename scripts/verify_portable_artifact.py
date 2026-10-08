@@ -128,9 +128,12 @@ def verify_portable_artifact(
                 if not info.is_dir():
                     filenames.add(info.filename)
             if missing := _REQUIRED - filenames:
-                raise PortableArtifactError(f"Portable ZIP missing required file: {sorted(missing)}")
+                raise PortableArtifactError(
+                    f"Portable ZIP missing required file: {sorted(missing)}"
+                )
             if not any(
-                name.startswith(_ROOT + "runtime/browsers/") and name.lower().endswith("/chrome.exe")
+                name.startswith(_ROOT + "runtime/browsers/")
+                and name.lower().endswith("/chrome.exe")
                 for name in filenames
             ):
                 raise PortableArtifactError("Portable ZIP is missing staged Chromium executable")
@@ -143,7 +146,9 @@ def verify_portable_artifact(
             if manifest.get("git_sha") != expected_git_sha:
                 raise PortableArtifactError("Portable manifest source SHA differs from CI source")
             if manifest.get("live_google_flow_tested") is not False:
-                raise PortableArtifactError("Portable manifest makes an unsupported live-test claim")
+                raise PortableArtifactError(
+                    "Portable manifest makes an unsupported live-test claim"
+                )
             if archive.testzip() is not None:
                 raise PortableArtifactError("Portable ZIP contains a member with invalid CRC")
     except zipfile.BadZipFile as exc:
