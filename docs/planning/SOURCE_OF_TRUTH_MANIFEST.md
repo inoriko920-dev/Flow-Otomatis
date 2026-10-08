@@ -83,3 +83,12 @@ S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 
 - Windows GitHub Actions artifact ID `11528593129`, outer-wrapper SHA256 `17e9c36b2f6db95f99ba5fb9fa3a0e4234dd5c188191c12f625cb1cd105a9431`; expires 22 Oct 2026 UTC.
 - Evidence: `docs/planning/audits/STEP12_PORTABLE_RELEASE_INTEGRITY_EVIDENCE_2026-10-08.md`.
 - Latest handoff: `docs/handoff/current/HANDOFF_STEP12_PORTABLE_QA_TO_MANUAL_GATE_2026-10-08.md`. R00–R04 offline audit unchanged, no live provider actions.
+
+## 8 October 2026 — SOL independent Hasil export concurrency hardening PASS
+- Fixed `ResultManifestWriter.write` concurrent static-temp collision via a uniquely owned NamedTemporaryFile, flush/fsync, atomic same-directory replace and own-temp cleanup.
+- Deterministic two-writer barrier regression and injected replace/partial-write failure tests PASS. Previous final manifest survives failed publication; no orphan temp.
+- Schema v1.0 and UI unchanged. Concurrent successful exports still have last-writer-wins semantics; no optimistic stale-snapshot fencing claimed.
+- PR #19 merged code/tested `42afad61a6bde7798623d807de2c74c51339fe82`; official main CI `37729402213` **SUCCESS**: 220 passed, Ruff/mypy/architecture PASS, UI 30/30 PASS, Chromium + Windows portable/smoke + ZIP verification PASS.
+- Windows artifact ID `11529730338` sha256 `ccf0aa7d64ddb967d5732952970aa7785f140fa8f579f4906659869b4d9b7272`, expires 2026-10-22; internal portable ZIP sha256 `242beb868acf5d2e190ba0f746963d607b1493aea258b34213d84fa2714da97d`.
+- Evidence `docs/planning/audits/STEP12_MANIFEST_ATOMIC_EXPORT_EVIDENCE_2026-10-08.md`; handoff `docs/handoff/current/HANDOFF_STEP12_MANIFEST_EXPORT_SAFE_2026-10-08.md`.
+- User reported Google manual login possible; READY-after-app-restart proof not supplied. Flow live remains BLOCKED, no live actions tested.
