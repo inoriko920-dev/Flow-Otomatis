@@ -15,7 +15,7 @@ from flow_otomatis.application.ports import (
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.services import LocalGenerationQueueService
-from flow_otomatis.domain.errors import PackageValidationError, StorageError
+from flow_otomatis.domain.errors import StorageError
 from flow_otomatis.domain.job import (
     GenerationAttentionCode,
     GenerationJobState,
