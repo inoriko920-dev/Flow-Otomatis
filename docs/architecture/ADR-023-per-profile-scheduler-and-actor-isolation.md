@@ -1,5 +1,8 @@
 # ADR-023 — Account-Aware Scheduler and Browser Actor Isolation (E12-01)
-Status: **PROPOSED / LIVE PARALLELISM BLOCKED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+Status: **OWNER-APPROVED ARCHITECTURE DESIGN — T06 D03/D05/D06 PASS; LIVE PARALLELISM BLOCKED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+
+> **2026-10-09 OWNER SIGNOFF — T06 architecture DESIGN ONLY.** The owner explicitly agreed to D01–D06 after being asked to approve their final design. Full scope and gate consequences: `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. D05 per-profile isolated worker with fresh current-process READY and one global writer, D03 account-specific provider permission/credit eligibility, and D06 fake-only staged rollout accepted as design; no multi-account live actions while G1/G5/G6/G9 are not PASS. This does **not** grant permission to code, merge PRs, migrate existing databases, operate Google Flow or spend credits. Any references below to "candidate"/"proposed" describe the historical draft that was accepted as an architecture design, not a claim of implemented behavior.
+
 Related: ADR-005 existing serial R1 queue, ADR-017 Browser Worker ownership, ADR-020 global authority, ADR-021 policy.
 
 ## Scope and alternatives
