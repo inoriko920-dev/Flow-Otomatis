@@ -7,7 +7,7 @@ Legacy `QUEUED/RUNNING/GENERATED/ATTENTION_REQUIRED/FAILED` in project SQLite re
 
 ## Candidate state transitions
 `PLAN_DRAFT -> PLAN_FROZEN -> RESERVED -> CLAIMED -> PRE_SUBMIT -> SUBMIT_STARTED`.
-From SUBMIT_STARTED only `ACCEPTED`, `SUBMIT_UNCERTAIN`, or `SAFE_FAILURE (proven no acceptance)`. Accepted -> `GENERATING -> GENERATED -> DOWNLOAD_QUEUED -> DOWNLOADING -> DOWNLOADED`.
+From `SUBMIT_STARTED` only `ACCEPTED`, `SUBMIT_UNCERTAIN`, or `FAILED_SAFE` (**conclusive evidence proves that no chargeable provider submission was accepted**). Accepted -> `GENERATING -> GENERATED -> DOWNLOAD_QUEUED -> DOWNLOADING -> DOWNLOADED`.
 `SUBMIT_UNCERTAIN -> RECONCILING -> (ACCEPTED | ATTENTION_REQUIRED)` by **read-only evidence**, never blind repeat.
 `PLAN_FROZEN -> PLAN_STALE` on asset, input digest, price/eligibility or selected profile change. `RESERVED/PRE_SUBMIT -> RELEASED_SAFE` ONLY if provably before any provider mutation and no extant attempt.
 Unrecognized state => BLOCKED and diagnostics. No implicit success based on UI progress only.
@@ -17,7 +17,7 @@ Unrecognized state => BLOCKED and diagnostics. No implicit success based on UI p
 - Record `SUBMIT_STARTED` in the coordinator and flush commit **before** mutating remote UI; this is a conservative ambiguity boundary. A crash immediately after commit but before click is ambiguous and **stays held**, requiring evidence-based reconciliation rather than unsafe auto-retry.
 - Owner fence, attempt ID, authorized profile and expected stable remote result identity accompany every callback. Out-of-order callbacks fail closed.
 - `ACCEPTED` requires a stable remote ID and correct profile. A loading indicator, timeout, absent ID or connection reset is not sufficient acceptance/safe failure evidence.
-- `FAILED_SAFE` requires driver evidence that no chargeable mutation was accepted. `UNKNOWN` holds reservation and blocks resubmit/rotation.
+- `FAILED_SAFE` is the **only canonical safe-failure state name** (do not introduce a separate `SAFE_FAILURE` enum). It requires durable, account-bound evidence proving that the provider did not accept a chargeable mutation. Timeout, absence of a remote ID, restart, or browser disconnect alone is **not** proof of safe failure. `SUBMIT_UNCERTAIN` holds the reservation and blocks automatic resubmit, account transfer and quota-driven rotation.
 - Projections to per-project SQLite are idempotent; crash between global COMMIT and project update triggers outbox replay, never new Generate.
 - Download is separately queued; use existing `GeneratedMediaDownloadProviderPort`, ADR-019 unique .part and NTFS no-clobber final publication, confirm nonempty file; DB write fail after publish requires file checksum/manual reconciliation, never deletion or overwrite.
 
@@ -29,6 +29,6 @@ Unrecognized state => BLOCKED and diagnostics. No implicit success based on UI p
 5. ACCEPTED with remote ID: poll read-only until ready; do not generate again.
 6. DOWNLOADING and final path already present: no-clobber, inspect file and DB evidence, manual reconciliation if inconsistent.
 7. Account logout/model unsupported/credits expired: pause only affected profile/new claims; never silently transfer an uncertain attempt.
-8. Shutdown or second running app: prevent new writer/claim, preserve leases and evidence; recover after verified restart.
+8. Shutdown or second running app: prevent new writer/claim, preserve leases and evidence; recover after **fresh verification** in the new application process. A stored `READY_VERIFIED` proof from an earlier process is historical audit data, not current session permission.
 
 Acceptance: X04-X10, X13 and original T03/T08/T12/T20/T22/T33 (as applicable). Tests inject crashes at every commit/action boundary using fake provider; no paid provider testing before G1/G6/G7/G8.
