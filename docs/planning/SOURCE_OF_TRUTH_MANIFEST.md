@@ -1,5 +1,17 @@
 # SOURCE OF TRUTH MANIFEST — S08-T01
 
+## LATEST G0 OWNER DECISION — 2026-10-09 (review branch PR #27, NOT merged)
+
+**G0 source-authority selection G0-A/B/C is explicitly APPROVED by the owner.** Decision and approved hashes: `docs/planning/decisions/G0_2026_10_09_OWNER_APPROVAL_OF_CANONICAL_REFERENCES.md`. This paragraph is an **unmerged PR #27 review-branch update**, not a claim that these new binary files are on `main`. Previously written statuses about original images and reconstructed E12 files below are historical. Existing STEP 00–07 manifest records remain unchanged.
+
+- **30-UI original high-fidelity reference (canonical):** PR #25 `docs/ui/original_uncompressed/04_STEP_04_FINAL_UI_REFERENCE_FLOW_OTOMATIS_BIOGRAPHY_SYNC_V1_2.docx` SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`; old JPEG-compressed DOCX in `main` is a **historical preview only**, not pixel/text/byte-equivalent. Existing `docs/ui/IMPLEMENTATION_OVERRIDES.md` remains binding for inaccurate mockup text.
+- **E12-00 canonical:** PR #27 `docs/planning/originals/2026-10-08/E12_00_ASTRA_BASELINE_GOVERNANCE_1521_WIB_HANDOFF_2026-10-08.docx` SHA-256 `9cc648b90a4c802558f6cea4435770396c926abcb6796897d958424e595ba05e`. Keep 15:20 WIB variant as preserved provenance.
+- **Master Plan V1.1 canonical original planning source:** PR #27 `docs/planning/originals/2026-10-08/MASTER_PLAN_FLOW_OTOMATIS_V1_1_IMPLEMENTATION_READY_2026-10-08.docx` SHA-256 `ace281206f8f7089643a51328486f6e949c706f1a9c8710fc5f500c664f04f71`. Does **not** approve implementation.
+- **E12-01 canonical ADR review source:** PR #27 `docs/planning/originals/2026-10-08/E12_01_ASTRA_ARCHITECTURE_ADR_V1_1_GITHUB_REVIEW_2026-10-08.docx` SHA-256 `0eab21d9664a31d187bb6c168ae47766462ed896e494b95021d10874855d58a3`. ADR-020–023 T06 still **PROPOSED / PENDING**. Older draft retained, not primary.
+- **22 approved E12-02 UI extensions:** PR #25 `docs/ui/final/assets/` + final 27-page consolidated DOCX, **24/24 archive PASS**; append-only relative to original frozen 30 UI; no code or merge.
+- **Pre-coding G0 overall NOT YET PASS:** review branch source selection **PASS**, physical archive PR25 and PR27 **PASS**, but cross-PR integration/main visibility, architecture T06 approval, provider G1, actual credits G5 and READY G6 remain independent. No PR merge, production coding, migrations or live Google Flow actions authorized by this decision.
+
+
 Status: **VERIFIED_IN_REPOSITORY**
 
 Mandatory planning/reference DOCX files physically committed to the repository:
