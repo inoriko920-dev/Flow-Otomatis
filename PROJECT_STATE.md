@@ -721,3 +721,10 @@ Gemini does not depend on the Google Flow login gate:
 - Previous V1/V2 Windows upload kits are **SUPERSEDED**; use `FLOW_OTOMATIS_E12_02_PR25_UPLOAD_GIT_BASH_V3_TESTED_2026-10-08.zip` with SHA-256 `0abd520d45a0952e4fbc35205171cc39f5d90ea733a5239cfad69f3da57ccf76` (100,352,438 bytes). ZIP CRC PASS, approved 24/24 hashes PASS, 22 PNG 1920x1080 PASS.
 - Actual isolated local Git clone/commit/push/re-read 24/24 blobs PASS; repeated run creates no commit; source tamper fails. This demonstrates local script behavior, **NOT** authenticated Windows/GitHub execution.
 - Branch PR #25 still has **0/24 uploaded binaries**, G4 archival PENDING; original G0 parity and other strict gates remain blocked. Current handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V3_GIT_BASH_LOCAL_REMOTE_PASS_2026-10-08.md`.
+
+
+## 2026-10-08 — PR #25 24/24 GitHub binary archive VERIFIED / G4 UI archival PASS (latest)
+- User performed authenticated V3 Windows Git Bash upload to PR #25 review branch. **GitHub upload commit `6fc332e10ee0109e200c152724a4deeb5978aa3c`**; commit tree independently lists 22 approved PNG, 27-page final 22-UI DOCX and exact original 30-image DOCX: **24/24 Git blob IDs and byte counts matched locally computed approved originals**.
+- One upload commit added exactly **25 `docs/ui/` paths** (the 24 binaries and JSON manifest), no app source/code or existing UI reference altered; CI on upload commit **SUCCESS**; `main` unchanged; PR #25 remains draft and not merged.
+- **E12-02 user visual approval: PASS; final DOCX: PASS; G4 approved binary archive: PASS.** Earlier log entries saying `0/24` refer to the pre-upload situation and are superseded. Archive evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`.
+- Strict **G0 still BLOCKED** (authority parity and missing original planning docs), **G1 UNKNOWN/BLOCKED**, **G5 live account credits/tariff UNVERIFIED**, **G6 READY-after-restart UNVERIFIED**, **ADR T06 pending owner approval**. No app coding, merge, live Generate/Download or credit consumption authorized by this G4 success.
