@@ -342,3 +342,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
 - [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
 - [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.
+
+## 8 October 2026 — E12-02 UI prompt checkpoint
+- [x] T01: Inventory 9 UIX extension groups and 22 image states, using existing 30 frozen UI references.
+- [x] T02: Prepare prompt matrix and self-contained prompt variants; downloadable DOCX and ZIP available in conversation.
+- [x] T03: Mandatory STOP after prompt preparation; no generated UI images yet.
+- [ ] T04: Create/review/approve each image with user input; not started.
+- [ ] T05: Consolidate all approved UI images into one final reference DOCX; not started.
+- [ ] G4 UI freeze BLOCKED; G0 strict and provider gates remain blocked. No code or E12-03 work.
