@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -88,11 +89,21 @@ _NAV_GLYPHS = {
 }
 
 
-class _GeminiAgentSignals(QObject):
-    """Return one read-only AI Agent answer to the Qt thread."""
+@dataclass(frozen=True, slots=True)
+class _GeminiAgentRequest:
+    """An immutable completion right bound to one displayed project/Scene."""
 
-    answered = Signal(object)
-    failed = Signal(str)
+    request_id: int
+    episode_id: str
+    scene_id: str
+    context_generation: int
+
+
+class _GeminiAgentSignals(QObject):
+    """One independent Qt signal bridge per Agent request (not window-owned)."""
+
+    answered = Signal(object, object)
+    failed = Signal(object, str)
 
 
 class _GeminiAgentTask(QRunnable):
@@ -104,6 +115,7 @@ class _GeminiAgentTask(QRunnable):
         workspace: WorkspaceState,
         scene_id: str,
         question: str,
+        request: _GeminiAgentRequest,
         signals: _GeminiAgentSignals,
     ) -> None:
         super().__init__()
@@ -111,6 +123,7 @@ class _GeminiAgentTask(QRunnable):
         self._workspace = workspace
         self._scene_id = scene_id
         self._question = question
+        self._request = request
         self._signals = signals
 
     @Slot()
@@ -118,13 +131,14 @@ class _GeminiAgentTask(QRunnable):
         try:
             reply = self._service.ask(self._workspace, self._scene_id, self._question)
         except FlowOtomatisError as exc:
-            self._signals.failed.emit(str(exc))
+            self._signals.failed.emit(self._request, str(exc))
         except Exception:
             self._signals.failed.emit(
-                "AI Agent gagal tanpa mengekspos secret atau detail provider."
+                self._request,
+                "AI Agent gagal tanpa mengekspos secret atau detail provider.",
             )
         else:
-            self._signals.answered.emit(reply)
+            self._signals.answered.emit(self._request, reply)
 
 
 class _GeminiHealthSignals(QObject):
@@ -211,6 +225,10 @@ class MainWindow(QMainWindow):
         self._gemini_agent_service = gemini_agent_service
         self._agent_answer: str | None = None
         self._agent_busy = False
+        self._agent_request_id = 0
+        self._agent_context_generation = 0
+        self._active_agent_request: _GeminiAgentRequest | None = None
+        self._agent_closed = False
         self._active_google_profile_id: str | None = None
         self._last_result_manifest_path: Path | None = None
         self._pending_workspace: WorkspaceState | None = None
@@ -223,9 +241,6 @@ class MainWindow(QMainWindow):
         self._gemini_health_signals = _GeminiHealthSignals(self)
         self._gemini_health_signals.checked.connect(self._on_gemini_health_checked)
         self._gemini_health_signals.failed.connect(self._show_gemini_health_error)
-        self._gemini_agent_signals = _GeminiAgentSignals(self)
-        self._gemini_agent_signals.answered.connect(self._on_gemini_agent_answered)
-        self._gemini_agent_signals.failed.connect(self._on_gemini_agent_failed)
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -418,6 +433,7 @@ class MainWindow(QMainWindow):
     def show_fixture(self, code: str) -> None:
         """Render one approved visual state inside the production shell."""
 
+        self._invalidate_agent_context()
         fixture = get_fixture(code)
         self._fixture_code = fixture.code
         self._set_navigation(fixture.nav_item)
@@ -443,6 +459,7 @@ class MainWindow(QMainWindow):
         if self._project_library_service is None:
             self.show_fixture("UI-IMG-001A")
             return
+        self._invalidate_agent_context()
         scan = self._project_library_service.scan_recent()
         workspaces = scan.workspaces
         self._fixture_code = "REAL_PROJECT_HUB"
@@ -510,6 +527,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Local results service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
+        self._invalidate_agent_context()
         results = self._local_results_service.snapshot(self._current_workspace.episode_id)
         self._fixture_code = "REAL_RESULTS"
         self._set_navigation("Hasil")
@@ -539,6 +557,7 @@ class MainWindow(QMainWindow):
         if self._gemini_key_service is None:
             self.show_fixture("UI-IMG-006A")
             return
+        self._invalidate_agent_context()
         profiles = self._gemini_key_service.list_profiles()
         self._fixture_code = "REAL_GEMINI_KEYS"
         self._set_navigation("Gemini Keys")
@@ -613,6 +632,7 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None:
             self.show_fixture("UI-IMG-004A")
             return
+        self._invalidate_agent_context()
         profiles = self._google_session_service.list_profiles()
         self._fixture_code = "REAL_GOOGLE_PROFILES"
         self._active_google_profile_id = None
@@ -634,6 +654,7 @@ class MainWindow(QMainWindow):
     def show_google_login(self, profile: GoogleSessionProfile) -> None:
         """Render real manual-login help for one authorized profile context."""
 
+        self._invalidate_agent_context()
         self._fixture_code = "REAL_GOOGLE_LOGIN"
         self._active_google_profile_id = profile.profile_id
         self._set_navigation("Profil Google")
@@ -764,6 +785,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         """Bound how long Qt waits while Browser Worker cleans up."""
 
+        self._agent_closed = True
+        self._invalidate_agent_context()
         if self._google_session_service is not None:
             self._google_session_service.shutdown(timeout_s=1.5)
         super().closeEvent(event)
@@ -797,6 +820,7 @@ class MainWindow(QMainWindow):
         if self._episode_import_service is None:
             raise InternalInvariantError("Episode import service is not configured")
         workspace = self._episode_import_service.validate(source_path)
+        self._invalidate_agent_context()
         self._pending_workspace = workspace
         self._fixture_code = "REAL_VALIDATION"
         self._set_navigation("Workspace")
@@ -845,6 +869,7 @@ class MainWindow(QMainWindow):
     def show_workspace_state(self, workspace: WorkspaceState) -> None:
         """Render frozen Workspace/Scene Inspector from persisted real state."""
 
+        self._invalidate_agent_context()
         self._fixture_code = "REAL_WORKSPACE"
         self._current_workspace = workspace
         if workspace.scenes and self._selected_scene_id not in {
@@ -865,9 +890,8 @@ class MainWindow(QMainWindow):
     def select_workspace_scene(self, scene_id: str) -> None:
         """Select a real Scene row and refresh only the Scene Inspector."""
 
+        self._invalidate_agent_context()
         self._selected_scene_id = scene_id
-        self._agent_answer = None
-        self._agent_busy = False
         self._render_workspace_right_panel()
 
     def select_scene_duration(self, duration_s: int) -> WorkspaceState:
@@ -900,6 +924,25 @@ class MainWindow(QMainWindow):
         self.show_workspace_state(workspace)
         return workspace
 
+    def _invalidate_agent_context(self) -> None:
+        """Retire all previous completions when visible context changes."""
+
+        self._agent_context_generation += 1
+        self._active_agent_request = None
+        self._agent_busy = False
+        self._agent_answer = None
+
+    def _is_current_agent_request(self, request: _GeminiAgentRequest) -> bool:
+        return (
+            not self._agent_closed
+            and self._fixture_code == "REAL_WORKSPACE"
+            and self._active_agent_request == request
+            and self._agent_context_generation == request.context_generation
+            and self._current_workspace is not None
+            and self._current_workspace.episode_id == request.episode_id
+            and self._selected_scene_id == request.scene_id
+        )
+
     def _ask_gemini_agent(self, question: str) -> None:
         if self._gemini_agent_service is None:
             self._agent_answer = (
@@ -910,26 +953,50 @@ class MainWindow(QMainWindow):
             return
         if self._current_workspace is None or self._selected_scene_id is None:
             return
-        if self._agent_busy:
+        if self._agent_busy or self._agent_closed:
             return
+
+        self._agent_request_id += 1
+        request = _GeminiAgentRequest(
+            request_id=self._agent_request_id,
+            episode_id=self._current_workspace.episode_id,
+            scene_id=self._selected_scene_id,
+            context_generation=self._agent_context_generation,
+        )
+        self._active_agent_request = request
         self._agent_busy = True
         self._agent_answer = None
         self._render_workspace_right_panel()
+
+        # Keep the bridge alive with its QRunnable rather than parent it to the window:
+        # a closing window must never destroy a signal emitter used by a worker.
+        signals = _GeminiAgentSignals()
+        signals.answered.connect(self._on_gemini_agent_answered)
+        signals.failed.connect(self._on_gemini_agent_failed)
         task = _GeminiAgentTask(
             self._gemini_agent_service,
             self._current_workspace,
             self._selected_scene_id,
             question,
-            self._gemini_agent_signals,
+            request,
+            signals,
         )
         QThreadPool.globalInstance().start(task)
 
-    def _on_gemini_agent_answered(self, reply: GeminiAgentReply) -> None:
+    def _on_gemini_agent_answered(
+        self, request: _GeminiAgentRequest, reply: GeminiAgentReply
+    ) -> None:
+        if not self._is_current_agent_request(request):
+            return
+        self._active_agent_request = None
         self._agent_busy = False
         self._agent_answer = reply.text
         self._render_workspace_right_panel()
 
-    def _on_gemini_agent_failed(self, message: str) -> None:
+    def _on_gemini_agent_failed(self, request: _GeminiAgentRequest, message: str) -> None:
+        if not self._is_current_agent_request(request):
+            return
+        self._active_agent_request = None
         self._agent_busy = False
         self._agent_answer = f"AI Agent belum bisa menjawab: {message}"
         self._render_workspace_right_panel()
