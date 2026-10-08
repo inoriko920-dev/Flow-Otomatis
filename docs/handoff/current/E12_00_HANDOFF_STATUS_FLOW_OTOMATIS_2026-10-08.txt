@@ -1,0 +1,20 @@
+FLOW-OTOMATIS — SOL HANDOFF V1.1 (PLANNING, BELUM BERIZIN CODING)
+Tanggal: 8 Oktober 2026 WIB
+Repo: https://github.com/inoriko920-dev/Flow-Otomatis
+Baseline audit SHA: e560684e04ed3a5fad40bb00a91823de68ca5431
+
+TUGAS PERTAMA:
+1. Baca MASTER_PLAN_FLOW_OTOMATIS_V1_1_IMPLEMENTATION_READY_2026-10-08.docx SELURUHNYA beserta dokumen MASTER PLAN V1.0.
+2. Baca AGENTS.md, PROJECT_STATE.md, TASKS.md, docs/software_factory, planning STEP 00–07, final UI, UI overrides, ADR, handoff terakhir.
+3. Jangan mengulang STEP 00–11; STEP 12 masih IN PROGRESS. Generate/Download live belum terbukti.
+4. Jangan coding atau mengubah GitHub sampai pemilik menyetujui V1.1 dan memberi izin eksplisit. E12-00 dan E12-01 planning/ADR dahulu; E12-02 prompt UI lalu WAJIB STOP menunggu seluruh gambar UI final + DOCX UI addendum disetujui.
+5. Setelah gate lengkap, kerjakan TEPAT SATU wave E12-00 s.d. E12-16 per giliran sesuai TASK CARDS di V1.1; laporan PASS/FAIL+evidence+next wave.
+6. Tujuan produk: 1 proyek → scan scene → hitung biaya → check akun → Smart Planner → approved Generate → Download → hasil terurut. Multi-account parallel hanya jika diperbolehkan Google dan disetujui pemilik.
+7. Prioritas ADR: global account credit reservation sebagai satu otoritas lintas proyek; two-DB projection harus idempotent via transactional outbox, cegah kredit sama dialokasikan dua proyek.
+8. Live Google Flow harus POLICY PASS, READY after restart PASS, observed credit/price/model verified, user explicit spend approval. Jangan login otomatis, bypass CAPTCHA/MFA/rate-limits, memakai endpoint tak terdokumentasi, atau retry mutasi ambiguous.
+9. Ikuti 30 UI lama. UI extension harus PROMPT → STOP → APPROVED PNG → 1 DOCX UI FINAL → docs in repo BEFORE UI coding.
+10. Jaga source/DB legacy, anti-duplicate, no-clobber downloads, audit trail dan Windows portable.
+11. Prioritaskan fake provider tests, CI official Windows and exact source SHA; jangan klaim LIVE PASS dari fake tests.
+12. Di akhir setiap wave lapor: BASE/HEAD, BRANCH, CHANGED FILES, TEST COMMANDS/COUNT, POLICY/ UI GATES, PASS/FAIL, WHAT NOT TESTED, RISK, NEXT EXACT WAVE.
+
+CATATAN: Prompt ini tidak dengan sendirinya memberikan persetujuan untuk mengubah repository, login, atau memakai kredit.
