@@ -377,3 +377,12 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] **G4 archive PENDING:** authenticated binary upload of all 22 PNG+final DOCX, verify exact SHA-256.
 - [ ] G1/G5/G6/ADR-T06 still PENDING; **NO CODE / LIVE ACTIONS / MERGE**.
 - Full details `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`.
+
+
+## 2026-10-08 — Binary PR25 upload kit staged, remote push pending
+- [x] Build one **100,450,016-byte** local upload ZIP, SHA-256 `df0593d23792af1f17ddfa420032e469be0ad1775585c78311ddaf4bb0ea5860`. It contains **22 approved UI PNG + FINAL DOCX + 30-UI original G0 DOCX**, plus immutable hash manifest and checksum-first Git for Windows helpers. Archive CRC and 24/24 binary SHA **PASS**.
+- [x] Local Git archival simulation: 25 permitted docs-only paths staged and committed, **PASS**; no application code or `main` changes.
+- [ ] **Execute authenticated GitHub binary upload to PR #25 branch** (not done); verify actual GitHub commit/tree/blob contents against all 24 SHA-256 plus DOCX media. Do not mark G4 full PASS until independently verified.
+- [ ] Strict G0 additionally requires other original DOCX authority evidence; archiving 30-UI uncompressed original alone does not automatically finish G0.
+- [ ] No coding/merge, provider action, or credit use before ALL gates PASS.
+- Handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`.
