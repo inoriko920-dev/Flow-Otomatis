@@ -393,3 +393,10 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Verify 24/24 binary exact hashes unchanged, ZIP CRC, expected branch/destinations; local isolated Git commit rehearsal 25/25 docs-only paths, 24/24 blob comparisons PASS.
 - [ ] **Push V2 from a genuinely authenticated Windows/Git session**, verify GitHub remote head and exact 24 uploaded binaries; local PowerShell Windows run and real GitHub push NOT YET TESTED.
 - [ ] Gate G4 binary archive not PASS until actual uploaded commit+SHA evidence. G0 strict and other implementation gates remain blocked. No merge or coding.
+
+
+## 2026-10-08 — T06 cross-ADR preflight audit (NOT owner approval)
+- [x] Independently review ADR-020..023 from `main`: global coordinator, profile eligibility, durable SUBMIT_STARTED, isolated account actors; note two P1 contract clarifications: `SAFE_FAILURE` vs `FAILED_SAFE` inconsistent naming and READY-after-restart requiring fresh verification.
+- [x] Produce 4-page DOCX review (conversation artifact) and GitHub Markdown audit `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
+- [ ] **T06 is PENDING owner ASTRA decisions D01–D06; ADRs remain PROPOSED.** This does not authorize coding.
+- [ ] PR25 GitHub approved binary archive still 0/24, G4 pending. G0 strict BLOCKED; G1/G3/G5/G6 continue pending. No merge/live work.
