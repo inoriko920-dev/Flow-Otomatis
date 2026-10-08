@@ -359,3 +359,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] Consolidate approved 22 PNG into one **FINAL** UI reference DOCX and obtain reference-DOCX signoff; current V2 DOCX is REVIEW ONLY and NOT in GitHub.
 - [ ] Original PNG binaries and final DOCX must be put in repo and verified before any UI G4 PASS claim; PR #25 must stay draft/unmerged pending UI approval.
 - [ ] **BLOCKED**: UI G4, strict G0, E12-01 ADR T06, provider G1/G5/G6. No code, E12-03, real Generate/Download or credits.
+
+
+## E12-02 — explicit 22-image approval received, 2026-10-08
+- [x] **Owner APPROVED** all 22 exact V2 images including illustration/sample-data differences; check approved hashes in `docs/ui/final/E12_02_APPROVED_22_UI_MANIFEST_AND_HANDOFF_2026-10-08.md`.
+- [x] **One FINAL reference DOCX CREATED & locally verified**: 27 pages, 22/22 original V2 PNG embedded byte-for-byte, SHA-256 `9a84372cbb10ad5e2db2d070c1d20319759aabee11ff85324a1193544ec6f1dd`.
+- [x] Downloadable ZIP created locally with DOCX+22 PNG+checksums; CRC/SHA pass; ZIP SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da`.
+- [ ] **BLOCKED: upload exact 22 PNG and DOCX binary files into GitHub**. GitHub branch currently contains only the approved text manifest. Do not claim full artifact archive or G4 overall PASS until uploaded SHA-256 values verified in repo.
+- [ ] G0 strict, G1 provider, G5 tariff, G6 restart READY, E12-01 ADR T06 remain independently pending. **NO CODING, NO MERGE, NO LIVE CREDIT USE**.
