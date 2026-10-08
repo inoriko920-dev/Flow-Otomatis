@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QTableWidget
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QTableWidget
 
 from flow_otomatis.application.services import LocalResultsService
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
@@ -30,7 +33,8 @@ def _visible_text(window: MainWindow) -> str:
     return "\n".join(values)
 
 
-def test_real_hasil_view_exports_handoff_manifest(tmp_path: Path, qtbot) -> None:
+@pytest.fixture
+def ready_results(tmp_path: Path, qtbot):
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)
     job_repo = SqliteGenerationJobRepository(projects_root)
@@ -97,6 +101,11 @@ def test_real_hasil_view_exports_handoff_manifest(tmp_path: Path, qtbot) -> None
     window = MainWindow(local_results_service=service)
     qtbot.addWidget(window)
     window.show_workspace_state(workspace)
+    return window, service, projects_root / workspace.episode_id / "project.sqlite3"
+
+
+def test_real_hasil_view_exports_handoff_manifest(ready_results, qtbot) -> None:
+    window, _service, _database = ready_results
     window.show_results_state()
 
     text = _visible_text(window)
@@ -193,3 +202,66 @@ def test_t17_missing_video_displays_unavailable_and_blocks_export(tmp_path: Path
     for button in matching:
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert window.last_result_manifest_path is None
+
+
+@pytest.mark.parametrize("damage", ["database", "timestamp", "take"])
+def test_hasil_navigation_reports_unreadable_history_and_keeps_workspace(
+    ready_results,
+    qtbot,
+    monkeypatch,
+    damage: str,
+) -> None:
+    window, _service, database = ready_results
+    if damage == "database":
+        database.write_bytes(b"invalid sqlite")
+    else:
+        with sqlite3.connect(database) as connection:
+            if damage == "timestamp":
+                connection.execute("UPDATE download_results SET updated_at = 'invalid'")
+            else:
+                connection.execute("UPDATE download_results SET take = 'invalid'")
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[1:]))
+    button = next(b for b in window.findChildren(QPushButton) if b.text().strip().endswith("Hasil"))
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert warnings and warnings[0][0] == "Hasil Tidak Dapat Dibuka"
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert not button.isChecked()
+    assert window.current_workspace is not None
+    assert window.last_result_manifest_path is None
+
+
+def test_hasil_export_reports_write_failure_preserves_manifest_and_can_retry(
+    ready_results,
+    qtbot,
+    monkeypatch,
+) -> None:
+    from flow_otomatis.infrastructure.filesystem import result_manifest_writer
+
+    window, _service, _database = ready_results
+    window.show_results_state()
+    previous = window.export_current_result_manifest()
+    before = hashlib.sha256(previous.read_bytes()).hexdigest()
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[1:]))
+    button = next(
+        b for b in window.findChildren(QPushButton) if b.text() == "Tandai Siap untuk Editing"
+    )
+    original_replace = result_manifest_writer.os.replace
+
+    def deny_replace(*args):
+        raise PermissionError("private-path-must-not-appear-in-dialog")
+
+    monkeypatch.setattr(result_manifest_writer.os, "replace", deny_replace)
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert warnings and warnings[0][0] == "Ekspor Hasil Gagal"
+    assert "private-path" not in str(warnings)
+    assert window.last_result_manifest_path is None
+    assert hashlib.sha256(previous.read_bytes()).hexdigest() == before
+    assert not list(previous.parent.glob("*.tmp"))
+    assert window.fixture_code == "REAL_RESULTS"
+
+    monkeypatch.setattr(result_manifest_writer.os, "replace", original_replace)
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert window.last_result_manifest_path == previous
+    assert len(warnings) == 1

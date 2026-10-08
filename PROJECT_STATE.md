@@ -644,3 +644,11 @@ Gemini does not depend on the Google Flow login gate:
 - GitHub Windows artifact `11530112083` (outer sha256 `789bb3c1afd5106580180f9b288e4067665b203e5477519ff291f6a8c02e9056`), inner ZIP sha256 `480ef6a8c08036990cf458b8f0c0ec2971aa47a031b29ea12112a461c3f357b6`, expires 22 Oct 2026 UTC.
 - Evidence `docs/planning/audits/STEP12_DOWNLOAD_HISTORY_READONLY_EVIDENCE_2026-10-08.md`; handoff `docs/handoff/current/HANDOFF_STEP12_DOWNLOAD_READONLY_2026-10-08.md`.
 - User's Google login works per report; READY after full app restart unverified. No Google Flow live test authorized/performed.
+
+
+## 8 October 2026 — Hasil error recovery audit
+- Fixed Hasil navigation and export callbacks leaking expected errors into Qt, plus untyped Download timestamp/take decode failures.
+- Local regression: baseline 227 tests; patched full suite 233 PASS. Ruff/architecture PASS. Windows CI and build pending.
+- Prior export file preserved on publication failure; UI reports a safe Indonesian message and permits explicit retry. Read-only history semantics retained.
+- Evidence/handoff: `docs/planning/audits/STEP12_RESULTS_ERROR_RECOVERY_2026-10-08.md`.
+- STEP 12 and live Google restart/Generate/Download gates unchanged.
