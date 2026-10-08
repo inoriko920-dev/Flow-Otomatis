@@ -349,3 +349,12 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] Update outdated historical C10/G4 references in the planning docs without rewriting original ASTRA source; 22 UI and 24/24 archive PASS, G0 source-reference owner selection PASS on unmerged PR #27.
 - [ ] **T06 D01–D06 architecture CONTENT owner signoff PENDING**; no implied acceptance from `lanjutkan` or previous `setuju` for source document selection.
 - [ ] G1 provider policy authorization, G5 current per-account credit/tariff, G6 READY after actual app restart, G3/G7/G8/G9 independent gates and G0 effective integration remain NOT PASS. NO app code, merge, migrations, Generate or Download.
+
+
+## 2026-10-09 — T06 six architecture design decisions SIGNED OFF (latest)
+- [x] Owner explicitly approved **D01–D06 architecture design** after direct, scoped request. Documented in `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md` (Draft PR #26). No additional T06 design approval should be requested for the identical package.
+- [x] Record ADR-020–023 **OWNER-APPROVED DESIGN / NOT IMPLEMENTED**, preserve global-ledger/no-double-credit, account consent/fresh provider evidence, unique identity and fencing, `SUBMIT_UNCERTAIN` HELD with no auto retry, canonical `FAILED_SAFE`, per-process READY recheck, and create-only reversible feature-flag/fake-first migration.
+- [x] G0-A/B/C owner source decision and original binary preservation already PASS on review branches; E12-02 approved UI 24/24 archive PASS. Do not re-upload.
+- [ ] **Overall pre-code G0 integration** still NOT PASS while canonical references are on unmerged Draft PR #25/#27.
+- [ ] **G1 provider policy/authorization, G5 actual per-account credit and tariff, G6 READY after full restart, G3/G7/G8/G9 implementation/fake/real acceptance** remain NOT PASS. Fake acceptance matrix X01–X15/F01/F02/M0–M5 not executed as part of T06 docs signoff.
+- [ ] Distinct implementation/start-coding and PR merge authorization NOT GIVEN. **NO CODE, MERGE, REAL PROVIDER ACTIONS, CREDIT USE OR QUOTA EVASION.**
