@@ -91,9 +91,10 @@ class SqliteDownloadResultRepository:
         if not db_path.is_file():
             return None
         try:
-            with sqlite3.connect(db_path) as connection:
+            with self._connect_readonly(db_path) as connection:
                 connection.row_factory = sqlite3.Row
-                self._create_schema(connection)
+                if not self._has_download_results_table(connection):
+                    return None
                 row = connection.execute(
                     """
                     SELECT * FROM download_results
@@ -110,9 +111,10 @@ class SqliteDownloadResultRepository:
         if not db_path.is_file():
             return ()
         try:
-            with sqlite3.connect(db_path) as connection:
+            with self._connect_readonly(db_path) as connection:
                 connection.row_factory = sqlite3.Row
-                self._create_schema(connection)
+                if not self._has_download_results_table(connection):
+                    return ()
                 rows = connection.execute(
                     """
                     SELECT * FROM download_results
@@ -130,6 +132,28 @@ class SqliteDownloadResultRepository:
         if not db_path.is_file():
             raise StorageError(f"Project database not found: {episode_id}")
         return sqlite3.connect(db_path)
+
+    @staticmethod
+    def _connect_readonly(db_path: Path) -> sqlite3.Connection:
+        """Never initialize or change SQLite when a user only views results."""
+
+        uri = f"{db_path.resolve().as_uri()}?mode=ro"
+        return sqlite3.connect(uri, uri=True)
+
+    @staticmethod
+    def _has_download_results_table(connection: sqlite3.Connection) -> bool:
+        """Old projects may not yet have Download history; leave them unchanged."""
+
+        return (
+            connection.execute(
+                """
+                SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'download_results'
+                LIMIT 1
+                """
+            ).fetchone()
+            is not None
+        )
 
     def _db_path(self, episode_id: str) -> Path:
         return self._projects_root / episode_id / "project.sqlite3"
