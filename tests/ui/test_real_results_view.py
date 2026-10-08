@@ -116,6 +116,7 @@ def test_real_hasil_view_exports_handoff_manifest(tmp_path: Path, qtbot) -> None
     assert window.last_result_manifest_path is not None
     assert window.last_result_manifest_path.is_file()
 
+
 def test_t17_missing_video_displays_unavailable_and_blocks_export(tmp_path: Path, qtbot) -> None:
     root = tmp_path / "projects"
     workspaces = SqliteWorkspaceRepository(root)
@@ -184,10 +185,11 @@ def test_t17_missing_video_displays_unavailable_and_blocks_export(tmp_path: Path
     assert window.fixture_code == "REAL_RESULTS"
     assert window.last_result_manifest_path is None
     # The frozen layout keeps its button; R03 must not wire a handoff action.
-    button = next(
-        button for button in window.findChildren(QPushButton)
+    matching = [
+        button
+        for button in window.findChildren(QPushButton)
         if button.text() == "Tandai Siap untuk Editing"
-    )
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    ]
+    for button in matching:
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert window.last_result_manifest_path is None
-

@@ -19,5 +19,5 @@ def is_available_output(output_path: str | None) -> bool:
         with candidate.open("rb") as stream:
             info = os.fstat(stream.fileno())
             return stat.S_ISREG(info.st_mode) and info.st_size > 0 and bool(stream.read(1))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False

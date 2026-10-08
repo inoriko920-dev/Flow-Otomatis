@@ -246,7 +246,11 @@ def test_google_flow_provider_rejects_success_at_wrong_path(tmp_path: Path) -> N
 def test_t18_collision_appearing_during_download_never_overwrites_final(tmp_path: Path) -> None:
     class CollisionDriver(FakeDownloadDriver):
         def download_one(
-            self, profile_id: str, remote_result_id: str, destination_path: str, *,
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
             timeout_ms: int,
         ) -> GoogleFlowDownloadEvidence:
             evidence = super().download_one(
@@ -296,7 +300,11 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
             self.barrier = Barrier(2)
 
         def download_one(
-            self, profile_id: str, remote_result_id: str, destination_path: str, *,
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
             timeout_ms: int,
         ) -> GoogleFlowDownloadEvidence:
             evidence = super().download_one(
