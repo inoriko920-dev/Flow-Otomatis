@@ -60,3 +60,10 @@ All image names correspond one-to-one to the original 22-image ZIP's `E12_02_MAN
 1. Transfer the final ZIP or the 22 PNG + final DOCX **without changing bytes** into the review branch (or a dedicated approved-UI asset branch) through an authenticated binary-capable GitHub upload process.
 2. Confirm the committed 22 PNG SHA-256 and final DOCX SHA-256 match exactly. Verify no code diff and test/document the immutable approved baseline.
 3. Update G4 provenance status based on evidence; retain owner approval. **Do not begin implementation until all other gates PASS and implementation permission is satisfied.**
+
+
+## 2026-10-08 — POST-UPLOAD CORRECTION (supersedes earlier pending statements)
+- **G4 UI binary archival PASS:** 22/22 approved PNG, final 27-page DOCX and original 30-image DOCX **24/24** present in PR #25 GitHub branch, byte-identical to approved local V3 ZIP.
+- Independent Git blob SHA/size comparisons 24/24 MATCH, source SHA-256 manifest 24/24 PASS; CI for upload commit `6fc332e10ee0109e200c152724a4deeb5978aa3c` SUCCESS. Upload commit adds only 25 `docs/ui/` files; original compressed UI reference remains untouched.
+- Canonical attestation: `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`. Earlier “not uploaded” statements on this page were true before Windows push, **not current**.
+- This **does not** complete strict G0 original planning DOCX/visual parity, G1 provider permission, G5 account balance, G6 restart READY or ADR T06. No coding/merge/live.
