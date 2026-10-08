@@ -331,18 +331,15 @@ def test_late_local_download_failure_preserves_confirmed_video_and_handoff(
     assert snapshot.downloaded_count == 1
     assert snapshot.handoff_ready is True
     assert snapshot.scenes[0].download_state == DownloadState.DOWNLOADED
-    assert json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))[
-        "scenes"
-    ][0]["download_status"] == "DOWNLOADED"
+    result = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert result["scenes"][0]["download_status"] == "DOWNLOADED"
 
 
 def test_local_download_failure_without_success_is_persisted(
     tmp_path: Path,
 ) -> None:
     service, _jobs = _service(tmp_path)
-    failed = service.record_download_failed(
-        "EP400_RESULTS", "SCENE_001", "network error"
-    )
+    failed = service.record_download_failed("EP400_RESULTS", "SCENE_001", "network error")
     repository = SqliteDownloadResultRepository(tmp_path / "projects")
     assert failed.state == DownloadState.FAILED
     assert failed.error_message == "network error"
@@ -373,9 +370,7 @@ def test_local_failure_from_second_service_cannot_clobber_success(
     def delayed_failure() -> DownloadRecord:
         started.set()
         assert release.wait(timeout=10)
-        return second.record_download_failed(
-            "EP400_RESULTS", "SCENE_001", "late rival failure"
-        )
+        return second.record_download_failed("EP400_RESULTS", "SCENE_001", "late rival failure")
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(delayed_failure)
@@ -386,8 +381,8 @@ def test_local_failure_from_second_service_cannot_clobber_success(
 
     assert recorded.state == DownloadState.DOWNLOADED
     assert recorded.output_path == str(video.resolve())
-    assert SqliteDownloadResultRepository(projects_root).get(
-        "EP400_RESULTS", "SCENE_001"
-    ) == recorded
+    assert (
+        SqliteDownloadResultRepository(projects_root).get("EP400_RESULTS", "SCENE_001")
+        == recorded
+    )
     assert service.snapshot("EP400_RESULTS").handoff_ready is True
-
