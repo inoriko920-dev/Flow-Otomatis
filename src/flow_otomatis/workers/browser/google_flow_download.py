@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadRequest,
@@ -83,14 +84,16 @@ class GoogleFlowDownloadProvider:
             raise MediaDownloadProviderError("Remote result identifier is empty.")
 
         final_path = Path(request.destination_path).expanduser().resolve()
-        if final_path.exists():
+        if os.path.lexists(final_path):
             raise MediaDownloadProviderError(
                 "Final download path already exists and will not be overwritten."
             )
-        partial_path = final_path.with_name(final_path.name + ".part")
-        if partial_path.exists():
+        # One attempt owns exactly one unpredictable partial path.
+        # The worker may create this absent path but may never share another attempt's file.
+        partial_path = final_path.with_name(f"{final_path.name}.{uuid4().hex}.part")
+        if os.path.lexists(partial_path):
             raise MediaDownloadProviderError(
-                "A partial download already exists; inspect it before retrying."
+                "Unique partial path collision; nothing was overwritten."
             )
 
         evidence = self._driver.download_one(
@@ -112,7 +115,29 @@ class GoogleFlowDownloadProvider:
                     "Flow reported download success without a non-empty file."
                 )
             final_path.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(partial_path, final_path)
+            try:
+                # NTFS CreateHardLinkW / POSIX link: fails atomically if final already exists.
+                # Partial and final share the same parent and therefore filesystem.
+                os.link(partial_path, final_path)
+            except FileExistsError as exc:
+                # Both the other owner's final file and our own partial are preserved.
+                raise MediaDownloadProviderError(
+                    "Final download appeared during this attempt; "
+                    "the existing file is preserved. Inspect the partial before retrying."
+                ) from exc
+            except OSError as exc:
+                # Never fall back to os.replace/copy-and-delete: the filesystem must
+                # support a proven no-clobber primitive, otherwise stop safely.
+                raise MediaDownloadAmbiguousError(
+                    "Atomic no-overwrite publication failed; partial preserved "
+                    "for manual recovery. No automatic retry is allowed."
+                ) from exc
+            try:
+                partial_path.unlink()
+            except OSError:
+                # The final link is already safely published. The own partial may
+                # remain for cleanup, but must not invalidate the confirmed final.
+                pass
             return GeneratedMediaDownloadResult(output_path=str(final_path))
 
         if evidence.state is GoogleFlowDownloadState.AUTH_REQUIRED:

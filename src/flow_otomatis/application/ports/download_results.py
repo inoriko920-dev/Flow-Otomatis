@@ -14,6 +14,10 @@ class DownloadResultRepositoryPort(Protocol):
         """Upsert one local download outcome."""
         ...
 
+    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
+        """Keep any confirmed DOWNLOADED evidence even if a rival attempt fails."""
+        ...
+
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         """Read one download outcome."""
         ...

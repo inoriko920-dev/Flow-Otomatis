@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from flow_otomatis.domain.errors import StorageError
-from flow_otomatis.domain.result import DownloadRecord
+from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
 class SqliteDownloadResultRepository:
@@ -45,6 +45,46 @@ class SqliteDownloadResultRepository:
                 connection.commit()
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download result: {exc}") from exc
+
+    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
+        """Store a failure only when no prior successful history exists.
+
+        The conditional upsert is atomic across competing SQLite connections.
+        """
+
+        if record.state != DownloadState.FAILED:
+            raise ValueError("Only FAILED records may use conditional failure persistence")
+        try:
+            with self._connect(record.episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute(
+                    """
+                    INSERT INTO download_results (
+                        episode_id, scene_id, state, updated_at,
+                        output_path, take, error_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (episode_id, scene_id) DO UPDATE SET
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        output_path = excluded.output_path,
+                        take = excluded.take,
+                        error_message = excluded.error_message
+                    WHERE download_results.state <> ?
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.state,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.error_message,
+                        DownloadState.DOWNLOADED,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"Could not save download failure: {exc}") from exc
 
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         db_path = self._db_path(episode_id)

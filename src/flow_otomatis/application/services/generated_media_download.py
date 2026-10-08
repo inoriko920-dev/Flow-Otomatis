@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
@@ -52,7 +53,7 @@ class GeneratedMediaDownloadService:
             and existing.output_path is not None
         ):
             existing_path = Path(existing.output_path)
-            if existing_path.is_file() and existing_path.stat().st_size > 0:
+            if is_available_output(str(existing_path)):
                 return existing
 
         jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
@@ -72,10 +73,10 @@ class GeneratedMediaDownloadService:
 
         destination = self._destination_path(episode_id, scene_id, normalized_take)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if destination.exists():
+        if destination.is_symlink() or destination.exists():
             raise InternalInvariantError(
-                "Download destination already exists and will not be overwritten: "
-                f"{destination.name}"
+                "Download destination already exists and will not be overwritten; "
+                f"manual reconciliation required: {destination.name}"
             )
 
         request = GeneratedMediaDownloadRequest(
@@ -95,15 +96,16 @@ class GeneratedMediaDownloadService:
                 take=normalized_take,
                 error_message=str(exc)[:500],
             )
-            self._download_repository.save(record)
+            # A losing concurrent attempt must not erase a successful download.
+            self._download_repository.save_failure_if_unconfirmed(record)
             raise
 
         output = Path(result.output_path).expanduser().resolve()
         if output != destination.resolve():
             raise InternalInvariantError("Download provider returned an unexpected output path.")
-        if not output.is_file() or output.stat().st_size <= 0:
+        if not is_available_output(str(output)):
             raise InternalInvariantError(
-                "Download provider did not produce a non-empty local file."
+                "Download provider did not produce a readable nonempty regular file."
             )
 
         record = DownloadRecord(
