@@ -22,3 +22,5 @@
 ADR-006 remains applicable to automated browser-adapter work, but it does not override the later STEP 12 normal-Chrome authentication decision recorded in PROJECT_STATE and the current handoff. Human Google sign-in uses installed normal Chrome with no Playwright/CDP attachment; automation attaches only after authentication.
 
 - ADR-018 ACCEPTED FOR R01–R03 PLANNING (8 Oct 2026): B01–B06 field-limited health, Agent context identity, content-aware ZIP/folder pre-submit validation, effective output availability, Windows atomic no-clobber publication, and timezone-aware project decoding. No code implemented in R00.
+
+- ADR-016 R02 ADDENDUM IMPLEMENTED + VERIFIED (8 Oct 2026): approved-image source SHA-256 folded into existing prepared request fingerprint; old digestless queued revisions fail closed; no schema migration. See R02 evidence.

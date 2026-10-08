@@ -23,3 +23,10 @@ Queued jobs currently preserve parameters from the first enqueue while later dis
 
 ## Compatibility
 Flow durations remain 4/6/8/10, Audio/SRT Target remains authoritative, and live provider wiring stays blocked.
+
+## R02 implementation addendum — 8 October 2026 (B03)
+- The canonical EpisodePackageReader now exposes `image_digest(source_path, scene_id, image_file)` through an application-owned verifier port. It resolves original package ZIP members relative to the manifest or folder references within the package root; never CWD.
+- The SHA-256 of the nonempty approved image bytes is combined with Scene request fields into `generation_jobs.request_fingerprint` at explicit prepare and recomputed at dispatch. Existing DB fields and version-2 job schema remain unchanged; no migration is needed for this request-hash revision.
+- Old queued jobs whose digestless request_fingerprint came from earlier code fail the new match and are parked REQUEST_STALE before mark_submit_started, requiring explicit prepare. They are not silently submitted or rewritten.
+- File absent/changed/unreadable results in a pre-submit attention outcome, never an ambiguous submitted claim. Immutable media snapshot is not implemented in R02; any later provider integration must preserve the immediate pre-submit source validation boundary and not claim post-verification immutability.
+- R02 evidence: `../planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`. CI PASS; no real Google Flow live proof.

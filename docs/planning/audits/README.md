@@ -224,3 +224,10 @@ Separate from the completed F01–F06/A00–A05 work above.
 - T01–T08 satisfied through real SQLite/Qt deterministic tests and CI. 137 tests passed; all required CI quality/UI/portable jobs passed.
 - The new B03/B04/B05/B06 findings are still open; prior historical F01–F06/A00–A05 remain closed.
 - No Flow live auth/Generate/Download tested or authorized by R01.
+
+## SOL R02 PASS — B03/B06, 8 October 2026
+- Evidence: `B03_B06_R02_EVIDENCE_2026-10-08.md`.
+- Handoff to next AI: `../../handoff/current/HANDOFF_STEP_12_BUG_R02_TO_R03_2026-10-08.md`.
+- PR #15 merged at `3a9f445ee9e814a78cd8c7085396f7d4c518259a`; tested SHA `ddf9580bbc3ab2d081c02080892536d416bd2503`, CI `37723155562` SUCCESS, 153 tests, UI 30/30, Windows smoke/build PASS.
+- B03/B06 CLOSED locally. B04/B05 remain OPEN. Historic A00–A05 F01–F06 and R01 B01/B02 closed as before.
+- No Google Flow live generation/download or real-account validation was performed.

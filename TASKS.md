@@ -246,3 +246,12 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - Official PR CI `37721917858`: all jobs SUCCESS; 137 tests PASS, Ruff/mypy/architecture PASS; UI frozen 30/30 PASS; Windows Chromium/portable PASS.
 - Next package ONLY after explicit user permission: R02 (B03 + B06, T09–T13 and T22–T25).
 - B03, B04, B05, B06 remain OPEN; R03/R04 NOT STARTED. Live Google Flow remains BLOCKED.
+
+### STEP 12 follow-up audit R02 — COMPLETE / PASS (8 October 2026)
+- B03 P1 missing/modified/unreadable image after queue preparation: CLOSED locally; image byte digest via canonical folder/ZIP reader is bound to prepared request_fingerprint and freshly rechecked before submit_started_at.
+- B06 P2 naive timestamps crashing project list: CLOSED locally; timezone-aware boundary for created_at/imported_at, corruption isolated and database not repaired during read.
+- Acceptance T09–T13 + T22–T25: PASS with integration SQLite/folder/ZIP and Qt Project Hub coverage; old digestless queued fingerprints are stale until explicit reprepare.
+- Implementation PR #15: https://github.com/inoriko920-dev/Flow-Otomatis/pull/15
+- Code merge SHA `3a9f445ee9e814a78cd8c7085396f7d4c518259a`; CI-tested SHA `ddf9580bbc3ab2d081c02080892536d416bd2503`, official CI `37723155562`: **153 passed**, Ruff/mypy/architecture PASS, frozen UI 30/30 PASS, Chromium and Windows portable PASS.
+- Evidence: `docs/planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`.
+- Next ONLY after explicit user "lanjutkan": **R03 B04+B05** (local result availability and no-clobber downloads). B04 and B05 OPEN. R04 NOT STARTED. Flow live BLOCKED.

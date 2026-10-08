@@ -576,3 +576,13 @@ Gemini does not depend on the Google Flow login gate:
 - Artifacts and T01–T08 evidence: `docs/planning/audits/B01_B02_R01_EVIDENCE_2026-10-08.md`.
 - R02 B03+B06 is next and NOT STARTED; B04/B05 reserved for R03. R04 NOT STARTED.
 - I12-02B2-LIVE and I12-03-LIVE remain BLOCKED until manual Google login READY + verified app restart and later authorized live flow.
+
+## 8 October 2026 — SOL R02 B03+B06 complete
+- R02 code changes merged: `3a9f445ee9e814a78cd8c7085396f7d4c518259a`, from PR #15.
+- Tested code SHA `ddf9580bbc3ab2d081c02080892536d416bd2503` / GitHub Actions `37723155562`: ALL 3 CI jobs SUCCESS (quality 153 tests, frozen UI 30/30, Windows Playwright/portable build/smoke).
+- New image content SHA256 is folded into the EXISTING generation request_fingerprint column; no schema change. Previously queued A03-era fingerprint revisions without a byte digest cannot pass fresh dispatch and require explicit reprepare.
+- ZIP and folder image source verified through canonical EpisodePackageReader; files changed/removed/read errors before submit are REQUEST_STALE and provider calls 0.
+- Timestamp decoder rejects naive/empty/invalid created_at/imported_at as project CORRUPT while healthy projects still list; no database write on read.
+- Audit evidence: `docs/planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`.
+- Next: **R03 B04 and B05**, not started and not authorized until user says "lanjutkan".
+- Live account READY/restart validation and Google Flow live remain BLOCKED; R02 tested no real provider mutation.
