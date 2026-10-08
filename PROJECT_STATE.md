@@ -703,3 +703,9 @@ Gemini does not depend on the Google Flow login gate:
 - **DO NOT USE V1** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_2026-10-08.zip`: PowerShell `RunGit` calls lack explicit array parameter binding. Use **V2** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_V2_DIVERIFIKASI_2026-10-08.zip`, 100,355,921 bytes, SHA-256 `e51789935bc414e62597403e19a0871d21af65612e06f1fecc581216d9a87c09`.
 - V2 exact original binary source unchanged, 24/24 SHA PASS; ZIP CRC PASS; 5 corrected Git invocation sites; strict GitHub path allowlist; 24 original Git blob checks. Local isolated Git rehearsal PASS (25 docs-only staged paths, 24/24 Git blob comparisons). **Windows PowerShell execution and actual remote GitHub push NOT TESTED; all 24 binaries still NOT IN GITHUB.**
 - V2 audit handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V2_CORRECTED_REMOTE_PENDING_2026-10-08.md`. PR #25 remains DRAFT, no merge/code. G4 archival PENDING, G0/G1/G5/G6 and ADR T06 unchanged.
+
+
+## 2026-10-08 — T06 preflight completed but decisions pending
+- Cross-ADR consistency review (ADR-020..023) prepared with 4-page review-only DOCX locally; report published in `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
+- F01 contract status naming `SAFE_FAILURE` vs `FAILED_SAFE` differs within ADR-022; F02 a stored prior READY proof is not a present READY after restart; F03 snapshot TTL/provider evidence unknown. All are recommendations, not decisions.
+- **D01–D06 owner signoff T06 PENDING**, existing ADR statuses PROPOSED. UI 22/22 visually approved; E12-02 GitHub 24 binary files still missing; G4/G0/G1/G3/G5/G6 prevent coding and live use.
