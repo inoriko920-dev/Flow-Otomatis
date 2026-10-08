@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from threading import Event, Lock
 from pathlib import Path
+from threading import Event, Lock
 
 import pytest
 

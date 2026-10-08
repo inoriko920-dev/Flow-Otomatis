@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
+from datetime import UTC, datetime
 from threading import Event, Lock
 
 import pytest
-from datetime import UTC, datetime
-
-from PySide6.QtCore import QThreadPool, QTimer, Qt
+from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton
 
 from flow_otomatis.application.services.gemini_agent import GeminiAgentReply

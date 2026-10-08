@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Event
 
-
 from PySide6.QtWidgets import QTableWidget
 
 from flow_otomatis.application.ports.gemini_keys import GeminiKeyHealthEvidence
