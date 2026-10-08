@@ -47,3 +47,13 @@ Earlier STEP 04 planning versions are retained under `docs/planning/archive/` an
 
 ## Gate
 S08-T01 remains PASS. The STEP 12 audit remediation track has its own A00–A05 gates and does not reopen S08-T01.
+
+## STEP 12 new 8 October audit — SOL R00 (B01–B06)
+- Exact original ASTRA DOCX: `docs/planning/audits/ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`.
+- Original size: 48,799 bytes. SHA-256: `5481a09b85219615169c285d6bfd42bcc7398bcf881a73a604f2e7a351444fda`. Git blob: `0a7bd29f26e2f8b3bd489ba4e5b82cff47362fb4`.
+- This upload is binary-identical to the user attachment; no simplification has been substituted.
+- Source code reinspection: `docs/planning/audits/B01_B06_SOL_R00_CODE_EVIDENCE_2026-10-08.md`.
+- Cross-module contract: `docs/architecture/ADR-018-step12-b01-b06-remediation-contracts.md`.
+- Next AI handoff: `docs/handoff/current/HANDOFF_STEP_12_BUG_R00_TO_R01_2026-10-08.md`.
+- The original, separate ASTRA Python/JSON reproducibility attachments were not provided. Not present.
+- The STEP 00–07 docs, final UI 30-state authority, and 7 October audit A00–A05 remain intact.

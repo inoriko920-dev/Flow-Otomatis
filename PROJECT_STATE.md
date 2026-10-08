@@ -557,3 +557,12 @@ Gemini does not depend on the Google Flow login gate:
 - Cek Health must pass before the active key is used;
 - AI Agent is read-only and cannot perform material application actions.
 
+## 8 October 2026 — New ASTRA B01–B06 R00 documentation update
+- New ASTRA source: `docs/planning/audits/ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx`; byte-identical SHA-256 `5481a09b85219615169c285d6bfd42bcc7398bcf881a73a604f2e7a351444fda`.
+- Baseline unchanged: `main` @ `0b9e2c4f63a9c0fdab0fe255830964a0e2fb6b39`.
+- R00 documentation/source verification: PASS when the R00 branch commit is confirmed. No production code or test code has been modified.
+- New findings B01, B02, B03, B04, B05, B06: **OPEN**; respective R01–R03 code and T01–T25 verification NOT STARTED.
+- New decisions: `docs/architecture/ADR-018-step12-b01-b06-remediation-contracts.md`.
+- Static code evidence: `docs/planning/audits/B01_B06_SOL_R00_CODE_EVIDENCE_2026-10-08.md`.
+- Next authorized package after user instruction: R01 B01+B02 only; no leap to R02.
+- Live Flow session/one-Scene mutation remains BLOCKED behind real login, READY and verified restart.
