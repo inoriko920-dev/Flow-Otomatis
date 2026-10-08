@@ -122,14 +122,18 @@ jobs:
       - name: Smoke staged Chromium
         run: uv run python scripts/smoke_browser_runtime.py .runtime/browsers
 
-      - name: Generate third-party notice inventory
-        run: uv run python scripts/generate_third_party_notices.py dist/THIRD_PARTY_NOTICES.txt
-
       - name: Build portable onedir ZIP
         run: uv run python scripts/build_portable.py --browser-source .runtime/browsers
 
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
+
+      - name: Verify release ZIP source, checksum, CRC and Windows paths
+        run: >
+          uv run python scripts/verify_portable_artifact.py
+          dist/Flow-Otomatis-portable-win-x64.zip
+          --checksum-file dist/SHA256SUMS.txt
+          --expected-git-sha "$env:GITHUB_SHA"
 
       - name: Upload portable STEP 12 I12-01 restart-proof artifact
         uses: actions/upload-artifact@v4
