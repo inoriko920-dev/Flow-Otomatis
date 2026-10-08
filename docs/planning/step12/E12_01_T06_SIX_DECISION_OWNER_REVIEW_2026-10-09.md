@@ -1,3 +1,5 @@
+> **LATEST 2026-10-09 — OWNER-APPROVED ARCHITECTURE DESIGN (D01–D06) / IMPLEMENTATION STILL BLOCKED.** After the original review below was authored, the owner was explicitly asked to approve **D01–D06 as final architecture design only** and replied **`setuju`**. The signed decision record is `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. Read all historical `T06 decision PENDING`, `ADRs PROPOSED`, and `not owner approved` wording below as **superseded for T06 design signoff only**; tests and live gates remain unexecuted/unverified. Architecture D01–D06 **PASS (decision only)**. G0 source-choice PASS but repository-integration precode gate not complete; G1 UNKNOWN/BLOCKED, G5 and G6 UNVERIFIED, G3/G7/G8/G9 not PASS. **NO CODE, MIGRATIONS, MERGE, LIVE GENERATE/DOWNLOAD OR CREDIT USE.**
+
 # Flow-Otomatis — E12-01 T06 six architecture decisions for owner review
 
 **Date:** 2026-10-09 WIB. **State: ASTRA REVIEW READY / OWNER T06 DECISION PENDING.**  
