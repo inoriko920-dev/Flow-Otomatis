@@ -350,3 +350,12 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T04: Create/review/approve each image with user input; not started.
 - [ ] T05: Consolidate all approved UI images into one final reference DOCX; not started.
 - [ ] G4 UI freeze BLOCKED; G0 strict and provider gates remain blocked. No code or E12-03 work.
+
+
+## E12-02 review of all 22 UI mockups — 2026-10-08 (on PR #25 only)
+- [x] UIX-01-A through UIX-09-B: 22 draft mockups created; each V2 PNG 1920×1080; independent ZIP/manifest SHA-256 and review DOCX embedded-image validation **22/22 PASS**.
+- [x] Image hash and 22-ID visual-approval checklist recorded in `docs/ui/review/E12_02_V2_22_IMAGE_MANIFEST_AND_OWNER_SIGNOFF_PENDING_2026-10-08.md` (GitHub text only).
+- [ ] **Owner must explicitly approve all exact 22 V2 images** or request corrections by ID; technical integrity does not mean visual approval.
+- [ ] Consolidate approved 22 PNG into one **FINAL** UI reference DOCX and obtain reference-DOCX signoff; current V2 DOCX is REVIEW ONLY and NOT in GitHub.
+- [ ] Original PNG binaries and final DOCX must be put in repo and verified before any UI G4 PASS claim; PR #25 must stay draft/unmerged pending UI approval.
+- [ ] **BLOCKED**: UI G4, strict G0, E12-01 ADR T06, provider G1/G5/G6. No code, E12-03, real Generate/Download or credits.
