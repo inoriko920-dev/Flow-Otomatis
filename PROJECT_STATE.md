@@ -690,3 +690,10 @@ Gemini does not depend on the Google Flow login gate:
 - Original 30-UI DOCX locally: **41,006,814 bytes**, SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`, Git blob SHA-1 `88b08c8c2ef001fc7d22aecd04625a75c206064d`, **30 embedded media**.
 - GitHub main reference path has **329,255-byte** intentionally compressed DOCX, Git blob `6e93a7e654e84ba2dd37af1fbc31c68ce3107f26` according to recursive Git tree. Byte parity **FAIL**, visual parity **NOT TESTED**, so strict G0 remains **BLOCKED**. This size difference is not by itself evidence of file corruption.
 - Additional read-only audit committed at `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`. No overwrite and no code change. Other gates G1/G5/G6/ADR-T06 still pending.
+
+
+## 2026-10-08 — PR25 binary upload kit assembled, not yet pushed
+- Owner-approved UI pack remains **22/22 visual signoff PASS**, final Word document **27-page/local PASS**.
+- Built self-contained Git-for-Windows archival kit with 24 exact-source binaries and a manifest: ZIP **100,450,016 bytes**, SHA256 `df0593d23792af1f17ddfa420032e469be0ad1775585c78311ddaf4bb0ea5860`; ZIP CRC and SHA 24/24 PASS. Offline Git simulation staged 25 paths exclusively under `docs/ui/`, PASS.
+- Includes exact original 30-image G0 authority DOCX 41,006,814 bytes, explicitly at a new provenance path rather than replacing repo's 329,255-byte compressed version. Upload kit binaries still **LOCAL ONLY**, not GitHub; Windows auth/push not exercised here. **G4 binary archival PENDING; G0 strict still BLOCKED; G1/G5/G6, ADR T06 unchanged.**
+- GitHub review-branch textual handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`. No code, merge, or remote Generate.
