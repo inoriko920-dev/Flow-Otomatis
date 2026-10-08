@@ -28,3 +28,11 @@ ADR-006 remains applicable to automated browser-adapter work, but it does not ov
 - ADR-019 ACCEPTED + IMPLEMENTED R03 (8 Oct 2026): effective download availability and export recheck, v1 UNAVAILABLE status semantics, atomic NTFS hardlink no-clobber with unique partial and conditional SQLite failure updates; manual recovery on publish-success/DB-failure. See R03 evidence, no live Flow acceptance.
 
 - ADR-018 final R04 closeout (8 Oct 2026): contracts B01–B06 implemented and OFFLINE CI VERIFIED on main `baf3257b293f6b05b4cdbca7e9f3d4aa1272d218`, run `37725495137`; real-account/Flow live separate BLOCKED. See final R04 evidence.
+
+
+## STEP 12 E12-01 — proposals only (8 Oct 2026 WIB)
+- **ADR-020 PROPOSED / ASTRA REVIEW:** one global coordinator SQLite for per-account credit reservations, attempts, fences, global outbox; per-project state remains authoritative for scene/historical results. Cross-project data projections idempotent, not assumed multi-DB atomic. `ADR-020-global-credit-and-attempt-authority.md`.
+- **ADR-021 PROPOSED / POLICY G1 UNKNOWN:** explicit profile authorization, provider-observed credit evidence, protected budget, zero live dispatch with unknown eligibility; account concurrency only if provider permits. `ADR-021-profile-consent-and-credit-evidence.md`.
+- **ADR-022 PROPOSED / ASTRA REVIEW:** durable pre-submit/submit-start boundary, ambiguous hold/reconcile, no auto resubmit, preserve existing v2 job model and result no-clobber. `ADR-022-ambiguous-submit-state-and-recovery.md`.
+- **ADR-023 PROPOSED / LIVE PARALLEL BLOCKED:** separate per-profile actor/scheduler behind feature flag, deterministic fake-first tests before any authorized concurrent live behavior. `ADR-023-per-profile-scheduler-and-actor-isolation.md`.
+- These **do not supersede ADR-005 serial R1 or any implemented ADR**. No ASTRA/owner signoff, migration or production implementation claimed. Strict G0 and policy/live gates remain BLOCKED.
