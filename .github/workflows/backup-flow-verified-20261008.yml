@@ -1,0 +1,274 @@
+name: Flow-Otomatis verified one-repo backup October 2026
+on:
+  push:
+    branches:
+      - 'backup/flow-otomatis-20261008-1435-wib-verified'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download tested Windows portable build
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Flow-Otomatis-step12-i12-01-restart-proof-win-x64
+          run-id: 37734144006
+          repository: inoriko920-dev/Flow-Otomatis
+          github-token: ${{ github.token }}
+          path: trusted_build
+      - name: Create, restore-test and verify sole-repository backup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          STAMP="$(TZ=Asia/Jakarta date +%Y-%m-%d_%H-%M-%S_WIB)"
+          START_TIME="$(TZ=Asia/Jakarta date +%Y-%m-%dT%H:%M:%S%:z)"
+          NAME="BACKUP-FLOW-OTOMATIS-$STAMP"
+          BASE="$GITHUB_WORKSPACE/backup_stage"
+          ROOT="$BASE/$NAME"
+          APP="$ROOT/APP_001_FLOW_OTOMATIS"
+          MIRROR="$RUNNER_TEMP/Flow-Otomatis-mirror.git"
+          TEST_MIRROR="$RUNNER_TEMP/Flow-Otomatis-test.git"
+          mkdir -p "$APP"/{GIT,SOURCE,BUILD,DOCS,RECOVERY}
+          git clone --mirror "https://github.com/$GITHUB_REPOSITORY.git" "$MIRROR"
+          git -C "$MIRROR" symbolic-ref HEAD refs/heads/main
+          MAIN_SHA="$(git -C "$MIRROR" rev-parse refs/heads/main)"
+          BRANCH_COUNT="$(git -C "$MIRROR" for-each-ref --format='%(refname)' refs/heads | wc -l)"
+          TAG_COUNT="$(git -C "$MIRROR" for-each-ref --format='%(refname)' refs/tags | wc -l)"
+          ALL_REFS_COUNT="$(git -C "$MIRROR" for-each-ref --format='%(refname)' | wc -l)"
+          BUNDLE="$APP/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          SOURCE="$APP/SOURCE/Flow-Otomatis-SOURCE-MAIN.zip"
+          git -C "$MIRROR" bundle create "$BUNDLE" --all
+          test -s "$BUNDLE"
+          git -C "$MIRROR" bundle verify "$BUNDLE" > "$APP/GIT/BUNDLE_VERIFY.txt" 2>&1
+          git bundle list-heads "$BUNDLE" > "$APP/GIT/BUNDLE_REFS.txt"
+          git clone --mirror "$BUNDLE" "$TEST_MIRROR" > "$APP/GIT/RESTORE_TEST.txt" 2>&1
+          test "$(git -C "$TEST_MIRROR" rev-parse refs/heads/main)" = "$MAIN_SHA"
+          git -C "$MIRROR" for-each-ref --format='%(refname)|%(objectname)' | sort > "$APP/GIT/EXPECTED_REFS.txt"
+          git -C "$TEST_MIRROR" for-each-ref --format='%(refname)|%(objectname)' | sort > "$APP/GIT/RESTORED_REFS.txt"
+          diff -u "$APP/GIT/EXPECTED_REFS.txt" "$APP/GIT/RESTORED_REFS.txt" >> "$APP/GIT/RESTORE_TEST.txt"
+          git -C "$MIRROR" archive --format=zip --output="$SOURCE" refs/heads/main
+          test -s "$SOURCE"
+          unzip -t "$SOURCE" > "$APP/SOURCE/SOURCE_ZIP_VERIFY.txt"
+          test "$(unzip -Z1 "$SOURCE" | wc -l)" -gt 50
+          git -C "$MIRROR" for-each-ref --format='%(refname:short)|%(objectname)' refs/heads > "$APP/BRANCHES.txt"
+          git -C "$MIRROR" for-each-ref --format='%(refname:short)|%(objectname)' refs/tags > "$APP/TAGS.txt"
+          git -C "$MIRROR" for-each-ref --format='%(refname)|%(objectname)' > "$APP/ALL_REFS.txt"
+          git -C "$MIRROR" log --all --date=iso-strict --pretty=format:'%H|%ad|%an|%s' > "$APP/COMMIT_HISTORY.txt"
+          printf '%s\n' "$MAIN_SHA" > "$APP/MAIN_COMMIT.txt"
+          EXTRACT="$RUNNER_TEMP/flow-source-extract"
+          mkdir -p "$EXTRACT"
+          unzip -q "$SOURCE" -d "$EXTRACT"
+          for ITEM in docs .github README.md PROJECT_STATE.md TASKS.md AGENTS.md PLAN.md pyproject.toml uv.lock requirements.txt; do
+            if test -e "$EXTRACT/$ITEM"; then cp -a "$EXTRACT/$ITEM" "$APP/DOCS/"; fi
+          done
+          if test -d "$GITHUB_WORKSPACE/trusted_build"; then
+            WINZIP="$(find "$GITHUB_WORKSPACE/trusted_build" -type f -name '*.zip' -print -quit)"
+            if test -n "$WINZIP"; then
+              cp "$WINZIP" "$APP/BUILD/Flow-Otomatis-Windows-Portable.zip"
+              unzip -t "$APP/BUILD/Flow-Otomatis-Windows-Portable.zip" > "$APP/BUILD/BUILD_ZIP_VERIFY.txt"
+              printf '%s\n' 'BUILD_STATUS=TESTED_CI_ARTIFACT' 'BUILD_CI_RUN_ID=37734144006' 'BUILD_COMMIT=1c7ade1922e45b987a45f495fb0784588a3c1291' 'BUILD_ARTIFACT_ID=11531465750' > "$APP/BUILD/BUILD_INFO.txt"
+            fi
+          fi
+          if ! test -f "$APP/BUILD/BUILD_INFO.txt"; then printf 'BUILD_STATUS=BUILD_NOT_AVAILABLE\n' > "$APP/BUILD/BUILD_INFO.txt"; fi
+          # Scan high-confidence private key and provider token patterns in reachable historical blobs.
+          SECRET_FOUND=0
+          while IFS= read -r OBJ; do
+            test "$(git -C "$MIRROR" cat-file -t "$OBJ")" = blob || continue
+            SIZE="$(git -C "$MIRROR" cat-file -s "$OBJ")"
+            test "$SIZE" -le 3000000 || continue
+            if git -C "$MIRROR" cat-file blob "$OBJ" | LC_ALL=C grep -aqE 'github_pat_[A-Za-z0-9_]{50,}|gh[pousr]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'; then
+              SECRET_FOUND=1
+              break
+            fi
+          done < <(git -C "$MIRROR" rev-list --objects --all | awk '{print $1}' | sort -u)
+          if test "$SECRET_FOUND" -ne 0; then
+            echo 'POTENTIAL_SECRET_IN_GIT_HISTORY: backup not published' >&2
+            exit 9
+          fi
+          printf '%s\n' 'HIGH_CONFIDENCE_SECRET_PATTERN_SCAN=PASS' 'SCOPE=ALL_REACHABLE_GIT_BLOBS_UP_TO_3MB' 'LIMITATION=Not a comprehensive secret audit; no GitHub secret values or browser profiles intentionally backed up' > "$APP/SECRET_SCAN.txt"
+          printf '%s\n' 'SECRET_VALUES_ARE_NOT_BACKED_UP' 'SECRET_REQUIRED_BUT_NOT_BACKED_UP=Reconfigure Actions secrets and local credentials manually if used' > "$APP/REQUIRED_SECRETS.txt"
+          cat > "$APP/REPOSITORY_INFO.txt" <<EOF
+          APP_NAME=Flow-Otomatis
+          ORIGINAL_REPO=https://github.com/inoriko920-dev/Flow-Otomatis
+          DEFAULT_BRANCH=main
+          MAIN_COMMIT=$MAIN_SHA
+          BRANCH_COUNT=$BRANCH_COUNT
+          TAG_COUNT=$TAG_COUNT
+          ALL_REFS_COUNT=$ALL_REFS_COUNT
+          BACKUP_STARTED_WIB=$START_TIME
+          EOF
+          cat > "$APP/RECOVERY/PETUNJUK_PEMULIHAN.txt" <<'EOF'
+          PEMULIHAN FLOW-OTOMATIS SAAT AKUN GITHUB LAMA HILANG
+          1. Ekstrak ZIP backup ke folder lokal pada Windows 11.
+          2. Pasang Git for Windows apabila belum ada.
+          3. Jalankan VERIFY_ALL_BACKUP.ps1 melalui PowerShell dari direktori utama hasil ekstrak.
+          4. Buat repository GitHub BARU yang masih kosong (jangan buat README otomatis).
+          5. Jalankan RESTORE_ALL.ps1, pilih 1, lalu masukkan URL repo baru.
+          6. Script membuat clone mirror dari Git Bundle dan menampilkan daftar branch dan tag.
+          7. Ketik SETUJU hanya jika URL tujuan sudah benar; tanpa persetujuan tidak ada push.
+          8. Seluruh branch dan tag akan dikirim ke repo baru.
+          9. Atur ulang default branch main serta settings Actions, izin, dan secret yang diperlukan.
+          10. Cocokkan HEAD main dengan MAIN_COMMIT.txt. Jalankan CI/build dan cek file terkait.
+          Git Bundle berisi riwayat + refs; SOURCE ZIP adalah snapshot source main untuk akses mudah.
+          Data GitHub di luar Git (misalnya issues, PR comments, GitHub Actions runs dan secrets)
+          tidak dapat dipulihkan 100% hanya dari Git Bundle ini.
+          EOF
+          cat > "$APP/RECOVERY/VERIFY_BACKUP.ps1" <<'PS1'
+          $ErrorActionPreference="Stop"
+          $App=Split-Path $PSScriptRoot -Parent
+          $List=Join-Path $App "SHA256SUMS.txt"
+          if (!(Test-Path $List)) {throw "Checksum aplikasi tidak ditemukan"}
+          $Count=0
+          foreach($Line in (Get-Content $List)){
+            if (!$Line.Trim()){continue}
+            $Parts=$Line.Split('|',2)
+            if($Parts.Count -ne 2){throw "Format checksum salah"}
+            $Rel=$Parts[1]
+            $File=Join-Path $App $Rel
+            if(!(Test-Path $File)){throw "File hilang: $Rel"}
+            if((Get-FileHash -Algorithm SHA256 $File).Hash.ToLowerInvariant() -ne $Parts[0].ToLowerInvariant()){throw "Checksum beda: $Rel"}
+            $Count++
+          }
+          $Bundle=Join-Path $App "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          $Check=Join-Path $env:TEMP ("flow-verify-"+[guid]::NewGuid().ToString()+".git")
+          try{
+            git init --bare $Check | Out-Null
+            git -C $Check bundle verify $Bundle
+            if($LASTEXITCODE -ne 0){throw "Bundle tidak valid"}
+          }finally{if(Test-Path $Check){Remove-Item $Check -Recurse -Force}}
+          Write-Host "PASS: $Count checksums dan Git Bundle."
+          PS1
+          cat > "$APP/RECOVERY/RESTORE_TO_NEW_GITHUB.ps1" <<'PS1'
+          $ErrorActionPreference="Stop"
+          $App=Split-Path $PSScriptRoot -Parent
+          & (Join-Path $PSScriptRoot "VERIFY_BACKUP.ps1")
+          $Bundle=Join-Path $App "GIT\Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
+          $Target=Read-Host "Folder kosong untuk clone mirror (contoh C:\Restore\Flow-Otomatis.git)"
+          if([string]::IsNullOrWhiteSpace($Target) -or (Test-Path $Target)){throw "Tujuan harus folder baru"}
+          git clone --mirror $Bundle $Target
+          if($LASTEXITCODE -ne 0){throw "Clone mirror gagal"}
+          $Expected=(Get-Content (Join-Path $App "MAIN_COMMIT.txt") -Raw).Trim()
+          $Actual=(git -C $Target rev-parse refs/heads/main).Trim()
+          if($Actual -ne $Expected){throw "Commit main tidak sama"}
+          $Url=Read-Host "URL repository GitHub BARU yang masih kosong"
+          if($Url -notmatch '^https://github\.com/[^/]+/[^/]+\.git$'){throw "Gunakan URL HTTPS GitHub berakhiran .git"}
+          git -C $Target remote remove origin
+          git -C $Target remote add origin $Url
+          Write-Host "TARGET:" $Url
+          Write-Host "BRANCHES:"
+          git -C $Target for-each-ref --format='%(refname:short)' refs/heads
+          Write-Host "TAGS:"
+          git -C $Target tag -l
+          $Confirm=Read-Host "Ketik SETUJU untuk mengirim SEMUA BRANCH + TAG ke repo baru"
+          if($Confirm -cne "SETUJU"){Write-Host "Dibatalkan: tidak ada push";exit 0}
+          git -C $Target push origin --all
+          if($LASTEXITCODE -ne 0){throw "Gagal push branches"}
+          git -C $Target push origin --tags
+          if($LASTEXITCODE -ne 0){throw "Gagal push tags"}
+          Write-Host "Branch dan tag berhasil dikirim. Atur main sebagai default di GitHub."
+          PS1
+          cat > "$ROOT/RESTORE_ALL.ps1" <<'PS1'
+          $ErrorActionPreference="Stop"
+          Write-Host "[1] Flow-Otomatis"
+          $Selection=Read-Host "Pilih aplikasi"
+          if($Selection -ne "1"){Write-Host "Tidak ada restore";exit 0}
+          & (Join-Path $PSScriptRoot "APP_001_FLOW_OTOMATIS\RECOVERY\RESTORE_TO_NEW_GITHUB.ps1")
+          PS1
+          cat > "$ROOT/VERIFY_ALL_BACKUP.ps1" <<'PS1'
+          $ErrorActionPreference="Stop"
+          $Count=0
+          foreach($Line in (Get-Content (Join-Path $PSScriptRoot "00_SHA256SUMS.txt"))){
+            if(!$Line.Trim()){continue}
+            $Parts=$Line.Split('|',2)
+            if($Parts.Count -ne 2){throw "Format checksum master salah"}
+            $Path=Join-Path $PSScriptRoot $Parts[1]
+            if(!(Test-Path $Path)){throw "MISSING: "+$Parts[1]}
+            if((Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant() -ne $Parts[0].ToLowerInvariant()){throw "CHECKSUM FAILED: "+$Parts[1]}
+            $Count++
+          }
+          & (Join-Path $PSScriptRoot "APP_001_FLOW_OTOMATIS\RECOVERY\VERIFY_BACKUP.ps1")
+          Write-Host "BACKUP VERIFIED: $Count checksum master"
+          PS1
+          cat > "$APP/README_RESTORE.txt" <<'EOF'
+          Mulai dari RECOVERY/PETUNJUK_PEMULIHAN.txt.
+          Jalankan VERIFY_ALL_BACKUP.ps1 sebelum proses restore.
+          Jangan push ke GitHub tanpa memeriksa URL repo baru.
+          EOF
+          cat > "$APP/STATUS_BACKUP.txt" <<EOF
+          STATUS=BACKUP_COMPLETE_FOR_GIT_SOURCE_REFS
+          GIT_BUNDLE=VERIFIED
+          GIT_BUNDLE_RESTORE_TEST=PASS
+          BRANCH_COUNT=$BRANCH_COUNT
+          TAG_COUNT=$TAG_COUNT
+          SOURCE_MAIN=VERIFIED
+          BUILD_STATUS=$(sed -n 's/^BUILD_STATUS=//p' "$APP/BUILD/BUILD_INFO.txt")
+          DOCS=INCLUDED
+          GITHUB_ISSUES_PR_COMMENTS_SECRETS=NOT_INCLUDED
+          EOF
+          cat > "$ROOT/00_README_PERTAMA.txt" <<'EOF'
+          BACKUP KHUSUS 1 REPOSITORY: FLOW-OTOMATIS
+          Akun GitHub lama TIDAK diperlukan untuk memulihkan kode, branch, tag, dan commit.
+          Gunakan VERIFY_ALL_BACKUP.ps1 sebelum RESTORE_ALL.ps1.
+          Catatan: Issues, PR review, setting GitHub, Actions run history, secret values,
+          Git LFS eksternal atau dependensi yang tidak tersimpan dalam Git bukan bagian
+          dari klaim pemulihan Git Bundle.
+          EOF
+          cat > "$ROOT/00_BACKUP_INFO.txt" <<EOF
+          SCOPE=Flow-Otomatis ONLY
+          ORIGINAL_REPOSITORY=https://github.com/inoriko920-dev/Flow-Otomatis
+          BACKUP_STARTED_WIB=$START_TIME
+          BACKUP_COMPLETED_WIB=$(TZ=Asia/Jakarta date +%Y-%m-%dT%H:%M:%S%:z)
+          MAIN_COMMIT=$MAIN_SHA
+          BRANCH_COUNT=$BRANCH_COUNT
+          TAG_COUNT=$TAG_COUNT
+          GIT_RESTORE_TEST=PASS
+          ARCHIVE_TEST=PASS
+          EOF
+          cat > "$ROOT/00_MASTER_MANIFEST.txt" <<EOF
+          TOTAL_PROJECTS=1
+          PROJECT=Flow-Otomatis
+          REPOSITORY=https://github.com/inoriko920-dev/Flow-Otomatis
+          MAIN_COMMIT=$MAIN_SHA
+          GIT_BUNDLE=APP_001_FLOW_OTOMATIS/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle
+          SOURCE=APP_001_FLOW_OTOMATIS/SOURCE/Flow-Otomatis-SOURCE-MAIN.zip
+          BUILD=APP_001_FLOW_OTOMATIS/BUILD/Flow-Otomatis-Windows-Portable.zip
+          BACKUP_STATUS=BACKUP_COMPLETE_FOR_GIT_SOURCE_REFS
+          RESTORE_SCRIPT=RESTORE_ALL.ps1
+          EOF
+          printf '%s\n' 'NAMA_PROYEK,REPO,DEFAULT_BRANCH,COMMIT_MAIN,BRANCH_COUNT,TAG_COUNT,SOURCE,GIT_HISTORY,BUILD' "Flow-Otomatis,https://github.com/inoriko920-dev/Flow-Otomatis,main,$MAIN_SHA,$BRANCH_COUNT,$TAG_COUNT,PASS,PASS,$(sed -n 's/^BUILD_STATUS=//p' "$APP/BUILD/BUILD_INFO.txt")" > "$ROOT/00_MASTER_MANIFEST.csv"
+          (
+           cd "$APP"
+           find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#|#' > SHA256SUMS.txt
+          )
+          (
+           cd "$ROOT"
+           find . -type f ! -name 00_SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#|#' > 00_SHA256SUMS.txt
+          )
+          (
+           cd "$ROOT"
+           while IFS='|' read -r SHA FILE; do
+            printf '%s  %s\n' "$SHA" "$FILE" | sha256sum -c --status
+           done < 00_SHA256SUMS.txt
+          )
+          test "$(find "$ROOT" -maxdepth 1 -type d -name 'APP_*' | wc -l)" -eq 1
+          ZIP_TEST="$RUNNER_TEMP/$NAME-LOCAL-VERIFICATION.zip"
+          (cd "$BASE" && zip -q -r "$ZIP_TEST" "$NAME")
+          unzip -t "$ZIP_TEST" > "$RUNNER_TEMP/ZIP_VERIFICATION.txt"
+          test -s "$ZIP_TEST"
+          printf 'BACKUP_NAME=%s\n' "$NAME" >> "$GITHUB_ENV"
+          printf 'BACKUP_ROOT=%s\n' "$ROOT" >> "$GITHUB_ENV"
+          printf 'Name: %s\nMain: %s\nBranches: %s\nTags: %s\nBundle and restored refs: PASS\nChecksum: PASS\nZIP integrity: PASS\n' "$NAME" "$MAIN_SHA" "$BRANCH_COUNT" "$TAG_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "BACKUP_RESULT=$NAME MAIN=$MAIN_SHA BRANCH_COUNT=$BRANCH_COUNT TAG_COUNT=$TAG_COUNT"
+      - name: Publish one downloadable ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_NAME }}
+          path: ${{ env.BACKUP_ROOT }}/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
