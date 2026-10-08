@@ -150,3 +150,44 @@ def test_project_hub_surfaces_corruption_and_keeps_healthy_project_openable(
     assert window.fixture_code == "REAL_WORKSPACE"
     assert window.current_workspace is not None
     assert window.current_workspace.episode_id == "EP201_HEALTHY"
+
+
+def test_project_hub_naive_timestamp_issue_keeps_healthy_project_openable(
+    tmp_path: Path,
+    qtbot,
+) -> None:
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    repo.save(_workspace("EP605_GOOD", "Healthy"))
+    repo.save(_workspace("EP606_NAIVE", "Bad Timestamp"))
+    bad_db = root / "EP606_NAIVE" / "project.sqlite3"
+    with sqlite3.connect(bad_db) as connection:
+        connection.execute("UPDATE project SET imported_at = '2026-10-07T10:00:00'")
+        connection.commit()
+    before = hashlib.sha256(bad_db.read_bytes()).hexdigest()
+
+    library = ProjectLibraryService(repo)
+    window = MainWindow(project_library_service=library)
+    qtbot.addWidget(window)
+    window.show_project_hub()
+    visible = _visible_text(window)
+    assert "Healthy" in visible
+    assert "EP606_NAIVE" in visible
+    assert "Data Rusak" in visible
+    assert "1 project siap" in visible
+
+    table = next(item for item in window.findChildren(QTableWidget) if item.columnCount() == 5)
+    healthy_row = next(
+        row
+        for row in range(table.rowCount())
+        if table.item(row, 1) is not None and table.item(row, 1).text() == "EP605_GOOD"
+    )
+    table.setCurrentCell(healthy_row, 0)
+    open_button = next(
+        button for button in window.findChildren(QPushButton) if button.text() == "Buka Project"
+    )
+    qtbot.mouseClick(open_button, Qt.MouseButton.LeftButton)
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert window.current_workspace is not None
+    assert window.current_workspace.episode_id == "EP605_GOOD"
+    assert hashlib.sha256(bad_db.read_bytes()).hexdigest() == before

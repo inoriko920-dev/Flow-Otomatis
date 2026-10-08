@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
@@ -16,7 +18,11 @@ from flow_otomatis.application.ports.generation_provider import (
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
-from flow_otomatis.domain.errors import InternalInvariantError
+from flow_otomatis.domain.errors import (
+    InternalInvariantError,
+    PackageSecurityError,
+    PackageValidationError,
+)
 from flow_otomatis.domain.job import (
     GenerationAttentionCode,
     GenerationJob,
@@ -27,12 +33,13 @@ from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 _DEFAULT_LEASE_SECONDS = 30 * 60
 
 
-def _scene_fingerprint(episode_id: str, scene: WorkspaceScene) -> str:
+def _scene_fingerprint(episode_id: str, scene: WorkspaceScene, image_digest: str) -> str:
     payload = {
         "episode_id": episode_id,
         "scene_id": scene.scene_id,
         "image_file": scene.image_file,
         "image_exists": scene.image_exists,
+        "image_sha256": image_digest,
         "motion_prompt": scene.motion_prompt,
         "target_duration_s": scene.target_duration_s,
         "flow_duration_s": scene.selected_flow_duration_s,
@@ -58,12 +65,14 @@ class LocalGenerationQueueService:
         job_repository: GenerationJobRepositoryPort,
         provider: GenerationProviderPort,
         *,
+        image_verifier: EpisodeImageVerifierPort | None = None,
         owner_id: str | None = None,
         lease_seconds: int = _DEFAULT_LEASE_SECONDS,
     ) -> None:
         self._workspace_repository = workspace_repository
         self._job_repository = job_repository
         self._provider = provider
+        self._image_verifier = image_verifier
         self._owner_id = owner_id or uuid4().hex
         self._lease_seconds = max(lease_seconds, 1)
 
@@ -103,7 +112,11 @@ class LocalGenerationQueueService:
                     model=scene.model,
                     resolution=scene.resolution,
                     aspect_ratio=scene.aspect_ratio,
-                    request_fingerprint=_scene_fingerprint(episode_id, scene),
+                    request_fingerprint=_scene_fingerprint(
+                        episode_id,
+                        scene,
+                        self._image_digest(workspace.source_package_path, scene),
+                    ),
                 )
             )
         self._job_repository.prepare_jobs(jobs)
@@ -139,7 +152,7 @@ class LocalGenerationQueueService:
                 self._owner_id,
             )
 
-        stale_reason = self._stale_reason(episode_id, scene, job)
+        stale_reason = self._stale_reason(episode_id, workspace.source_package_path, scene, job)
         if stale_reason is not None:
             return self._job_repository.mark_attention(
                 job.job_id,
@@ -227,6 +240,7 @@ class LocalGenerationQueueService:
     def _stale_reason(
         self,
         episode_id: str,
+        source_package_path: str,
         scene: WorkspaceScene,
         job: GenerationJob,
     ) -> str | None:
@@ -241,9 +255,16 @@ class LocalGenerationQueueService:
             return f"Scene {scene.scene_id} no longer has a selected Flow duration."
         if not scene.image_exists:
             return f"Scene {scene.scene_id} image is no longer available."
-        if job.request_fingerprint != _scene_fingerprint(episode_id, scene):
+        try:
+            current_digest = self._image_digest(source_package_path, scene)
+        except PackageValidationError, PackageSecurityError, InternalInvariantError:
             return (
-                f"Scene {scene.scene_id} changed after it was queued; "
+                f"Scene {scene.scene_id}: gambar hilang atau tidak bisa diverifikasi. "
+                "Persiapkan antrean kembali sebelum Generate."
+            )
+        if job.request_fingerprint != _scene_fingerprint(episode_id, scene, current_digest):
+            return (
+                f"Scene {scene.scene_id} or image bytes changed after prepare; "
                 "prepare the queue again before Generate."
             )
         if (
@@ -260,6 +281,15 @@ class LocalGenerationQueueService:
                 "prepare the queue again."
             )
         return None
+
+    def _image_digest(self, source_package_path: str, scene: WorkspaceScene) -> str:
+        """Fail closed when a canonical content verifier was not composed."""
+
+        if self._image_verifier is None:
+            raise InternalInvariantError("Generation input verifier is not configured")
+        return self._image_verifier.image_digest(
+            Path(source_package_path), scene.scene_id, scene.image_file
+        )
 
     def _scene(
         self,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -40,6 +41,66 @@ class EpisodePackageReader:
             "Episode package must be a ZIP, FLOW_OTOMATIS_IMPORT.json, or directory",
             code="PACKAGE_SOURCE_UNSUPPORTED",
         )
+
+    def image_digest(self, source_path: Path, scene_id: str, image_file: str) -> str:
+        """Hash an approved image using the package's ZIP or filesystem resolver."""
+
+        snapshot = self.load(source_path)
+        evidence = next(
+            (item for item in snapshot.scenes if item.scene.scene_id == scene_id),
+            None,
+        )
+        if evidence is None or evidence.scene.image_file != image_file or not evidence.image_exists:
+            raise PackageValidationError(
+                f"Scene {scene_id}: approved image is unavailable or changed",
+                code="IMAGE_NOT_AVAILABLE",
+            )
+
+        source = source_path.expanduser().resolve()
+        digest = hashlib.sha256()
+        bytes_read = 0
+        try:
+            if source.suffix.lower() == ".zip":
+                with zipfile.ZipFile(source) as archive:
+                    names = [name for name in archive.namelist() if not name.endswith("/")]
+                    self._validate_archive_names(names)
+                    manifests = [
+                        name for name in names if PurePosixPath(name).name == _MANIFEST_NAME
+                    ]
+                    if len(manifests) != 1:
+                        raise PackageValidationError(
+                            "ZIP manifest is missing or ambiguous",
+                            code="MANIFEST_COUNT_INVALID",
+                        )
+                    member = self._resolve_member(manifests[0], image_file)
+                    with archive.open(member) as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            digest.update(chunk)
+                            bytes_read += len(chunk)
+            else:
+                manifest_path = snapshot.source_path
+                package_root = self._infer_directory_root(manifest_path)
+                image_path = self._resolve_disk_ref(package_root, manifest_path.parent, image_file)
+                if not image_path.is_file():
+                    raise PackageValidationError(
+                        f"Scene {scene_id}: source image file is missing",
+                        code="IMAGE_NOT_AVAILABLE",
+                    )
+                with image_path.open("rb") as stream:
+                    while chunk := stream.read(1024 * 1024):
+                        digest.update(chunk)
+                        bytes_read += len(chunk)
+        except (OSError, zipfile.BadZipFile, RuntimeError, KeyError, ValueError) as exc:
+            raise PackageValidationError(
+                f"Scene {scene_id}: source image cannot be read",
+                code="IMAGE_READ_FAILED",
+            ) from exc
+        if bytes_read == 0:
+            raise PackageValidationError(
+                f"Scene {scene_id}: source image is empty",
+                code="IMAGE_EMPTY",
+            )
+        return digest.hexdigest()
 
     def _load_zip(self, source: Path) -> PackageSnapshot:
         try:

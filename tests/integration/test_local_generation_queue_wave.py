@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -20,6 +22,7 @@ from flow_otomatis.domain.job import (
 )
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
+from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
 from flow_otomatis.infrastructure.persistence import (
     SqliteGenerationJobRepository,
     SqliteWorkspaceRepository,
@@ -73,16 +76,67 @@ def _workspace() -> WorkspaceState:
     )
 
 
+def _workspace_with_source(tmp_path: Path, *, zip_source: bool = False) -> WorkspaceState:
+    """Create real import-compatible folder or ZIP image evidence for queue tests."""
+
+    workspace = _workspace()
+    manifest = {
+        "schema_version": "1.0",
+        "episode_id": workspace.episode_id,
+        "project_name": workspace.project_name,
+        "production_profile": {
+            "model": workspace.model,
+            "resolution": workspace.resolution,
+            "aspect_ratio": workspace.aspect_ratio,
+        },
+        "scene_count": len(workspace.scenes),
+        "scenes": [
+            {
+                "scene_id": scene.scene_id,
+                "image_file": scene.image_file,
+                "motion_prompt": scene.motion_prompt,
+                "target_duration_s": scene.target_duration_s,
+                "recommended_flow_duration_s": scene.recommended_flow_duration_s,
+                "selected_flow_duration_s": scene.selected_flow_duration_s,
+                "trim_target_s": scene.trim_target_s,
+                "model": scene.model,
+                "resolution": scene.resolution,
+                "aspect_ratio": scene.aspect_ratio,
+                "status": "READY",
+            }
+            for scene in workspace.scenes
+        ],
+        "created_at": workspace.created_at.isoformat(),
+        "source_versions": {},
+    }
+    if zip_source:
+        package_zip = tmp_path / "source.zip"
+        with zipfile.ZipFile(package_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("FLOW_OTOMATIS_IMPORT.json", json.dumps(manifest))
+            for scene in workspace.scenes:
+                archive.writestr(scene.image_file, f"image-bytes-{scene.scene_id}".encode())
+        return replace(workspace, source_package_path=str(package_zip))
+
+    package_root = tmp_path / "package"
+    package_root.mkdir(parents=True, exist_ok=True)
+    manifest_path = package_root / "FLOW_OTOMATIS_IMPORT.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    for scene in workspace.scenes:
+        (package_root / scene.image_file).write_bytes(f"image-bytes-{scene.scene_id}".encode())
+    return replace(workspace, source_package_path=str(manifest_path))
+
+
 def _setup(tmp_path: Path):
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)
-    workspace_repo.save(_workspace())
+    workspace_repo.save(_workspace_with_source(tmp_path))
     job_repo = SqliteGenerationJobRepository(projects_root)
     provider = FakeGenerationProvider()
     service = LocalGenerationQueueService(
         workspace_repo,
         job_repo,
         provider,
+        image_verifier=EpisodePackageReader(),
         owner_id="worker-main",
         lease_seconds=60,
     )
@@ -162,13 +216,14 @@ class AmbiguousGenerationProvider:
 def test_ambiguous_submit_blocks_queue_and_prevents_automatic_resubmit(tmp_path: Path) -> None:
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)
-    workspace_repo.save(_workspace())
+    workspace_repo.save(_workspace_with_source(tmp_path))
     job_repo = SqliteGenerationJobRepository(projects_root)
     provider = AmbiguousGenerationProvider()
     service = LocalGenerationQueueService(
         workspace_repo,
         job_repo,
         provider,
+        image_verifier=EpisodePackageReader(),
         owner_id="ambiguous-worker",
     )
 
@@ -368,7 +423,7 @@ def _create_legacy_job_table(db_path: Path, *, state: str = "QUEUED") -> None:
 def test_legacy_unverified_queue_is_parked_until_explicit_reprepare(tmp_path: Path) -> None:
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)
-    workspace_repo.save(_workspace())
+    workspace_repo.save(_workspace_with_source(tmp_path))
     db_path = projects_root / "EP300_QUEUE" / "project.sqlite3"
     _create_legacy_job_table(db_path)
 
@@ -384,6 +439,7 @@ def test_legacy_unverified_queue_is_parked_until_explicit_reprepare(tmp_path: Pa
         workspace_repo,
         job_repo,
         provider,
+        image_verifier=EpisodePackageReader(),
         owner_id="new-worker",
     )
     reprepared = service.prepare_queue("EP300_QUEUE")
@@ -394,7 +450,7 @@ def test_legacy_unverified_queue_is_parked_until_explicit_reprepare(tmp_path: Pa
 def test_failed_schema_migration_rolls_back_all_added_columns(tmp_path: Path) -> None:
     projects_root = tmp_path / "projects"
     workspace_repo = SqliteWorkspaceRepository(projects_root)
-    workspace_repo.save(_workspace())
+    workspace_repo.save(_workspace_with_source(tmp_path))
     db_path = projects_root / "EP300_QUEUE" / "project.sqlite3"
     _create_legacy_job_table(db_path)
 
@@ -429,3 +485,165 @@ def test_failed_schema_migration_rolls_back_all_added_columns(tmp_path: Path) ->
     assert "request_fingerprint" not in columns
     assert "owner_id" not in columns
     assert meta is None
+
+
+def test_t09_folder_image_deleted_after_prepare_blocks_submit(tmp_path: Path) -> None:
+    _root, workspace_repo, _jobs, provider, service = _setup(tmp_path)
+    service.prepare_queue("EP300_QUEUE")
+    workspace = workspace_repo.load("EP300_QUEUE")
+    assert workspace is not None
+    image = Path(workspace.source_package_path).parent / workspace.scenes[0].image_file
+    image.unlink()
+
+    outcome = service.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.state is GenerationJobState.ATTENTION_REQUIRED
+    assert outcome.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert outcome.submit_started_at is None
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize("change", ["delete_zip", "remove_entry"])
+def test_t10_zip_source_unavailable_blocks_provider(tmp_path: Path, change: str) -> None:
+    projects_root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(projects_root)
+    workspace = _workspace_with_source(tmp_path, zip_source=True)
+    repo.save(workspace)
+    jobs = SqliteGenerationJobRepository(projects_root)
+    provider = FakeGenerationProvider()
+    service = LocalGenerationQueueService(
+        repo, jobs, provider, image_verifier=EpisodePackageReader()
+    )
+    service.prepare_queue(workspace.episode_id)
+    zip_path = Path(workspace.source_package_path)
+    if change == "delete_zip":
+        zip_path.unlink()
+    else:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            retained = {
+                name: archive.read(name)
+                for name in archive.namelist()
+                if name != workspace.scenes[0].image_file
+            }
+        with zipfile.ZipFile(zip_path, "w") as archive:
+            for name, data in retained.items():
+                archive.writestr(name, data)
+
+    result = service.run_next(workspace.episode_id)
+    assert result is not None
+    assert result.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert result.submit_started_at is None
+    assert provider.calls == []
+
+
+def test_t11_modified_image_bytes_same_name_blocks_and_reprepare_works(tmp_path: Path) -> None:
+    _root, repo, _jobs, provider, service = _setup(tmp_path)
+    service.prepare_queue("EP300_QUEUE")
+    workspace = repo.load("EP300_QUEUE")
+    assert workspace is not None
+    image = Path(workspace.source_package_path).parent / workspace.scenes[0].image_file
+    image.write_bytes(b"new-content-same-file-name")
+
+    result = service.run_next("EP300_QUEUE")
+    assert result is not None
+    assert result.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert provider.calls == []
+    service.prepare_queue("EP300_QUEUE")
+    generated = service.run_next("EP300_QUEUE")
+    assert generated is not None
+    assert generated.state is GenerationJobState.GENERATED
+    assert len(provider.calls) == 1
+
+
+def test_t12_unreadable_image_maps_to_pre_submit_attention(tmp_path: Path, monkeypatch) -> None:
+    _root, repo, _jobs, provider, service = _setup(tmp_path)
+    service.prepare_queue("EP300_QUEUE")
+    workspace = repo.load("EP300_QUEUE")
+    assert workspace is not None
+    image = Path(workspace.source_package_path).parent / workspace.scenes[0].image_file
+    original_open = Path.open
+
+    def deny_image_open(self: Path, *args, **kwargs):
+        if self == image:
+            raise PermissionError("synthetic access denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", deny_image_open)
+    outcome = service.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert outcome.submit_started_at is None
+    assert provider.calls == []
+
+
+def test_t13_verified_zip_image_submits_once_and_ambiguity_is_not_retried(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "projects"
+    workspace = _workspace_with_source(tmp_path, zip_source=True)
+    repo = SqliteWorkspaceRepository(root)
+    repo.save(workspace)
+    jobs = SqliteGenerationJobRepository(root)
+    provider = AmbiguousGenerationProvider()
+    service = LocalGenerationQueueService(
+        repo, jobs, provider, image_verifier=EpisodePackageReader()
+    )
+    service.prepare_queue(workspace.episode_id)
+    outcome = service.run_next(workspace.episode_id)
+    assert outcome is not None
+    assert outcome.attention_code is GenerationAttentionCode.SUBMIT_AMBIGUOUS
+    assert len(provider.calls) == 1
+    assert service.run_next(workspace.episode_id) is None
+    assert len(provider.calls) == 1
+
+
+def test_legacy_fingerprint_without_image_bytes_never_submits(tmp_path: Path) -> None:
+    from flow_otomatis.application.services.local_generation_queue import _scene_fingerprint
+
+    _root, repo, jobs, provider, service = _setup(tmp_path)
+    prepared = service.prepare_queue("EP300_QUEUE")
+    workspace = repo.load("EP300_QUEUE")
+    assert workspace is not None
+    scene = workspace.scenes[0]
+    import hashlib
+
+    legacy_payload = {
+        "episode_id": workspace.episode_id,
+        "scene_id": scene.scene_id,
+        "image_file": scene.image_file,
+        "image_exists": scene.image_exists,
+        "motion_prompt": scene.motion_prompt,
+        "target_duration_s": scene.target_duration_s,
+        "flow_duration_s": scene.selected_flow_duration_s,
+        "model": scene.model,
+        "resolution": scene.resolution,
+        "aspect_ratio": scene.aspect_ratio,
+    }
+    old_digest = hashlib.sha256(
+        json.dumps(
+            legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
+    ).hexdigest()
+    assert old_digest != prepared[0].request_fingerprint
+    assert len(_scene_fingerprint(workspace.episode_id, scene, "1" * 64)) == 64
+    with sqlite3.connect(_root / workspace.episode_id / "project.sqlite3") as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET request_fingerprint=? WHERE scene_id=?",
+            (old_digest, scene.scene_id),
+        )
+        connection.commit()
+    blocked = service.run_next(workspace.episode_id)
+    assert blocked is not None
+    assert blocked.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert provider.calls == []
+
+
+def test_prepare_requires_canonical_verifier(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    repo.save(_workspace_with_source(tmp_path))
+    jobs = SqliteGenerationJobRepository(root)
+    service = LocalGenerationQueueService(repo, jobs, FakeGenerationProvider())
+    with pytest.raises(Exception, match="verifier"):
+        service.prepare_queue("EP300_QUEUE")
+    assert jobs.list_for_episode("EP300_QUEUE") == ()
