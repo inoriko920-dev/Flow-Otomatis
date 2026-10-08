@@ -65,6 +65,21 @@ def build(repo_root: Path, browser_source: Path) -> tuple[Path, Path]:
     work_root.mkdir(parents=True, exist_ok=True)
     spec_root.mkdir(parents=True, exist_ok=True)
 
+    # Generate license provenance AFTER dist/ cleanup, otherwise build() removes
+    # the notice created by an earlier CI step before packaging the release.
+    notices_source = dist_root / "THIRD_PARTY_NOTICES.txt"
+    subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "generate_third_party_notices.py"),
+            str(notices_source),
+        ],
+        cwd=repo_root,
+        check=True,
+    )
+    if not notices_source.is_file() or notices_source.stat().st_size == 0:
+        raise RuntimeError("Third-party dependency notice was not generated")
+
     subprocess.run(
         [
             sys.executable,
@@ -98,9 +113,7 @@ def build(repo_root: Path, browser_source: Path) -> tuple[Path, Path]:
         raise RuntimeError(f"Browser runtime is missing: {browser_source}")
     shutil.copytree(browser_source, staged_browser, dirs_exist_ok=True)
 
-    notices_source = dist_root / "THIRD_PARTY_NOTICES.txt"
-    if notices_source.exists():
-        shutil.copy2(notices_source, bundle_root / notices_source.name)
+    shutil.copy2(notices_source, bundle_root / notices_source.name)
 
     _write_manifest(bundle_root, repo_root)
 

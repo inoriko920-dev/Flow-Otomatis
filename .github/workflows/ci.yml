@@ -122,9 +122,6 @@ jobs:
       - name: Smoke staged Chromium
         run: uv run python scripts/smoke_browser_runtime.py .runtime/browsers
 
-      - name: Generate third-party notice inventory
-        run: uv run python scripts/generate_third_party_notices.py dist/THIRD_PARTY_NOTICES.txt
-
       - name: Build portable onedir ZIP
         run: uv run python scripts/build_portable.py --browser-source .runtime/browsers
 
