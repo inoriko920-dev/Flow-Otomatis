@@ -381,8 +381,6 @@ def test_local_failure_from_second_service_cannot_clobber_success(
 
     assert recorded.state == DownloadState.DOWNLOADED
     assert recorded.output_path == str(video.resolve())
-    assert (
-        SqliteDownloadResultRepository(projects_root).get("EP400_RESULTS", "SCENE_001")
-        == recorded
-    )
+    stored = SqliteDownloadResultRepository(projects_root).get("EP400_RESULTS", "SCENE_001")
+    assert stored == recorded
     assert service.snapshot("EP400_RESULTS").handoff_ready is True
