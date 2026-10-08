@@ -231,18 +231,31 @@ class SqliteWorkspaceRepository:
             raise ValueError("Stored episode identity does not match its project directory")
 
         scenes = tuple(self._decode_scene(row) for row in scene_rows)
+        created_at = self._decode_aware_timestamp(project["created_at"])
+        imported_at = self._decode_aware_timestamp(project["imported_at"])
         return WorkspaceState(
             schema_version=str(project["schema_version"]),
             episode_id=stored_episode_id,
             project_name=str(project["project_name"]),
             source_package_path=str(project["source_package_path"]),
-            created_at=datetime.fromisoformat(str(project["created_at"])),
-            imported_at=datetime.fromisoformat(str(project["imported_at"])),
+            created_at=created_at,
+            imported_at=imported_at,
             model=str(project["model"]),
             resolution=str(project["resolution"]),
             aspect_ratio=str(project["aspect_ratio"]),
             scenes=scenes,
         )
+
+    @staticmethod
+    def _decode_aware_timestamp(value: object) -> datetime:
+        """Require timezone-aware stored timestamps without guessing or repairing."""
+
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Workspace timestamp must be nonempty text")
+        parsed = datetime.fromisoformat(value)
+        if parsed.utcoffset() is None:
+            raise ValueError("Workspace timestamp lacks timezone offset")
+        return parsed
 
     def _decode_scene(self, row: sqlite3.Row) -> WorkspaceScene:
         image_exists = int(row["image_exists"])
