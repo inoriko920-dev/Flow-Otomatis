@@ -683,3 +683,10 @@ Gemini does not depend on the Google Flow login gate:
 - **FINAL ZIP**: `FLOW_OTOMATIS_E12_02_22_UI_FINAL_APPROVED_DOCX_PNG_2026-10-08.zip`, 22 original PNG + DOCX + checksums, ZIP integrity PASS, SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da` (conversation artifact, NOT in GitHub).
 - **G4 visual signoff: PASS; G4 binary archive: PENDING, hence G4 overall cannot yet be marked PASS.** GitHub connector writes documentation but cannot directly read the local binary contents for upload; the local Git remote was unreachable. Avoid claiming binary upload. PR #25 stays DRAFT and unmerged, no production code.
 - Other gates G0/G1/G5/G6 and ADR T06 remain blocked/unverified. User expressly forbids coding until all gates PASS.
+
+
+## 2026-10-08 — G0 binary parity discrepancy measured (no mutation)
+- E12-02 owner signoff for 22 new UI images **PASS**; final DOCX and ZIP locally verified, GitHub binary asset upload **PENDING**, G4 overall not PASS.
+- Original 30-UI DOCX locally: **41,006,814 bytes**, SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`, Git blob SHA-1 `88b08c8c2ef001fc7d22aecd04625a75c206064d`, **30 embedded media**.
+- GitHub main reference path has **329,255-byte** intentionally compressed DOCX, Git blob `6e93a7e654e84ba2dd37af1fbc31c68ce3107f26` according to recursive Git tree. Byte parity **FAIL**, visual parity **NOT TESTED**, so strict G0 remains **BLOCKED**. This size difference is not by itself evidence of file corruption.
+- Additional read-only audit committed at `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`. No overwrite and no code change. Other gates G1/G5/G6/ADR-T06 still pending.
