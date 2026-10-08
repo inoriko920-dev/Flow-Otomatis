@@ -207,3 +207,13 @@ Evidence:
 
 This closes only the local audit-remediation track. Real-account restart validation remains pending and live Google Flow generation remains BLOCKED.
 
+## 8 October 2026 — ASTRA B01–B06 follow-up (R00–R04)
+Separate from the completed F01–F06/A00–A05 work above.
+- Original source: `ASTRA_BUG_AUDIT_SOL_PLAN_FLOW_OTOMATIS_2026-10-08.docx` (48,799 bytes, SHA-256 `5481a09b85219615169c285d6bfd42bcc7398bcf881a73a604f2e7a351444fda`; byte-identical binary, **not** a compact approximation).
+- SOL R00 inspection: `B01_B06_SOL_R00_CODE_EVIDENCE_2026-10-08.md`.
+- Contract decision: `../../architecture/ADR-018-step12-b01-b06-remediation-contracts.md`.
+- Current handoff: `../../handoff/current/HANDOFF_STEP_12_BUG_R00_TO_R01_2026-10-08.md`.
+- R00 documentation and source verification: PASS on committed R00 branch; no production code changes.
+- B01–B06: ALL OPEN; R01–R04 not started. R01 is next (Gemini consistency only).
+- The separate reproduction_results.json/reproduce_findings.py referred to in ASTRA's DOCX were not provided and are not falsely claimed as committed.
+- Flow live stays BLOCKED.

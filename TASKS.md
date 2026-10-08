@@ -224,3 +224,15 @@ Evidence:
 
 Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by the existing real-account restart validation.
 
+## STEP 12 follow-up ASTRA audit — 8 October 2026
+- Baseline reviewed: `0b9e2c4f63a9c0fdab0fe255830964a0e2fb6b39`; no source changes since ASTRA's snapshot.
+- R00: documentation sync/source inspection/ADR-018/handoff — PASS on the SOL R00 branch; code untouched.
+- B01/P1 health-key selection race: OPEN → R01 T01–T04.
+- B02/P2 Gemini Agent stale-context response: OPEN → R01 T05–T08.
+- B03/P1 before live missing/changed image after queue prepare: OPEN → R02 T09–T13.
+- B06/P2 naive timestamp isolate-and-sort: OPEN → R02 T22–T25.
+- B04/P1 missing output still handoff-ready: OPEN → R03 T14–T17.
+- B05/P1 before live download publish overwrite: OPEN → R03 T18–T21.
+- R04: official combined regression/UI/portable verification after R01–R03; NOT STARTED.
+- This follow-up does not undo the prior A00–A05 completion. Live real-account restart gate remains BLOCKED pending owner validation.
+- SOL must stop after R00 and wait for explicit permission before R01.
