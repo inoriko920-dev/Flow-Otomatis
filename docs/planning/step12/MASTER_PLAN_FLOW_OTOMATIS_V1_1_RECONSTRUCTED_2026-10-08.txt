@@ -1,0 +1,1888 @@
+                                                                   FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+SOFTWARE FACTORY V2 | STEP 12
+
+
+FLOW-OTOMATIS
+MASTER PLAN V1.1
+IMPLEMENTATION READY • SMART CREDIT PLANNER • END-TO-END • MULTI-ACCOUNT
+CONDITIONAL
+Penyempurnaan terukur dari MASTER PLAN V1.0 menjadi paket rencana yang bisa ditugaskan per wave
+kepada SOL, tanpa mengulang STEP 00–11.
+
+ STATUS SAAT DISERAHKAN DRAFT UNTUK REVIEW / BELUM DISAHKAN sebagai otoritas repo. Tidak ada
+ perubahan GitHub, coding, login otomatis, atau konsumsi kredit dalam penyusunan dokumen.
+
+
+ KENDALI DOKUMEN                                           NILAI
+ Versi                                                     1.1 — Implementation Ready, draft per 8 Oktober 2026 WIB
+ Repo target                                               https://github.com/inoriko920-dev/Flow-Otomatis
+ Baseline main                                             e560684e04ed3a5fad40bb00a91823de68ca5431
+                                                           STEP 12 — Integrations & External Services; live masih
+ Tahap saat audit
+                                                           BLOCKED
+                                                           30 komposisi final lama +
+ Otoritas UI
+                                                           docs/ui/IMPLEMENTATION_OVERRIDES.md
+                                                           MASTER_PLAN_FLOW_OTOMATIS_END_TO_END_SMART_C
+ Induk wajib baca
+                                                           REDIT_MULTI_AKUN_2026-10-08.docx (V1.0)
+                                                           End-to-end scene → video diunduh; akun bekerja paralel
+ Keputusan pengguna
+                                                           HANYA jika diizinkan Google
+                                                           Perencanaan saja; dokumen rencana bukan persetujuan
+ Jenis pekerjaan
+                                                           Generate
+
+
+Dibaca bersama: AGENTS.md, PROJECT_STATE.md, TASKS.md, ADR REGISTER, source-of-truth STEP 00–07, referensi UI final,
+handoff dan kode HEAD aktual.
+
+
+                    DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE    |   8 OKT 2026   |   Hal. 1
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+Peta isi dan cara memakai V1.1
+Dokumen ini bersifat mandiri sebagai instruksi eksekusi terinci, namun tidak menghapus V1.0; aturan yang
+tidak direvisi tetap berlaku. Buka panel Navigation/Heading Microsoft Word untuk menavigasi bab dan kartu
+kerja.
+    BAB                                     SUBSTANSI                                  HASIL
+                                            Otoritas, target produk, baseline,
+    00–02                                                                              Batas proyek disepakati
+                                            perubahan V1→V1.1
+                                            Policy, end-to-end,
+    03–05                                                                              Go/no-go jelas
+                                            arsitektur/ownership
+                                            Schema kredit global, planner,
+    06–09                                                                              Kontrak teknis siap ditinjau
+                                            concurrency, Flow live
+    10                                      UI Coverage Matrix dan STOP gate           Tidak redesign UI lama
+    11                                      Matriks tes dan acceptance                 Bukti PASS terukur
+                                            17 wave E12-00 s.d. E12-16 dengan
+    12                                                                                 Paket siap dibagikan SOL
+                                            task card
+                                            Gate, keputusan pending, handoff,
+    13–15                                                                              Lanjutan lintas chat aman
+                                            demo/release
+                                            Data DTO/SQL konseptual, risiko,
+    Lampiran                                                                           Implementasi tidak perlu menebak
+                                            referensi, prompt SOL
+
+
+        Semua persyaratan live harus dibuktikan pada akun dan UI resmi terkini; tarif resmi adalah snapshot,
+         bukan jaminan.
+        Setiap wave dieksekusi hanya setelah DoR dan UI/policy gate terkait PASS.
+        Label pernyataan: VERIFIED-CODE (dibaca di HEAD), CI-REPORTED (dari GitHub), PROPOSED (arsitektur
+         target), BLOCKED (belum aman), USER-APPROVED (pilihan produk).
+        Tidak boleh menyimpulkan persetujuan Google hanya dari keberhasilan login atau dari kemampuan
+         teknis mengendalikan browser.
+
+
+00. Otoritas dan keputusan produk yang dikunci
+Tujuan final USER-APPROVED: satu proyek/episode di-scan → validasi scene & aset → hitung harga per
+model/durasi/output → cek kapasitas akun → Freeze Plan + persetujuan → pengiriman per scene → pemantauan
+hasil → unduh media → manifest/hasil terurut. Akun jamak boleh dipakai bersamaan hanya apabila kebijakan
+Google yang berlaku secara jelas mengizinkan pola operasi tersebut.
+        UI tetap Bahasa Indonesia, putih-biru, Windows 11 x64 portable multi-file ZIP; 30 desain lama harus tetap
+         menjadi baseline. Penambahan UI hanya lewat prompt→STOP→gambar final→review→satu DOCX UI
+         addendum.
+        Paket impor valid berupa manifest schema v1.0 + gambar approved/prompt; Audio/SRT Target Duration
+         authoritative, pilihan Flow 4/6/8/10 detik selalu ≥ Target; scene >10 detik perlu split upstream.
+        Model produk frozen: Omni Flash 1.1, 720p, 16:9; perlu pencocokan model canonical di UI resmi, tidak
+         diam-diam mengganti ke model lebih murah/berbeda.
+        Satu scene pada satu waktu tidak boleh memiliki dua submit aktif. Post-submit outcome UNKNOWN tidak
+         boleh diulang otomatis.
+        Generate dan Download adalah lifecycle terpisah; manifest tidak boleh mengaku file tersedia kalau media
+         gagal diverifikasi.
+        Dilarang auto-login, penyelesaian CAPTCHA/MFA otomatis, stealth, pengambilan cookie/token, rotating
+         akun untuk menghindari limit, atau endpoint tidak terdokumentasi.
+        Wajib berhenti jika input wajib rusak/tidak terbaca; termasuk MP4/SRT bila suatu kontrak upstream kelak
+         mewajibkannya.
+
+    KETENTUAN IZIN LIVE Desain otomatis penuh adalah TARGET bersyarat. Jika akses/otomasi browser atau multi-
+    akun tidak diizinkan, implementasi berhenti di mode planner lokal dan/atau panduan eksekusi manual yang
+
+
+                        DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE       |   8 OKT 2026   |   Hal. 2
+                                                                            FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+ mematuhi layanan; jangan mengganti tujuan diam-diam.
+
+
+01. Baseline repo yang diperiksa ulang
+Baseline HEAD main dan pohon kode cocok dengan audit V1.0: e560684e04ed3a5fad40bb00a91823de68ca5431.
+Terdapat 254 node tree (file dan direktori) pada inspeksi ulang. Laporan sebelumnya di TASKS menunjukkan
+PR #22 berhasil digabung, 233 pytest dan 30/30 UI PASS di CI; angka tersebut adalah CI-REPORTED, BUKAN uji
+ulang V1.1 atau uji live.
+ SUBSISTEM                                   STATUS SAAT INSPEKSI                          BUKTI/PEMILIK CANONICAL
+                                                                                           EpisodeImportService;
+ Impor/scene & durasi                        Ada dan wired; manifest v1.0                  ScenePlanningService;
+                                                                                           contracts/package/import_manifest.py
+                                                                                           SqliteWorkspaceRepository;
+ Proyek/persistensi                          Ada; SQLite per proyek
+                                                                                           ProjectLibraryService
+                                             Serial, provider-neutral; belum wired ke      LocalGenerationQueueService.run_until_
+ Antrean Generate
+                                             UI produksi                                   idle(); bootstrap/main.py
+                                             RUNNING atau ATTENTION menghalangi            SqliteGenerationJobRepository.claim_ne
+ Lease/fencing lama
+                                             claim episode lain                            xt(); _SCHEMA_VERSION=2
+                                             Normal Chrome dengan CDP pasca-login;
+                                                                                           system_chrome_cdp.py; google_sessions;
+ Login manual                                bukti READY setelah restart belum
+                                                                                           restart_gated_generation.py
+                                             PASSED di repo
+ Flow Generate                               Kontrak submit_one saja; no live selector     google_flow_generation.py
+                                             Kontrak download_one saja; no live
+ Flow Download                                                                             google_flow_download.py
+                                             selector
+                                                                                           LocalResultsService;
+ Hasil & ekspor                              Ada; atomik, recovery bug diperbaiki
+                                                                                           result_manifest_writer.py; PR #19–22
+                                                                                           Perlu modul baru setelah
+ Credit/allocator                            Belum ada kemampuan global
+                                                                                           ADR/ownership
+                                                                                           Perlu redesign klaim/pemilik/ledger &
+ Multi-profile parallel                      Belum tersedia
+                                                                                           browser actors
+
+
+Catatan audit delta: PROJECT_STATE.md bagian atas masih menampilkan riwayat CI 90 test untuk gate auth; TASKS/README
+dan laporan setelahnya mencatat 233 test untuk bug Hasil. E12-00 wajib memakai bukti teranyar per commit, tanpa
+menghapus sejarah dan tanpa menafsirkan 233 tes sebagai bukti Flow live.
+
+
+02. Perubahan penting V1.0 → V1.1
+ KODE                                        TEMUAN V1                                     KEPUTUSAN V1.1 / OWNER REVIEW
+                                                                                           USULAN: satu global orchestration DB
+                                             Reservation per-proyek belum menjamin
+                                                                                           menjadi sumber tunggal claim + account
+ DELTA-01                                    saldo tidak dobel dipakai oleh dua
+                                                                                           reservation; project DB menjadi
+                                             proyek
+                                                                                           projection/idempotent sync. ADR wajib.
+                                                                                           Tambah 90 task card terperinci serta
+ DELTA-02                                    17 wave belum cukup atomik untuk SOL          matriks 60 test ID dan gate rinci; satu
+                                                                                           wave per giliran.
+                                                                                           Pisahkan review policy dan eligibility
+                                             Ketidakpastian izin UI automation/multi-
+ DELTA-03                                                                                  tiap akun dari bukti teknis browser;
+                                             account
+                                                                                           hard-stop independen.
+                                                                                           Perjelas output_count, result-card
+ DELTA-04                                    Penanganan 1 request → N output               identity, debit per generation, multi-take
+                                                                                           manifest.
+                                                                                           Coverage matrix P0/P1: states, error,
+                                             UI tambahan belum punya coverage
+ DELTA-05                                                                                  approval, conflict, screen mapping; STOP
+                                             final
+                                                                                           gate.
+                                                                                           Outbox/projection idempotent, repair
+                                             Crash antara global commit dan project
+ DELTA-06                                                                                  pada startup, jangan dua DB commit
+                                             update
+                                                                                           independen.
+
+
+                          DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE        |    8 OKT 2026   |   Hal. 3
+                                                                      FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+ KODE                                   TEMUAN V1                                      KEPUTUSAN V1.1 / OWNER REVIEW
+                                                                                       Key result identity harus di-scope
+ DELTA-07                               Cross-account remote result attribution        provider/profile/project/scene/attempt;
+                                                                                       hentikan cross-account mismatch.
+                                                                                       Pertahankan ZIP/manifest existing;
+                                        Pilihan akses MP4/SRT langsung belum
+ DELTA-08                                                                              impor MP4/SRT langsung adalah future
+                                        final
+                                                                                       scope setelah keputusan terpisah.
+
+
+03. Kebijakan Google & gate kelayakan
+Referensi resmi yang dibaca 8 Oktober 2026: Google Flow Help (kredit) menginformasikan 720p Omni Flash
+4/6/8/10 = 7/10/12/15 kredit PER GENERASI, bukan selalu per request; contoh 1 request menghasilkan 2 video.
+Pusat bantuan akses Flow di sisi lain memuat syarat berlangganan untuk sebagian pengalaman model;
+kepastian entitlement akun nyata harus berasal dari UI/ketentuan terkini, bukan asumsi 50 kredit. Ketentuan
+Google melarang penyalahgunaan, bypass, dan akses otomatis yang melanggar instruksi mesin; informasi yang
+saya tinjau tidak memberi otorisasi afirmatif untuk bot UI multi-akun.
+ GATE                                   BUKTI WAJIB                                    BILA BELUM JELAS
+                                        Terms khusus Flow + ToS + Kebijakan AI;
+                                                                                       BLOCK live browsing mutating; planner
+ POL-01                                 jenis otomasi yang dituju; review
+                                                                                       lokal diperbolehkan
+                                        tanggal/URL
+                                        Hak pakai model, region, umur/akun,
+                                                                                       UNSUPPORTED/UNKNOWN; jangan
+ POL-02                                 data pengguna, trial/subscription per
+                                                                                       berpindah model diam-diam
+                                        profile
+                                        Konfirmasi pengguna atas akun
+ POL-03                                 milik/berizin; bukan pool untuk                Multi-account disabled
+                                        mengelak kuota
+                                        Izin eksplisit untuk aksi Generate dan
+ POL-04                                                                                Zero provider mutation
+                                        batas kredit pilot
+                                        Antarmuka resmi yang memang
+                                                                                       Gunakan langkah manual dan jangan
+ POL-05                                 mengizinkan integrasi/automation; tidak
+                                                                                       bangun workaround stealth
+                                        endpoint tak terdokumentasi
+                                        Aturan rate/concurrency yang sah dan
+ POL-06                                                                                Concurrency 1 / manual sampai terbukti
+                                        observed profile cap
+
+
+
+ SUMBER YANG PERLU DIBACA ULANG SEBELUM LIVE https://support.google.com/flow/answer/16526234?hl=en
+ ; https://support.google.com/flow/answer/16353333?hl=en ; https://policies.google.com/terms ;
+ https://policies.google.com/terms/generative-ai/use-policy. Harga, izin, dan kelayakan dapat berubah. Simpan URL,
+ waktu cek, dan potongan bukti tanpa data rahasia.
+
+
+04. Alur produk end-to-end dan kontrak kualitas
+1.   P0 Intake: pilih paket ZIP/folder/manifest; validasi struktur, gambar, prompt, Scene ID, fingerprint dan
+     durasi. Tolak seluruh langkah mutating jika kontrak wajib gagal.
+2.   P1 Scan: hasil immutable SceneScanReport; show READY/INVALID; per-Scene alasan; source timestamp
+     boleh NULL, tidak dibuat-buat.
+3.   P2 Setup: profil opt-in, check login/Flow capability/credit dengan provenance+TTL; status UNKNOWN
+     bukan saldo 50.
+4.   P3 Quote: tarif per durasi x output count; versi immutable; jika UI official berbeda, freeze quote baru dan
+     minta approval.
+5.   P4 Plan: allocator deterministik, urutan scene, mode hemat/seimbang/manual;
+     WAIT_CREDIT/UNSUPPORTED harus eksplisit.
+6.   P5 Freeze+approve: checksum input, snapshot biaya, accounts, maksimal kredit, output_count, scope run;
+     approval melekat tepat satu PlanRevision.
+
+
+
+                    DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE           |   8 OKT 2026   |   Hal. 4
+                                                                                   FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+7.        P6 Dispatch: revalidate just-in-time; claim+reservation ACID global; worker 1 per profil; sebelum submit
+          set PRE_SUBMIT; post-submit tidak auto-retry.
+8.        P7 Observe: remote result ID hanya dianggap stable jika terverifikasi, mapping akun/proyek/scene/attempt
+          tidak ambigu; result not-ready tidak download.
+9.        P8 Download: ambil ke temp unik, verifikasi media, publish no-clobber, persist result; failure jangan
+          mengubah file sukses.
+10. P9 Handoff: manifest sorted, hasil COMPLETE/PARTIAL dibedakan, checksum dan biaya
+          observed/estimated dipisah; restart reconcile dulu.
+
+
+05. Arsitektur, modul & batas kepemilikan
+    KEPUTUSAN DESAIN UTAMA (USULAN UNTUK ADR) Gunakan global orchestrator DB sebagai otoritas atomic
+    scheduler/account reservations untuk SEMUA proyek lokal. Proyek lama tetap disimpan di SQLite per proyek.
+    Status generation/download lama dijaga sebagai proyeksi kompatibel; jangan menjadikan dua DB independen
+    sebagai otoritas transaksi tunggal.
+
+
+PySide6 UI (views, signals, dialogs; Indonesian)
+           | approved commands/read-model DTOs
+Application (scan, quote, planner, scheduler, results, credit)
+           | pure domain + ports
+Domain (durations, cost, eligibility, transitions, invariants)
+      /       |          \
+Global orchestration DB         Project SQLite     Account Browser Worker
+    assignment/reservation legacy projection profile-affine CDP ONLY
+    outbox/ledger            source metadata     authorized Flow UI only
+                     |
+                  Filesystem output + manifest
+    MODUL/OWNER                                      PERUBAHAN DIIZINKAN                          DIHINDARI
+                                                     Gunakan model durasi v1 existing;            Breaking import manifest 1.0 tanpa
+    domain/scene/*; contracts/package/*
+                                                     perluasan hanya versioned                    adapter
+    application/services/                            Façade serial lama dapat dipertahankan      Menggandakan business logic baru di Qt
+    local_generation_queue.py                        untuk legacy/fixture                         atau per worker
+                                                     Port v2 extension sebagai interface          Mengubah signature lama secara
+    application/ports/generation_jobs.py
+                                                     terpisah/adapter kompatibel                  destruktif
+    infrastructure/persistence/                      Migrasi dengan backfill bukti dan            Menambah thread tanpa mengubah
+    sqlite_generation_job_repository.py              projection                                   episode-wide blocking
+                                                     Global DB actor/reservation ledger           Cross-project writable DB tanpa single
+    infrastructure/persistence/<new>.py
+                                                     setelah ADR                                  source of truth
+                                                     Hanya owner thread; typed evidence no        Playwright di Qt, login otomatis, selector
+    workers/browser/*
+                                                     secrets                                      tebakan
+                                                                                                  Menyelundupkan scheduler langsung ke
+    bootstrap/main.py                                Komposisi services baru setelah gate
+                                                                                                  MainWindow tanpa port
+                                                     Approved dialogs/status via application      Mengubah 30-state frozen tanpa
+    presentation/*
+                                                     DTO                                          referensi
+
+
+         Satu aplikasi Windows boleh memiliki lebih dari satu proses: default buat single-writer global lock dengan
+          pesan instance kedua, atau buktikan multi-process SQLite locking sebelum mendukung dua writer.
+         All browser/session operations profile-affine: satu owner thread/profil; Qt hanya command/results; tidak
+          memindahkan Page/Context di thread Qt.
+         Pisahkan ketat: Gemini API keys/konsumsi token tidak sama dengan Flow credits; Agent tidak boleh
+          menjalankan Generate tanpa action + approval nyata.
+         Jaga PathService canonical: LocalAppData/Flow-Otomatis/Settings untuk global metadata DB, Projects
+          untuk workspace, Sessions untuk browser-data privat.
+
+
+                             DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE             |   8 OKT 2026   |   Hal. 5
+                                                                                 FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+06. Model data kredit global & migrasi tanpa kehilangan riwayat
+06.1 Peran database
+    DB                                          OTORITAS                                           KEWAJIBAN
+                                                Akun non-secret, credit snapshot, tariff           Satu BEGIN IMMEDIATE untuk
+    settings/orchestration.sqlite3 (USULAN)     version, plan, assignment, attempt,                reserve+claim; key unik; writer lock;
+                                                reservation, ledger, event/outbox                  migration versioned
+                                                Manifest/scene workspace dan histori               Projection dari global events; hasil lama
+    Projects/<episode>/workspace.db
+                                                Generate/Download lama                             tidak boleh hilang/ditimpa
+                                                Chrome profile rahasia (di luar                    Manual login, permission-aware; tidak
+    Sessions/<profile>
+                                                GitHub/ZIP/manifest)                               dibaca sebagai data aplikasi umum
+                                                                                                   No-clobber, SHA256, ukuran/durasi/type,
+    Project output folder                       Media tervalidasi dan handoff manifest
+                                                                                                   ownership scope
+
+
+06.2 Tabel baru yang dianjurkan (konseptual, belum DDL final)
+    TABEL                                       PRIMARY/UNIQUE / FIELD UTAMA                       ATURAN
+                                                profile_id UUID, display_label, enabled,
+    profiles                                                                                       No credentials; alias redacted, owner opt-in
+                                                policy_verdict, created_at
+                                                observation_id, profile_id, model, status,
+    capability_observations                                                                        append-only proof; provider UI/source
+                                                evidence_digest, observed_at, expires_at
+                                                snapshot_id, profile_id, balance nullable,
+                                                                                                   Saldo MANUAL tidak membuka auto-submit
+    credit_snapshots                            provenance, confidence, observed_at,
+                                                                                                   strict
+                                                expires_at
+                                                price_version, canonical_model, resolution,        immutable; provider UI overrides require
+    tariff_catalogs
+                                                duration, output_count, per_gen_cost               new quote
+                                                plan_id/revision, episode_id, input_digest,
+    project_plans                                                                                  freeze approval exactly revision
+                                                quote_id, objective, approval_digest
+                                                assignment_id, plan_revision, scene_id,
+    assignments                                                                                    unique active scene per project
+                                                profile_id, quoted_cost, status
+                                                attempt_id, assignment_id, owner_token,
+    attempts                                                                                       unique active safe submit; fencing token
+                                                submit_boundary, state, remote_result_id
+                                                reservation_id, attempt_id UNIQUE,
+    reservations                                                                                   atomic with claim; UNKNOWN submit holds
+                                                profile_id, amount, status, expire_policy
+                                                event_id UUID, idempotency_key UNIQUE,
+    credit_ledger                                                                                  append-only; no double debit
+                                                account, amount, event_type, evidence_hash
+                                                event_id, sequence, aggregate_id,                  transactionally append with global
+    outbox_events
+                                                payload_digest, projected_at, retries              mutations
+                                                provider+profile+remote_result+attempt
+    project_result_links                                                                           no cross-account attribution
+                                                uniqueness scope
+
+
+06.3 Transaction invariants I01–I12
+        I01 — Unique live attempt per (episode_id, scene_id, output_slot) for a plan revision; no duplicate provider
+         submit.
+        I02 — Available(account) = max(fresh_observed_balance - SUM(active local reservations) - safety_hold, 0).
+         Nilai ini estimasi kapasitas untuk dispatch, bukan saldo Google final.
+        I03 — All reservations across ALL projects for a profile are written in ONE global authoritative DB
+         transaction.
+        I04 — Owner token/generation lease fencing: old workers cannot mark/charge/release jobs after losing
+         ownership.
+        I05 — If boundary SUBMIT_STARTED and remote outcome unknown, reservation stays
+         HELD_PENDING_RECONCILIATION.
+        I06 — CONFIRMED spent requires provider evidence; SAFE_FAILURE without evidence of no charge stays
+         UNKNOWN.
+        I07 — No provider action on policy=UNKNOWN, model unsupported, auth-not-ready, price stale, invalid
+         input or insufficient usable credit.
+
+
+
+                            DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE               |   8 OKT 2026   |   Hal. 6
+                                                                           FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+      I08 — Commit global claim+reservation+outbox atomically; projector to per-project DB is repeatable with
+       idempotency key.
+      I09 — Provider remote result id is scoped to verified profile + flow project + attempt; absent stable ID =
+       AMBIGUOUS.
+      I10 — After manual plan change only untouched QUEUED work can be moved; revision and new approval
+       required.
+      I11 — No verified output path may be overwritten, even on delayed failures or collisions.
+      I12 — Missing or corrupt legacy data must fail read-only and never cause destructive auto-recovery.
+
+06.4 Migrasi dan recovery
+      Preflight: backup DB/manifest + hash; inspect v2 known, unknown/newer schema opens read-only or
+       STOP.
+      Migration add-only: buat global DB schema_version=1, backfill hanya recorded historical jobs non-secret;
+       ledger saldo awal UNKNOWN (tidak memalsukan).
+      Satu owner orchestrator; migration in transaction; jika gagal rollback tidak menyentuh project DB lama.
+      Jika perlu projection job state baru, buat upcaster/adapter ke legacy enum; jangan overwrite
+       GENERATED/DOWNLOADED.
+      Crash injection: setelah global commit tetapi sebelum project projection, outbox replay harus aman (at-
+       least-once delivery, idempotent apply).
+      Rollback release: binary lama boleh membaca proyek lama hanya jika ada compatibility proof; backup
+       disimpan di lokasi user dengan rotasi dan checksum; jangan menyatakan rollback schema otomatis
+       mungkin tanpa uji.
+
+
+07. Smart Credit Planner—kontrak algoritma dan contoh
+07.1 Cost catalog dan quote
+    FLOW DURASI 720P                         BIAYA / OUTPUT                               ATURAN
+    4 detik                                  7 kredit                                     Target s: 0 < s ≤ 4
+    6 detik                                  10 kredit                                    4<s≤6
+    8 detik                                  12 kredit                                    6<s≤8
+    10 detik                                 15 kredit                                    8 < s ≤ 10
+    >10 detik                                BLOKIR                                       Split scene upstream; no Generate
+
+
+quote(scene) = official_price(canonical_model, 720p, chosen_duration, account_entitlement)
+          × request_output_count
+observed_usable(profile) = max(observed_balance - globally_reserved - safety_hold, 0)
+project_total_estimate = Σ quote(scene) [scene VALID dan dipilih]
+credit_after_real = NEW OBSERVED FLOW CREDIT (NOT arithmetic estimate!)
+
+Contoh V1.0: 12 scene, saldo SIMULASI 50 per akun, total 124 kredit (A=41; B=44; C=39), sisa simulasi 26 dari
+150. Ini bukan bukti akun tersebut mempunyai 50 atau entitlement yang benar.
+
+07.2 Planner deterministik
+11. Input FrozenScan + TariffQuoteVersion + opt-in account snapshot + policy verdict + output_count +
+       concurrency caps.
+12. Exclude accounts: login not READY after restart, credit STALE/MANUAL_ONLY/UNKNOWN, model
+       unsupported, policy UNKNOWN, browser busy.
+13. Sort scene by descending cost; secondary target_source_time ascending (NULL last); scene_id lexicographic.
+14. Tentukan objective: HEMAT_AKUN, SEIMBANG atau OTOMATIS_PINTAR (default seimbang dengan tie-
+       break stabil); bounded improvement setelah greedy.
+15. Allocate capacity secara in-memory, TIDAK membuat ledger reservation provider saat preview.
+16. Expose assignment + explainability/rejected candidates + WAIT_CREDIT per scene; stable result for
+       identical canonical input.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE           |   8 OKT 2026     |   Hal. 7
+                                                                    FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+17. Freeze PlanRevision checksum; pre-submit revalidate changed input, price, credit, capability, policy; any
+       change invalidate approval.
+18. Only untouched QUEUED can replan after explicit revised approval; no silent moving of
+       SUBMIT_STARTED/AMBIGUOUS.
+Performa: benchmark 10/60/100/500 scene; jangan menjanjikan optimal global. Sebuah deterministic greedy +
+bounded local swap lebih mudah diaudit daripada solver acak tanpa bukti.
+
+
+08. Scheduler paralel, state machine, dan stop semantics
+    LEVEL                                 STATUS KUNCI                            PENYEBAB STOP / RECOVERY
+                                          DRAFT / PLAN_READY / RUNNING /
+                                                                                  Completed hanya jika semua selected
+    Project                               PAUSED / WAIT_CREDIT / ATTENTION /
+                                                                                  scene mempunyai hasil yang diwajibkan
+                                          PARTIAL / COMPLETED
+                                          UNKNOWN / LOGIN_REQUIRED /
+                                          READY_CHECKED /                         Account blocked scoped; profil lain boleh
+    Account
+                                          FLOW_UNAVAILABLE / CREDIT_LOW /         lanjut hanya jika policy/independent safe
+                                          BUSY / RATE_LIMITED / SUSPENDED
+                                          QUEUED / RESERVED / CLAIMED /
+                                          PRE_SUBMIT / SUBMIT_UNCERTAIN /
+    Generate                                                                      No blind retry; reconcile read-only
+                                          ACCEPTED / GENERATING /
+                                          GENERATED / ATTENTION
+                                          NOT_READY / QUEUED / DOWNLOADING        Download separately; partial file no final
+    Download
+                                          / DOWNLOADED / FAILED / ATTENTION       claim
+                                          UNVERIFIED / OBSERVED /
+                                                                                  strict dispatch requires fresh observed
+    Credit                                RESERVED_LOCAL / RECONCILING /
+                                                                                  balance
+                                          CONFLICT
+
+
+      Per-profile actor hanya menangani satu operasi browser mutating pada satu waktu; concurrency total ≤
+       jumlah aktor yang sah dan batas provider yang terverifikasi.
+      Panggilan mutating harus mencatat attempt+token sebelum browser action; timeout setelah klik dapat
+       berarti ACCEPTED, bukan FAILED.
+      Lease expiry pre-submit boleh return QUEUED hanya bila terbukti tidak melewati boundary; post-submit
+       tetap ATTENTION sampai rekonsiliasi sah.
+      Pause: hentikan claim baru, jangan memutus mutasi yang sudah dikirim; Stop: cancel pekerjaan non-
+       mutating/queued, tahan post-submit uncertain; Close app: persist & recover safe.
+      Download worker terpisah dari Generate; download retry yang hanya membaca result stable dan tidak
+       menimbulkan charge dapat diizinkan dengan batas dan laporan jelas.
+      Berikan warning bila Windows sleep/network drop/browser lock; no rate-limit bypass; account cooldown
+       sesuai pesan Flow.
+
+
+09. Driver Google Flow (rencana LIVE bersyarat)
+09.1 Satu scene pilot yang diperbolehkan setelah gate
+19. Manual login selesai di normal Chrome; owner menutup login Chrome; session READINESS divalidasi
+       setelah restart aplikasi.
+20. Cek model/option/resolusi/kredit dan identitas project Flow melalui interface resmi; bukti tanpa data
+       rahasia.
+21. Map scene image SHA/prompt hash, duration, output_count, approved price; re-check sebelum submit.
+22. Lakukan satu submit persis, tanpa auto retry; interpret ACCEPTED hanya bila remote result reference
+       stabil.
+23. Amati status bukan hanya keberadaan kartu visual; 2 output harus punya 2 take/result IDs/biaya
+       ditetapkan per gen.
+24. Setelah generated, unduh hasil yang dipilih ke unik .part, cek media signature+duration/size/SHA, atomic
+       no-clobber, persisted result.
+
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE   |   8 OKT 2026   |   Hal. 8
+                                                                                   FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+09.2 Kondisi blocking driver
+    KONDISI                                       RESPONSE                                        TIDAK BOLEH
+                                                  STOP, VERSION_MISMATCH, screenshot
+    UI berubah/selector tidak unik                                                                Klik posisi x-y tebakan
+                                                  sanitized
+    Akun salah/project remote berubah             ACCOUNT_PROJECT_MISMATCH                        Menaruh hasil pada scene lain
+    Kredit UI tidak teramati                      CREDIT_UNKNOWN                                  Memakai angka 50 manual sebagai fakta
+    Klik Generate timeout                         SUBMIT_UNCERTAIN                                Klik Generate kedua kali
+    CAPTCHA/MFA/unusual activity                  HANDOFF_MANUAL/PAUSED                           Bypass/rate-limit evasion
+    Result card muncul tanpa ID stabil            ATTENTION                                       Tandai GENERATED/DOWNLOADED
+                                                                                                  Membuat selector live hanya karena
+    ToS izin automation unresolved                POLICY_BLOCKED
+                                                                                                  teknis memungkinkan
+
+
+10. UI Coverage Matrix — harus diproses sebelum coding UI baru
+Semua layar existing tetap 30-state reference. UI berikut ialah addendum usulan yang harus melalui:
+inventory→prompt UI→WAJIB STOP→generate gambar→review/revisi pengguna →satu DOCX UI final →masuk
+repo setelah izin GitHub diberikan. Tidak boleh menganggap daftar ini sebagai UI yang sudah disetujui.
+    ID                         TAMPILAN                   STATES MINIMUM               P                            ATURAN
+                                                          ready/invalid/wait                                        Sisip pada workspace
+    UIX-01                     Ringkasan Scan & Kredit                                 P0
+                                                          credit/tariff unknown                                     existing; 30 lama tetap
+                                                                                                                    Modal/drawer, jangan
+                                                          accounts, assignment,
+    UIX-02                     Dialog Smart Credit Plan                                P0                           tambah sidebar
+                                                          estimate, unmatched
+                                                                                                                    permanen
+                                                          balance
+                                                                                                                    Status sebenarnya,
+    UIX-03                     Rincian Kredit per Akun    observed/TTL/reserved/s      P0
+                                                                                                                    bukan label Online statis
+                                                          ource
+                                                          max
+                                                                                                                    User approval no hidden
+    UIX-04                     Freeze Plan & Approval     budget/output_count/revi     P0
+                                                                                                                    Generate
+                                                          sion/diff
+                                                          account worker, scene                                     Per-account, actionable
+    UIX-05                     Live Run Monitor                                        P0
+                                                          progress, PAUSE                                           status; no fake progress
+                                                          submit uncertain, credit                                  Recovery via
+    UIX-06                     Conflict/Reconciliation                                 P0
+                                                          conflict, lost session                                    banner/temporary route
+                                                          subset safe and locked                                    Tidak pindah
+    UIX-07                     Replan/Partial Project                                  P1
+                                                          scenes                                                    running/ambiguous
+                                                          quote stale, policy                                       Start disabled until
+    UIX-08                     Tariff/Policy Changed                                   P0
+                                                          revoked, entitlement                                      reapproval
+                                                          result per scene,                                         Reuse Hasil; no
+                               Download/Handoff
+    UIX-09                                                checksum,                    P1                           Download button when
+                               report
+                                                          partial/complete                                          not generated
+
+
+
+        Prompt UI hanya untuk bagian tambahan, referensi 30 lama tetap; kesalahan label resolusi pada artefak
+         lama dikoreksi menjadi 720p sebagaimana overrides.
+        UI P0 wajib state idle/ready/loading/error/stale/blocked/permission denied/partial; setiap tombol harus
+         punya command application-layer dan tes UI.
+        UIX-06 Recovery Center bukan menu permanen sidebar; UIX-09 output adalah video, bukan PNG.
+        Tidak membuka coding UI hanya karena pemilik mengetik “lanjutkan”; perlu approval gambar final
+         eksplisit dan DOCX addendum referensi UI.
+
+
+                         DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE                 |   8 OKT 2026   |   Hal. 9
+                                                                        FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+11. Acceptance & test matrix lintas wave
+Tes T01–T45 di V1.0 tetap berlaku; V1.1 menetapkan wave kepemilikan serta menambahkan X01–X15 khusus
+lintas proyek/policy. Semua tes fake/fixture tidak membutuhkan login ataupun biaya Google. Live pilot diberi
+label LIVE hanya bila benar-benar dijalankan dengan persetujuan.
+ ID                         PERILAKU WAJIB                      WAVE                               BUKTI
+                            Mapping 4/6/8/10, invalid,
+ T01–T04                                                        E12-03/05                          UNIT/CONTRACT
+                            selected<Target, asset missing
+                            Quote 124/50 simulasi, 2
+ T05–T10                    outputs, tarif berubah,             E12-03/04/05                       UNIT/INTEGRATION
+                            unknown, kurang kredit
+                            Claim race, last credit, account
+ T11–T17                    safe, post-submit ambiguous,        E12-04/11/14                       SQLITE/FAULT
+                            crash
+                            Auth expired, browser lock,
+ T18–T23                    entitlement, unreadable credit,     E12-07/08/14                       FIXTURE+LIVE READ
+                            outside activity, refresh
+                            Remote ID stable, not-ready, bad
+ T24–T28                                                        E12-09/10                          PROVIDER FIXTURE
+                            download, collision, late failure
+                            Corrupt legacy, migration, stale
+ T29–T34                    prompt, replan, moving              E12-04/05/11/14                    SQLITE/CONTRACT
+                            running, cross-account result
+
+
+ ID                         PERILAKU WAJIB                      WAVE                               BUKTI
+                            UI DOM drift, rate limit, Qt
+ T35–T39                    responsive, restart during          E12-07/09/15                       UI/FAULT/BUILD
+                            RUNNING, portable path
+                            30 UI, policy, consent, multi-
+ T40–T45                                                        E12-02/06/12/15                    UI/SECURITY/OUTPUT
+                            output, time zone, sorted final
+                            Two local projects race for same
+ X01                        last 15 credits: exactly one        E12-04/11                          CONCURRENT SQLITE
+                            reserve/claim
+                            Attempt actor lost lease cannot
+ X02                        mutate or free new owner            E12-04/11                          FENCING
+                            reservation
+                            Outbox global committed,
+ X03                        projection interrupted, restart     E12-04/14                          CRASH INJECTION
+                            replay exactly once
+                            Two app instances/write locks:
+ X04                                                            E12-04/15                          PROCESS/LOCK
+                            only supported writer allowed
+
+
+ ID                         PERILAKU WAJIB                      WAVE                               BUKTI
+                            Unknown policy/entitlement
+ X05                        never dispatch even with            E12-05/07                          SECURITY
+                            manual balance=999
+                            Quote approval revision
+ X06                        mismatch or changed                 E12-03/05                          DOMAIN
+                            output_count blocks Start
+                            Cross-profile remote result ID
+ X07                        reused does not attach wrong        E12-10/11                          CONTRACT
+                            scene
+                            Redaction:
+                            logs/screenshots/manifest/backu
+ X08                                                            E12-07/15                          SECURITY
+                            p contain no cookie/token/email
+                            secret
+                            Model UI access conflicts with
+ X09                                                            E12-07/08                          CAPABILITY
+                            help entitlement: fail-closed
+                            No invented credit regeneration
+ X10                        at midnight WIB; time zones         E12-04/07                          CLOCK
+                            correct
+
+
+                  DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE              |   8 OKT 2026   |   Hal. 10
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+ ID                         PERILAKU WAJIB                       WAVE                            BUKTI
+                            Unsupported filesystem
+ X11                        hardlink: fail safely; no old file   E12-10/15                       FS
+                            clobber
+                            User tries auto-reassign
+ X12                        SUBMIT_UNCERTAIN to second           E12-11/14                       DOMAIN
+                            account: rejected
+                            Partial project displayed
+ X13                        PARTIAL; never assert all            E12-06/10/15                    UI+MANIFEST
+                            outputs complete
+                            One request returns two output
+ X14                        cards; exact two take links and      E12-03/09/10                    CONTRACT
+                            cost
+                            Policy changes during active
+ X15                        plan: zero new submits; safe         E12-07/13/14                    INTEGRATION
+                            work remains auditable
+
+
+12. Kartu implementasi E12-00 s.d. E12-16
+Setiap wave di bawah memiliki satu sasaran, dependency gate, artefak dan task cards. File/fungsi
+implementasi final ditetapkan melalui pencarian canonical owner pada HEAD ketika wave mulai; nama modul
+baru bersifat usulan. Perubahan setiap wave harus di branch terfokus, tes sesuai task ID, laporan PASS/FAIL
+dan rollback yang aman. Tampilan UI baru tetap tunduk pada STOP gate.
+
+
+                  DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE            |   8 OKT 2026   |    Hal. 11
+                                                                           FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-00 — Baseline & governance
+    OWNER / ROLE                              GATE                                      OUTPUT PASS
+                                                                                        NO CODING; baseline repeatable,
+    ASTRA/Repo governance                     G0, G2                                    master approved, policy review
+                                                                                        started.
+
+
+
+E12-00-T01 | Verifikasi HEAD tree, PR, CI source SHA; catat tanggal WIB
+    Kerjakan: Baca AGENTS, TASKS, PROJECT_STATE, ADR register dan handoff; tulis audit diff terhadap e560684e; cek source
+    code bukan README saja.
+    Deliverable: Baseline SHA, memo DELTA, matrix sumber bukti.
+    Acceptance: Perbedaan baseline dijelaskan; tidak ada file repo tersentuh.
+    Stop/rollback: Gagal identifikasi branch/SHA → STOP.
+
+E12-00-T02 | Inventaris canonical owners dan test relevan
+    Kerjakan: Baca ports, modules, callers, migration, tests; cari duplikasi sebelum usul file baru.
+    Deliverable: Module Ownership Map / conflict list.
+    Acceptance: Setiap modul punya owner; target changes traceable.
+    Stop/rollback: Jika module owner konflik → ASTRA ADR.
+
+E12-00-T03 | Peta legal/policy dan sumber harga
+    Kerjakan: Catat terms, page version, screenshot sanitized + date; bedakan harga/entitlement/akses otomasi.
+    Deliverable: Policy Review Register POL-01..06.
+    Acceptance: Policy live UNKNOWN direkam BLOCKED; tidak dinyatakan PASS tanpa dasar.
+    Stop/rollback: No experimental mutation.
+
+E12-00-T04 | Tentukan batas scope dan handoff product
+    Kerjakan: Kunci ZIP/manifest existing; MP4/SRT direct future scope; daftar non-goals dan model frozen.
+    Deliverable: Scope Baseline Matrix.
+    Acceptance: Pengguna tidak diminta teknis berulang; ambigu relevan dicatat.
+    Stop/rollback: Stop bila perubahan tujuan produk.
+
+E12-00-T05 | Siapkan paket docs authority V1.1
+    Kerjakan: Cocokkan dengan V1.0, UI old, semua DOCX planning; minta persetujuan sebelum push GitHub.
+    Deliverable: Master DOCX approved + prompt TXT + status.
+    Acceptance: Dokumen lengkap di repo hanya setelah izin mutasi diberikan.
+    Stop/rollback: Tidak coding/commit dalam tahap review ini.
+
+Gate akhir E12-00
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE         |   8 OKT 2026   |   Hal. 12
+                                                                          FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-01 — ADR arsitektur lintas modul
+    OWNER / ROLE                             GATE                                       OUTPUT PASS
+                                                                                        Tidak ada breaking schema tanpa
+    ASTRA/Architecture                       G0, G3                                     migration; keputusan global DB
+                                                                                        disahkan.
+
+
+
+E12-01-T01 | ADR global DB orchestration sebagai authority
+    Kerjakan: Bandingkan alternatif (project DB per-account, ATTACH, global authority+outbox); pilih berdasar atomicity dan
+    backward compatibility.
+    Deliverable: ADR-020 proposed, sequence diagram.
+    Acceptance: Alasan, tradeoff, lock/consistency terbukti dengan skenario X01/X03.
+    Stop/rollback: Jika keputusan belum sah → STOP schema.
+
+E12-01-T02 | Kunci identitas akun & keterpisahan sesi
+    Kerjakan: Profile ID opaque; label aman; rights/opt-in; remote context identity; zero secrets.
+    Deliverable: AccountRegistryContract.
+    Acceptance: Identity collision/mismatch typed error.
+    Stop/rollback: No cookie/token metadata.
+
+E12-01-T03 | Rinci schema, port version, migrasi/backfill
+    Kerjakan: Specify unique constraints, outbox, idempotency, owner token; compatibility v2 job/manifest v1.
+    Deliverable: DDL sketch + migration up/down policy.
+    Acceptance: Rollback/resume testable; unknown version read-only.
+    Stop/rollback: No destructive rewrite.
+
+E12-01-T04 | Tetapkan state machine & retry rules
+    Kerjakan: Generate vs Download; pre/post submit; unknown spend; attempt mapping; crash matrix.
+    Deliverable: Transition Table/ADR.
+    Acceptance: Tidak ada transisi yang menyebabkan duplicate submit.
+    Stop/rollback: AMBIGUOUS always stops.
+
+E12-01-T05 | Keputusan concurrency & process isolation
+    Kerjakan: 1 Browser Worker per profil; global scheduler single writer; multiple app instance policy.
+    Deliverable: Actor/lease ownership diagram.
+    Acceptance: No cross-thread Playwright; race X02/X04.
+    Stop/rollback: Unknown safety → concurrency 1.
+
+E12-01-T06 | Review arsitektur dan signoff
+    Kerjakan: ASTRA review lintas modul, policy, security, UI, perf; freeze design input ke SOL.
+    Deliverable: Approved ADR pack & DoR.
+    Acceptance: Semua P0 open decisions terselesaikan sebelum E12-03/04.
+    Stop/rollback: Bila risiko unresolved, wave affected BLOCKED.
+
+Gate akhir E12-01
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE          |   8 OKT 2026   |   Hal. 13
+                                                                           FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-02 — UI addendum — WAJIB STOP
+    OWNER / ROLE                              GATE                                      OUTPUT PASS
+                                                                                        Semua gambar P0 final pengguna
+    ASTRA/UI                                  G4                                        setujui; satu DOCX addendum
+                                                                                        disahkan.
+
+
+
+E12-02-T01 | Buat Coverage Matrix UIX-01..09
+    Kerjakan: Map base screen to extension, 30 frozen, state loading/empty/error/partial, copy Bahasa Indonesia.
+    Deliverable: UI Coverage Matrix spreadsheet-in-doc.
+    Acceptance: Tidak ada layar P0 tanpa prompt/gambar.
+    Stop/rollback: No UI code.
+
+E12-02-T02 | Tulis prompt spesifik per state
+    Kerjakan: Layout whitelist, components, modal size, error copy, icon semantics, 720p, video output.
+    Deliverable: Prompt UI pack versioned.
+    Acceptance: Prompt tidak menimpa original shell/layout.
+    Stop/rollback: No image approval inferred.
+
+E12-02-T03 | STOP setelah prompt disiapkan
+    Kerjakan: Ajukan prompt ke pengguna dan hentikan.
+    Deliverable: Prompt-only STOP evidence.
+    Acceptance: Tidak ada generate gambar otomatis sebagai akibat “lanjutkan” biasa.
+    Stop/rollback: Tunggu instruksi gambar eksplisit.
+
+E12-02-T04 | Generate/review/revisi seluruh referensi baru
+    Kerjakan: Setiap image ID, prompt ID+revision, state, interaction; user final signoff.
+    Deliverable: Approved UI PNG references.
+    Acceptance: P0/P1 visual review tertulis.
+    Stop/rollback: Reject ambiguous labels.
+
+E12-02-T05 | Satukan seluruh UI final ke DOCX addendum
+    Kerjakan: Embed final PNG, prompts, interaction, UI_FREEZE_MANIFEST, checksum/reference IDs.
+    Deliverable: 1 DOCX UI addendum final.
+    Acceptance: Semua file siap repo sebelum coding UI; repo tidak disentuh tanpa izin.
+    Stop/rollback: Jika gambar kurang, UI gate FAIL.
+
+Gate akhir E12-02
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE         |   8 OKT 2026   |   Hal. 14
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-03 — Tariff catalog & Quote Engine offline
+    OWNER / ROLE                             GATE                                     OUTPUT PASS
+                                                                                      Deterministic pricing; immutable
+    SOL/Domain                               G0, G2, ADR
+                                                                                      quotes; 0 calls provider.
+
+
+
+E12-03-T01 | PriceCatalog canonical + versioned fixture
+    Kerjakan: Buat domain immutable model/res/duration/output; source URL/verified date/TTL; support unknown.
+    Deliverable: TariffCatalog model + contract tests.
+    Acceptance: 720p 4/6/8/10 7/10/12/15 fixture; never assume permanent.
+    Stop/rollback: Reject unknown model.
+
+E12-03-T02 | Canonical Omni Flash product mapping
+    Kerjakan: Pisahkan repo display "Omni Flash 1.1" dan official "Gemini Omni Flash" via verified product mapping.
+    Deliverable: ModelCapability DTO.
+    Acceptance: Mismatched alias unresolved blocks live.
+    Stop/rollback: No silent switch.
+
+E12-03-T03 | Quote per generation vs per request
+    Kerjakan: Include output_count and UI options; computation Decimal/integer; no negative.
+    Deliverable: QuoteEngine + tests.
+    Acceptance: T05/T06, X14 accurate for 1 and 2 outputs.
+    Stop/rollback: Never quote default output if unverified.
+
+E12-03-T04 | Price invalidation and frozen revision
+    Kerjakan: TTL/quote_id/catalog revision/approval hash; UI actual cost > local snapshot blocks.
+    Deliverable: TariffQuote versioned snapshot.
+    Acceptance: T07 and X06.
+    Stop/rollback: No stale Start.
+
+E12-03-T05 | Mock/fake provider and stress quotes
+    Kerjakan: 10/60/100/500 scenes; deterministic; fuzz numeric/NaN; error codes.
+    Deliverable: Unit/contract/perf evidence.
+    Acceptance: Ruff/mypy/architecture/tests PASS.
+    Stop/rollback: No browser mutation.
+
+Gate akhir E12-03
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE       |   8 OKT 2026   |   Hal. 15
+                                                                        FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-04 — Global credit ledger, snapshots & migrations
+    OWNER / ROLE                                GATE                                  OUTPUT PASS
+                                                                                      Global cross-project reservation
+    SOL/Infrastructure                          G3, E12-01                            atomic, migration reversible or safe-
+                                                                                      stop.
+
+
+
+E12-04-T01 | Global schema/version bootstrap
+    Kerjakan: Create global DB under Settings with v1 migrations; backup before DDL; schema guard.
+    Deliverable: GlobalOrchestrationRepository.
+    Acceptance: X04/safe unknown version.
+    Stop/rollback: No drop/overwrite legacy.
+
+E12-04-T02 | CreditSnapshot with evidence and expiry
+    Kerjakan: Store observed/user manual/unknown distinct, TTL, source digest, entitlement, model support.
+    Deliverable: CreditObservationPort DTO.
+    Acceptance: Manual 999 never equals VERIFIED.
+    Stop/rollback: No fake refresh.
+
+E12-04-T03 | Single transaction claim/reserve/outbox
+    Kerjakan: BEGIN IMMEDIATE, unique active scene/profile reservation and fencing; global per-profile availability.
+    Deliverable: ReserveAndClaimTransaction.
+    Acceptance: T11/T12/X01 race PASS.
+    Stop/rollback: Rollback on any failure.
+
+E12-04-T04 | Append-only ledger & idempotency
+    Kerjakan: event/idempotency unique, provider proof digest, expected vs confirmed separate; reserve pending unknown.
+    Deliverable: CreditLedgerWriter/Reader.
+    Acceptance: Replay cannot double-count.
+    Stop/rollback: No balance math as fact.
+
+E12-04-T05 | Outbox project projection
+    Kerjakan: Event replay to project SQLite, idempotent apply/confirmed results preservation; startup repair.
+    Deliverable: ProjectionService.
+    Acceptance: X03 forced mid-projection crash PASS.
+    Stop/rollback: No dual independent commits.
+
+E12-04-T06 | Legacy project migration/restore
+    Kerjakan: Golden DBs: empty, old v2, corrupted, running/attention, complete downloads.
+    Deliverable: Migration report + fixtures.
+    Acceptance: T29/T30 + checksum byte-preserve.
+    Stop/rollback: On unknown schema open readonly.
+
+Gate akhir E12-04
+      Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+       hasil P/F.
+      Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+       lulus.
+      Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+       perencanaan saat ini tetap baca-saja.
+
+
+                         DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE    |   8 OKT 2026   |   Hal. 16
+                                                                          FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-05 — Smart Credit Planner offline
+    OWNER / ROLE                              GATE                                     OUTPUT PASS
+                                                                                       Accurate deterministic allocation;
+    SOL/Domain+Application                    E12-03/04
+                                                                                       Freeze Plan; no provider mutation.
+
+
+
+E12-05-T01 | Build immutable ScanPlanInput
+    Kerjakan: Canonical scene IDs, target, digest, selected duration, readiness, source timestamp.
+    Deliverable: ScanPlanInput DTO.
+    Acceptance: T01–04/31.
+    Stop/rollback: Reject changed image/prompt.
+
+E12-05-T02 | Eligible profile filtering
+    Kerjakan: Only opted-in, policy signed, ready model/credit, no stale; explain exclusion.
+    Deliverable: CandidateSelectionService.
+    Acceptance: T08/T09/X05.
+    Stop/rollback: No optimistic 50.
+
+E12-05-T03 | Greedy allocation & stable tie-break
+    Kerjakan: Cost DESC, time ASC, scene ASC; min accounts/balanced, bounded swaps.
+    Deliverable: SmartCreditPlanner.
+    Acceptance: Same inputs same hash, no overallocation.
+    Stop/rollback: No unbounded search.
+
+E12-05-T04 | Manual-assisted reassign & revisions
+    Kerjakan: Revalidate accounts, capacity and unclaimed only; diff costs/revision.
+    Deliverable: ReplanService.
+    Acceptance: T32/T33/X12.
+    Stop/rollback: Reject SUBMIT_STARTED.
+
+E12-05-T05 | Freeze+explicit approval contract
+    Kerjakan: Bind source fingerprint, account list, maximal credits, number outputs, tariff version.
+    Deliverable: PlanApproval object.
+    Acceptance: No START until approval current.
+    Stop/rollback: No silent user assent.
+
+E12-05-T06 | Mixed duration fake soak
+    Kerjakan: Simulate 12 scene total 124, 60 scene partial, 2 projects same account, unknown credits.
+    Deliverable: Golden fixture set.
+    Acceptance: T05/T10/X01.
+    Stop/rollback: 0 provider calls.
+
+Gate akhir E12-05
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE         |   8 OKT 2026   |   Hal. 17
+                                                                        FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-06 — UI Credit Planner extension
+    OWNER / ROLE                             GATE                                    OUTPUT PASS
+                                                                                     Approved UI implemented with active
+    SOL/Presentation                         G4, E12-05
+                                                                                     services and no 30-UI regressions.
+
+
+
+E12-06-T01 | Implement only approved UIX modal/views
+    Kerjakan: Use Qt model/view and application DTO; no infra import.
+    Deliverable: UIX-01–04 Qt widgets.
+    Acceptance: Source screenshot vs approved UI.
+    Stop/rollback: No redesign shell.
+
+E12-06-T02 | Truthful status/source/balance display
+    Kerjakan: Observed at WIB and stale/manual badges; explain blocked buttons.
+    Deliverable: Credit Details binding.
+    Acceptance: T08/T21, error states.
+    Stop/rollback: Never static “Online” status.
+
+E12-06-T03 | Approval/replan interaction
+    Kerjakan: Freeze version, costs/account assignments, consent; disable START when stale.
+    Deliverable: Review/approval command route.
+    Acceptance: T42, X06.
+    Stop/rollback: No implicit Generate.
+
+E12-06-T04 | Progress/partial/recovery navigation
+    Kerjakan: UIX-05–09 as approved; async signals, keyboard focus and accessible hints.
+    Deliverable: Run Monitor/Recovery extension.
+    Acceptance: T37, X13.
+    Stop/rollback: Recovery not permanent sidebar.
+
+E12-06-T05 | Visual/UI regression
+    Kerjakan: 30/30 legacy + P0/P1 new screenshots; CI screenshot diff; inspect manual warnings.
+    Deliverable: UI Evidence Artifact.
+    Acceptance: Diff threshold approved, no label overflow.
+    Stop/rollback: If UI gate FAIL rollback extension.
+
+Gate akhir E12-06
+      Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+       hasil P/F.
+      Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+       lulus.
+      Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+       perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE      |   8 OKT 2026   |   Hal. 18
+                                                                          FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-07 — Account capabilities & credit probe READ-ONLY
+    OWNER / ROLE                              GATE                                      OUTPUT PASS
+                                                                                        Eligibility/price/credit observation
+    SOL/Browser+Application                   POL-01 review
+                                                                                        evidence; ZERO submit.
+
+
+
+E12-07-T01 | Observe official account model access
+    Kerjakan: Use authorized existing session/preflight; no reverse-engineered endpoint; scoped account identity.
+    Deliverable: CapabilityObservation DTO.
+    Acceptance: T20/X09 unknown blocks.
+    Stop/rollback: No privileged request.
+
+E12-07-T02 | Read actual credit with provenance
+    Kerjakan: Provider official UI if supported; capture balance, source and observed time.
+    Deliverable: ReadOnlyCreditProbePort.
+    Acceptance: T21/T22/X10; UNKNOWN when absent.
+    Stop/rollback: No 50 assumption.
+
+E12-07-T03 | Probe TTL and quote reconciliation
+    Kerjakan: Stale UI changes invalidated; explicit refresh action; account logout status.
+    Deliverable: CreditReconciliationService.
+    Acceptance: T07/T18/T23.
+    Stop/rollback: No auto recharge.
+
+E12-07-T04 | DOM/version change handling
+    Kerjakan: Selector validated semantic identity and account; changed DOM fixture yields typed stop.
+    Deliverable: SelectorVerifier fixture.
+    Acceptance: T35 zero mutation.
+    Stop/rollback: No pixel click fallback.
+
+E12-07-T05 | Qt responsiveness, sanitized diagnostics
+    Kerjakan: Only browser worker owner; UI future/signal; redact sensitive screenshots.
+    Deliverable: ReadOnly Probe Evidence.
+    Acceptance: T37/X08.
+    Stop/rollback: Do not export browser data.
+
+Gate akhir E12-07
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE         |   8 OKT 2026   |   Hal. 19
+                                                                        FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-08 — Single-account live session permission gate
+    OWNER / ROLE                             GATE                                     OUTPUT PASS
+                                                                                      Real READY after restart + provider
+    USER+ASTRA+SOL                           G1, G5, G6
+                                                                                      policy/license + pilot consent.
+
+
+
+E12-08-T01 | Manual READY after full restart
+    Kerjakan: User logs in normal Chrome, exits app, reopens, Cek Ulang Sesi; no password shared.
+    Deliverable: Sanitized READY proof.
+    Acceptance: Cross-instance lulus (not same app instance).
+    Stop/rollback: Login only ≠ proof.
+
+E12-08-T02 | Validate actual Flow entitlement
+    Kerjakan: Model, region/account/subscription and output mode verified through UI/service policy.
+    Deliverable: Capability signoff evidence.
+    Acceptance: UNSUPPORTED prevents Generate.
+    Stop/rollback: No assumed free support.
+
+E12-08-T03 | Authorize automation integration path
+    Kerjakan: ASTRA review terms for intended non-stealth, no bypass automation; provider-approved if needed.
+    Deliverable: POL signoff/GoNoGo.
+    Acceptance: Explicit permission or STOP live.
+    Stop/rollback: UI automation technically possible not enough.
+
+E12-08-T04 | Create sanitized selector/operation mapping
+    Kerjakan: Read-only inspect real user-visible Flow UI and version; independent fixture reproduce.
+    Deliverable: Selector Contract approved.
+    Acceptance: No guessed clicks; account/project verified.
+    Stop/rollback: No hidden API.
+
+E12-08-T05 | Approve maximum pilot cost
+    Kerjakan: One scene, number of outputs, selected account, price per generation, refund risk, user consent.
+    Deliverable: Pilot Consent Snapshot.
+    Acceptance: No execution before user action.
+    Stop/rollback: Budget expired -> STOP.
+
+Gate akhir E12-08
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE        |   8 OKT 2026   |   Hal. 20
+                                                                        FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-09 — One-scene live Generate pilot
+    OWNER / ROLE                               GATE                                   OUTPUT PASS
+                                                                                      Single real authorized submit +
+    SOL/Browser Worker                         G6, E12-08
+                                                                                      remote stable identity, no duplicate.
+
+
+
+E12-09-T01 | Wire approved provider with restart gate
+    Kerjakan: Bootstrap via RestartGatedGenerationProvider; keep fake/fixture fallback mode.
+    Deliverable: LiveProviderComposition.
+    Acceptance: 0 downstream call when gate fails.
+    Stop/rollback: Never direct ungated injection.
+
+E12-09-T02 | Pre-submit input rehash/settings check
+    Kerjakan: Verify approved image bytes and prompt and exact duration/model/outputs/price.
+    Deliverable: PreSubmitSentinel.
+    Acceptance: T31, invalid -> 0 mutating action.
+    Stop/rollback: Stop stale request.
+
+E12-09-T03 | Persist attempt/submission boundary
+    Kerjakan: Claim/reservation/fencing and SubmitStarted before mutating click.
+    Deliverable: Atomic attempt evidence.
+    Acceptance: Exactly one intentional submit.
+    Stop/rollback: Unknown result must hold reservation.
+
+E12-09-T04 | Execute one verified submit
+    Kerjakan: Authorized UI driver, account remote project, selector model profile; one request.
+    Deliverable: Sanitized live pilot evidence.
+    Acceptance: 1 scene ACCEPTED only stable result ID.
+    Stop/rollback: No retry after timeout.
+
+E12-09-T05 | Analyze accepted vs ambiguous/failed
+    Kerjakan: Map error types; read-only remote reconciliation; compare balance without guessing.
+    Deliverable: Outcome report.
+    Acceptance: T24/T35/X09.
+    Stop/rollback: No live batch on failure.
+
+Gate akhir E12-09
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE        |   8 OKT 2026   |   Hal. 21
+                                                                            FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-10 — One-scene result & Download pilot
+    OWNER / ROLE                              GATE                                         OUTPUT PASS
+                                                                                           One valid output downloaded, linked
+    SOL/Browser+Results                       G7
+                                                                                           and checksum, no old overwrite.
+
+
+
+E12-10-T01 | Observe remote result readiness
+    Kerjakan: Distinguish accepted/generating/generated, result identity unique per output slot.
+    Deliverable: ResultObservationContract.
+    Acceptance: T25/X14.
+    Stop/rollback: No download before ready.
+
+E12-10-T02 | Implement authorized download driver
+    Kerjakan: Remote matching profile/project/attempt; unique temp file; no-clobber publish.
+    Deliverable: LiveDownloadDriver.
+    Acceptance: T26/T27/X11.
+    Stop/rollback: No overwriting existing file.
+
+E12-10-T03 | Verify media bytes/format/duration
+    Kerjakan: Non-zero, video magic/mime, metadata when available, checksum, safe path; quarantine HTML response.
+    Deliverable: MediaValidationEvidence.
+    Acceptance: Bad output never DOWNLOADED.
+    Stop/rollback: No blind extension rename.
+
+E12-10-T04 | Link download to result manifest
+    Kerjakan: Source/provenance/take/remote/profile masked/trim target; sorted Scene.
+    Deliverable: Manifest vNext proposal and v1 compatibility.
+    Acceptance: T45/X07/X13.
+    Stop/rollback: Do not break strict v1 consumers.
+
+E12-10-T05 | Single-scene complete demonstration
+    Kerjakan: User verifies file player and hash, GUI Hasil, rollback/collision/restart.
+    Deliverable: G8 acceptance report.
+    Acceptance: PASS only on real 1 scene.
+    Stop/rollback: No multi-account yet.
+
+Gate akhir E12-10
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE          |   8 OKT 2026   |   Hal. 22
+                                                                               FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-11 — Account-aware queue & fake-browser actors
+    OWNER / ROLE                              GATE                                         OUTPUT PASS
+                                                                                           Two FAKE profiles run independent
+    SOL/Scheduler                             E12-04/05/10
+                                                                                           scene jobs safely.
+
+
+
+E12-11-T01 | New scheduler port, retain old serial facade
+    Kerjakan: Transition episode-wide blocker to per-account/scoped attention after ADR; avoid destructive enum.
+    Deliverable: AccountAwareScheduler + adapter.
+    Acceptance: T13/T15/T33.
+    Stop/rollback: No isolation from global DB.
+
+E12-11-T02 | Profile-affine worker actor pool
+    Kerjakan: One browser owner per profile and serialized in-profile operations; per profile limits.
+    Deliverable: ActorPool/Command DTO.
+    Acceptance: No Qt blocking/cross-thread object.
+    Stop/rollback: If safety unknown cap=1.
+
+E12-11-T03 | Claim+lease+reservation fencing
+    Kerjakan: Global claim in same transaction; token check for all outcomes.
+    Deliverable: Lease/attempt fencing.
+    Acceptance: T11/T12/X01/X02.
+    Stop/rollback: Old owner cannot write.
+
+E12-11-T04 | Crash+ambiguous fake scenarios
+    Kerjakan: Interrupt pre-submit, after click, after result; no duplicate.
+    Deliverable: Soak 60 fake scenes.
+    Acceptance: T14/T16/T17/X12.
+    Stop/rollback: AMBIGUOUS held.
+
+E12-11-T05 | Account independent progress + pause
+    Kerjakan: Blocked A allows safe B only when policy permits, no mutation to attention scene.
+    Deliverable: Scheduler progress DTO.
+    Acceptance: T13/T15/X15.
+    Stop/rollback: No silent reassignment.
+
+E12-11-T06 | Cross-project concurrent scenario
+    Kerjakan: Run two projects sharing account; concurrent app instance test.
+    Deliverable: Integration transaction logs.
+    Acceptance: Global invariant X01/X04.
+    Stop/rollback: No account overspend.
+
+Gate akhir E12-11
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE            |   8 OKT 2026   |   Hal. 23
+                                                                          FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-12 — Two-profile LIVE pilot (conditional)
+    OWNER / ROLE                             GATE                                       OUTPUT PASS
+                                                                                        Two approved accounts execute two
+    USER+SOL/Live                            G9, policy explicit                        distinct scenes; correct credit
+                                                                                        observations.
+
+
+
+E12-12-T01 | Policy-specific approval for N=2
+    Kerjakan: Validate if concurrent multi-profile usage is permitted; no evasion of free limit.
+    Deliverable: Additional Consent + POL.
+    Acceptance: If prohibited, wave marked NOT_APPLICABLE/BLOCKED.
+    Stop/rollback: No workarounds.
+
+E12-12-T02 | Check both READY/Flow/credit live
+    Kerjakan: Separate browser profiles, project binding, no credentials exported.
+    Deliverable: AccountEligibility proof.
+    Acceptance: Both freshness and budget current.
+    Stop/rollback: No unknown balance.
+
+E12-12-T03 | Select separate scenes and cost cap
+    Kerjakan: One scene each for pilot; known duration/output count; no shared remote IDs.
+    Deliverable: PilotPlan revision.
+    Acceptance: Exactly 2 intended submits max.
+    Stop/rollback: No automatic new accounts.
+
+E12-12-T04 | Execute and observe both
+    Kerjakan: Monitor per account, rate-limit messages and debit; no ambiguous repeats.
+    Deliverable: Live Evidence Report.
+    Acceptance: T34/X07/T36.
+    Stop/rollback: Any violation STOP.
+
+E12-12-T05 | Confirm video output+reconciliation
+    Kerjakan: Each result to right scene, video checksum, observed credit, partial handling.
+    Deliverable: G9 acceptance.
+    Acceptance: No cross-account mix; no duplicate.
+    Stop/rollback: No scale-up on failure.
+
+Gate akhir E12-12
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE          |   8 OKT 2026   |   Hal. 24
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-13 — Dynamic N-account & safe replan
+    OWNER / ROLE                               GATE                                      OUTPUT PASS
+                                                                                         N accounts only as permitted; effective
+    SOL/Planner/Scheduler                      E12-12 PASS
+                                                                                         capacity-based scheduling.
+
+
+
+E12-13-T01 | Dynamic eligible account discovery
+    Kerjakan: Opt-in ready profiles only, no fixed 2/3/5, respect concurrency/terms.
+    Deliverable: AccountScopeSelect.
+    Acceptance: No hidden inclusion.
+    Stop/rollback: Unknown profile disabled.
+
+E12-13-T02 | Optimize approved objectives at run
+    Kerjakan: Frozen plan sorted, capacity budget and run estimates; user preview.
+    Deliverable: DynamicPlanner.
+    Acceptance: No negative credit reserve.
+    Stop/rollback: No auto use all accounts.
+
+E12-13-T03 | Replan only safe queued after changes
+    Kerjakan: Show revision diff; new approval; budget check global.
+    Deliverable: ReplanDiff DTO.
+    Acceptance: T32/T33/X06.
+    Stop/rollback: Never move accepted jobs.
+
+E12-13-T04 | WAIT_CREDIT/partial continue subset
+    Kerjakan: Subset choice explicitly selected; report uncompleted scenes.
+    Deliverable: PartialRunPolicy.
+    Acceptance: T09/X13.
+    Stop/rollback: Project not FULL COMPLETE.
+
+E12-13-T05 | Soak bounded N fake before live expansion
+    Kerjakan: N=1..5 fixture/perf; live increments only if provider permits, user reapproves.
+    Deliverable: Scaling Evidence.
+    Acceptance: No duplicate/cross-profile/budget.
+    Stop/rollback: No unattended marathon until approved.
+
+Gate akhir E12-13
+      Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+       hasil P/F.
+      Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+       lulus.
+      Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+       perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE         |     8 OKT 2026   |   Hal. 25
+                                                                          FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-14 — Reconciliation, restart & fault hardening
+    OWNER / ROLE                              GATE                                        OUTPUT PASS
+                                                                                          No duplicate and fully explainable
+    SOL/Recovery                              E12-11/12
+                                                                                          restart for all critical boundaries.
+
+
+
+E12-14-T01 | Restore global/project state on startup
+    Kerjakan: Replay outbox, validate leases, stale credit/session; read-only remote matching.
+    Deliverable: RecoveryService.
+    Acceptance: T17/T29/X03.
+    Stop/rollback: No blind submit.
+
+E12-14-T02 | Recover unknown billing/credit
+    Kerjakan: Observe official ledger after timeout/provider failure; annotate expected/confirmed delta.
+    Deliverable: CreditReconciliation.
+    Acceptance: T22/X10, no fake zero spend.
+    Stop/rollback: Conflict blocks affected account.
+
+E12-14-T03 | UI Recovery Center/attention workflow
+    Kerjakan: Operator can select inspect, reauth, safe retry after evidence; UIX-06.
+    Deliverable: Recovery Dialog.
+    Acceptance: T38/T42.
+    Stop/rollback: No permanent sidebar item.
+
+E12-14-T04 | Account/project/result mismatch handling
+    Kerjakan: Make remote key scoped, quarantine orphan/mismatched cards.
+    Deliverable: Integrity report.
+    Acceptance: T34/X07.
+    Stop/rollback: No wrong manifest association.
+
+E12-14-T05 | Fault injection matrix
+    Kerjakan: Power-cut fake, sqlite busy, Qt shutdown, browser exit, disk full, download partial, UI DOM drift.
+    Deliverable: T14–T38 + X03 regression.
+    Acceptance: No lost confirmed output.
+    Stop/rollback: Fail closed on corrupt state.
+
+E12-14-T06 | Security review logs and data retention
+    Kerjakan: No secrets in backup/telemetry; redact screenshot; cleanup limited to safe temp.
+    Deliverable: Security evidence.
+    Acceptance: X08.
+    Stop/rollback: Never delete proof of credit conflict.
+
+Gate akhir E12-14
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                       DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE        |      8 OKT 2026   |   Hal. 26
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-15 — Full QA, Windows portable & release gates
+    OWNER / ROLE                             GATE                                     OUTPUT PASS
+                                                                                      Repeatable binary and CI with truthful
+    SOL/Release QA                           G10
+                                                                                      live feature flags.
+
+
+
+E12-15-T01 | Run pinned uv/ruff/mypy/architecture/full pytest
+    Kerjakan: Compare active CI SHA, collect exact commands/job conclusions and counts.
+    Deliverable: CI Evidence.
+    Acceptance: No false report; failures block.
+    Stop/rollback: No release while red.
+
+E12-15-T02 | Visual regression old + addendum
+    Kerjakan: 30/30 frozen + all new states; compare screenshots on Windows.
+    Deliverable: Visual Evidence.
+    Acceptance: No clipped labels or layout regression.
+    Stop/rollback: Rollback UI extension if needed.
+
+E12-15-T03 | Security & stress testing
+    Kerjakan: Simulate 60/100/500 scenes, 10000 ledger events, 1–5 fake workers, secret scan, SQL locks.
+    Deliverable: Perf/Security Report.
+    Acceptance: No duplicate claim, no leaked secrets.
+    Stop/rollback: Stress failure STOP.
+
+E12-15-T04 | Windows portable build integrity
+    Kerjakan: PyInstaller onedir; launch from path Unicode/spaces; verify SHA/CRC/source/time.
+    Deliverable: Portable ZIP + checksums.
+    Acceptance: T39, packaging smoke.
+    Stop/rollback: Do not package Sessions/user DB.
+
+E12-15-T05 | Release readiness labels
+    Kerjakan: Feature matrix distinguishes PLANNER_READY, SINGLE_LIVE_READY, MULTI_LIVE_ALLOWED.
+    Deliverable: Release Candidate DoD.
+    Acceptance: No fully automatic label without live evidence.
+    Stop/rollback: User sees limits.
+
+Gate akhir E12-15
+     Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+      hasil P/F.
+     Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+      lulus.
+     Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+      perencanaan saat ini tetap baca-saja.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE        |   8 OKT 2026   |   Hal. 27
+                                                                            FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+E12-16 — Final docs, backup & AI handoff
+    OWNER / ROLE                               GATE                                          OUTPUT PASS
+                                                                                             Operator can work; AI can continue
+    SOL+ASTRA                                  E12-15
+                                                                                             from repo without guessing.
+
+
+
+E12-16-T01 | Operator SOP Indonesia
+    Kerjakan: How to import, credit, approval, session, partial/retry/recover safely.
+    Deliverable: USER_GUIDE.docx/md.
+    Acceptance: No terminal required for basic usage.
+    Stop/rollback: Sensitive data hidden.
+
+E12-16-T02 | Final architecture/ADR/manifest & release notes
+    Kerjakan: Sync MODULE_OWNERSHIP, ADR, FAQ, migration notes, UI manifest and hashes.
+    Deliverable: Docs release set.
+    Acceptance: Claims match real tested source SHA.
+    Stop/rollback: No stale CI numbers.
+
+E12-16-T03 | Backup & recovery drill (source only)
+    Kerjakan: Git bundle all refs/tags/history; includes source docs; excluded session, token, user DB.
+    Deliverable: Verified recovery package/README.
+    Acceptance: Can restore on new remote; no secret export.
+    Stop/rollback: Backup without credential claims.
+
+E12-16-T04 | User acceptance demo 12 scene
+    Kerjakan: Run safe demo with mixed durations/partial, quote and monitored outputs as applicable.
+    Deliverable: Demo Report.
+    Acceptance: No live claims if policy blocks.
+    Stop/rollback: No forced credit use.
+
+E12-16-T05 | SOL handoff and final gate
+    Kerjakan: Record HEAD, PR, tests, policy validity, known risks, blocked steps, next safe action.
+    Deliverable: Handoff TXT + PROJECT_STATE/TASKS.
+    Acceptance: Next AI has exact task and evidence.
+    Stop/rollback: No assumption that all goals accomplished.
+
+Gate akhir E12-16
+      Proof harus menyebut baseline/HEAD SHA, branch, changed files, tests yang benar-benar dijalankan, dan
+       hasil P/F.
+      Jangan melanjutkan wave dependen bila task penting di atas gagal atau policy/UI/credit evidence belum
+       lulus.
+      Update status proyek/handoff di repo hanya setelah pemilik memberi izin mutasi GitHub; tahap
+       perencanaan saat ini tetap baca-saja.
+
+
+13. Pemetaan gate akhir dan Definition of Ready
+    GATE                             SYARAT PASS                     BILA FAIL                        WAVE
+                                     Master V1.1 disetujui; semua
+                                     DOCX planning dan final UI
+    G0 — Docs                        addendum sudah masuk repo       STOP coding.                     E12-00/01/02
+                                     SEBELUM coding modul
+                                     terkait.
+                                     Terms/izin service & intended
+    G1 — Policy                      automation terverifikasi non-   Live disabled/manual.            E12-07/08/09/12
+                                     UNKNOWN.
+
+
+                      DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE            |   8 OKT 2026   |   Hal. 28
+                                                                         FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+ GATE                          SYARAT PASS                       BILA FAIL                           WAVE
+                               HEAD commit SHA/CI
+ G2 — Baseline                 status/diff diverifikasi dan      STOP jika drift.                    Setiap wave
+                               fokus branch benar.
+                               Migration/backup
+                               restore/fencing/outbox/cross-
+ G3 — DB                                                         STOP schema/dispatcher.             E12-04/11
+                               project concurrency tests
+                               PASS.
+                               Final PNG disetujui + satu
+ G4 — UI                       DOCX UI final + UI freeze; 30     STOP UI coding.                     E12-02/06
+                               visual lama aman.
+                               Model+output
+                               count+tariff+observed
+ G5 — Price                                                      No auto dispatch.                   E12-03/07/08/09
+                               credit+snapshot fresh per
+                               akun.
+                               READY setelah restart app
+ G6 — Login                                                      No live Generate.                   E12-08/09
+                               dan user consent nyata.
+                               Exactly 1 authorized submit →
+ G7 — Generate                                                   No batch/parallel.                  E12-09
+                               stable remote result ID.
+                               Valid file media checksum/no
+ G8 — Download                                                   No end-to-end claims.               E12-10
+                               clobber/result link.
+                               Permission clear,
+ G9 — Two-profile              identity/account isolation, two   No N expansion.                     E12-12/13
+                               distinct scene pilots.
+                               all
+                               quality/security/UI/Windows
+ G10 — RC                                                        No final release.                   E12-15/16
+                               artifact verified & policy
+                               truthful.
+
+
+DoR per wave: (1) docs/ADR approved; (2) baseline known; (3) scope + non-goals; (4) interface+schema &
+rollback; (5) test IDs & failure; (6) no policy/UI blocker; (7) account consent/budget only for live; (8) fake fixture
+prepared. DoD: code, tests, CI official, UI if relevant, semantic evidence, security, source-of-truth/handoff
+updated and limitations listed.
+
+
+14. Risiko P0/P1 dan keputusan yang masih PENDING
+ ID                            RISIKO                            LEVEL                               MITIGASI
+                                                                                                     ASTRA policy review + no
+                               Legal ToS automation/multi-
+ R01                                                             CRITICAL                            bypass; live blocked until
+                               account
+                                                                                                     authorized
+                                                                                                     Single global authority +
+                               Credits cross-project double
+ R02                                                             CRITICAL                            unique reservation + X01 race
+                               reserve
+                                                                                                     test
+                                                                                                     submit_started persisted,
+ R03                           Submit clicked but timeout        CRITICAL                            ATTENTION, no retry, remote
+                                                                                                     read-only reconcile
+                                                                                                     transactional outbox and
+                               Split-brain global vs project
+ R04                                                             CRITICAL                            idempotent projection + crash
+                               state
+                                                                                                     injection
+                                                                                                     validated selector catalog;
+ R05                           Google Flow UI selector drift     HIGH                                stop unknown version; no
+                                                                                                     pixel fallback
+                                                                                                     TariffQuote immutable
+                               Provider pricing/entitlement
+ R06                                                             HIGH                                revision, last observed UI,
+                               changes
+                                                                                                     consent reapproval
+                               Worker cross-thread/browser                                           profile-affine owner; async Qt;
+ R07                                                             HIGH
+                               lock                                                                  lock tests
+                                                                                                     scope remote mapping
+                               Wrong result assigned to
+ R08                                                             HIGH                                profile/project/attempt and
+                               other account
+                                                                                                     sentinel checks
+
+
+                    DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE              |   8 OKT 2026   |   Hal. 29
+                                                                   FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+ ID                          RISIKO                        LEVEL                          MITIGASI
+                                                                                          immutable pre-migration
+ R09                         Old DB overwrite/corrupt      HIGH                           backup+hash; failure read-
+                                                                                          only
+                             Download partial/no-clobber                                  temp unique + validation +
+ R10                                                       HIGH
+                             file system limitations                                      Windows atomic link fail-safe
+                                                                                          redaction, no sessions in
+ R11                         Account privacy/log leak      HIGH                           export/backups, secret
+                                                                                          scanner
+                             Plan UX appears ready but                                    truthful status and blocking
+ R12                                                       MED
+                             unavailable                                                  copy; no decorative Online
+
+
+                                                                               KEBUTUHAN SEBELUM
+ ID KEPUTUSAN                          STATUS
+                                                                               IMPLEMENTASI
+                                                                               End-to-end automatic target; multiple
+ D01                                   LOCKED by user                          authorized accounts conditional on
+                                                                               Google allowance.
+                                                                               Import JSON v1, Scene_###, frozen
+ D02                                   LOCKED by repo                          model/display 720p, 30 UI reference
+                                                                               retained.
+                                                                               Global orchestrator DB, project
+ D03                                   PROPOSED pending ADR                    projections & outbox; must sign off
+                                                                               before E12-04.
+                                                                               Whether Flow UI automation is
+ D04                                   PENDING provider                        authorized; provider API/official path if
+                                                                               any.
+                                                                               Actual model entitlement/output
+ D05                                   PENDING live
+                                                                               count/tariff per Google account.
+                                                                               Coverage UIX-01..09, prompts, final PNG
+ D06                                   PENDING UI
+                                                                               review and docx UI addendum.
+                                                                               Partial execution yes, only with user
+ D07                                   PROPOSED
+                                                                               explicit approval and PARTIAL status.
+                                                                               Auto resume after restart default OFF
+ D08                                   PROPOSED
+                                                                               until unambiguous reconciliation.
+                                                                               MP4/SRT direct importer, split wizard,
+ D09                                   SCOPE LATER                             editing/timeline merge, 360p/other
+                                                                               models.
+
+
+15. Langkah operasional setelah V1.1 disetujui
+1) Pemilik meninjau DOCX V1.1. Bila disetujui, memberi izin terpisah untuk menyimpannya ke repo Flow-
+Otomatis saja; jangan otomatis push dokumen saat tahap review.
+2) ASTRA memulai E12-00 (audit drift/policy) lalu E12-01 (ADR lintas modul/global DB). Tidak mengulang STEP
+00–11 dan tidak menulis kode bisnis pada gate planning.
+3) Setelah E12-01 PASS, kerjakan E12-02: peta UI, prompt. STOP wajib. Setelah seluruh PNG final disetujui,
+kumpulkan referensi UI dalam satu DOCX, kemudian commit docs sebelum UI coding.
+4) SOL mengerjakan E12-03..E12-07 dengan fake data/fixture. Wave live E12-08..E12-10 baru berjalan setelah
+policy, model, READY-after-restart dan biaya disetujui.
+5) E12-11 dapat menguji multi-worker FAKE. E12-12 real dua akun hanya jika izin Google jelas dan pemilik
+menyetujui pilot; E12-13 scale-up bertahap.
+6) E12-14..E12-16 finishing: recovery, CI, UI, Windows ZIP, SOP dan git backup source (tanpa rahasia).
+
+
+Lampiran A. Sketsa SQL/JSON yang belum boleh langsung dieksekusi
+Ini ilustrasi untuk ADR-020, bukan migrasi siap pakai. SOL harus memvalidasi foreign keys, SQLite version,
+locking, exception handling, data types, index cardinality, crash semantics dan test sebelum implementasi.
+
+
+                  DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE     |   8 OKT 2026   |   Hal. 30
+                                                                                  FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+-- GLOBAL orchestrator / illustrative only:
+CREATE TABLE credit_reservations (
+    reservation_id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL,
+    attempt_id TEXT UNIQUE NOT NULL,
+    estimated_credits INTEGER NOT NULL CHECK(estimated_credits > 0),
+    status TEXT NOT NULL CHECK(status IN
+     ('HELD','HELD_PENDING_RECONCILIATION','RELEASED','RECONCILED')),
+    created_at_utc TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_ledger_idempotent
+    ON credit_ledger(idempotency_key);
+-- Claim/hold/outbox atomically committed in ONE database, once.
+BEGIN IMMEDIATE;
+-- Re-read FRESH observed snapshot, aggregate held reservations,
+-- ensure account eligibility, pricing, scene not already active;
+-- INSERT attempt + reservation + claim owner token + outbox;
+COMMIT;
+{
+    "plan_schema": "proposed-v1.1", "episode_id": "EPISODE_001",
+    "revision": 3, "approved": false,
+    "source_fingerprint": "sha256:...", "quote_version": "2026-10-08-observed",
+    "output_count": 1, "expected_credits": 124,
+    "accounts": [{"profile_id": "opaque-uuid", "balance": null,
+     "confidence": "UNVERIFIED", "selected": false}],
+    "assignments": [{"scene_id":"SCENE_001", "profile_id":"opaque-uuid",
+     "flow_duration_s":4, "expected_credits":7, "state":"PLAN_ONLY"}],
+    "unassigned": [], "policy_verdict": "PENDING"
+}
+
+
+
+Lampiran B. Handoff TXT untuk SOL — ringkasan yang harus ditegakkan
+       Sebelum wave apa pun: baca V1.0 + V1.1, AGENTS.md, PROJECT_STATE.md, TASKS.md, ADR, semua
+        planning original, UI Final/Overrides dan test terdekat.
+       Jangan mulai coding bila E12-00/E12-01 ADR belum diapprove, atau penambahan UI belum memiliki
+        prompt, gambar final, DOCX addendum lengkap.
+       Kerjakan tepat satu wave sesuai kartu tugas; baca HEAD terbaru dan buat delta jika berbeda dari baseline
+        e560684e; branch fokus; jangan mengubah repo lain.
+       Sebelum menambah service baru: cari exact concept/synonym di canonical owners dan ports; cegah util
+        duplikat.
+       Untuk live: jangan login otomatis/bypass, jangan menerka selector/UI price, jangan memakai kuota manual
+        sebagai observed, jangan retry ambiguous, jangan mengirim biaya tanpa persetujuan.
+       Setelah wave: catat changed files, tests+commands/official CI SHA, windows artifact, gate PASS/FAIL, what
+        not tested, risk and next wave; jangan berbohong soal live.
+
+
+Lampiran C. Referensi audit dan pembatasan klaim
+     DOKUMEN                                                             URL
+                                                                         https://github.com/inoriko920-dev/Flow-Otomatis/tree/
+     Repo main HEAD
+                                                                         e560684e04ed3a5fad40bb00a91823de68ca5431
+                                                                         https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/
+     AGENTS.md
+                                                                         AGENTS.md
+                                                                         https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/
+     PROJECT_STATE
+                                                                         PROJECT_STATE.md
+
+
+                          DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE             |   8 OKT 2026   |   Hal. 31
+                                                                      FLOW-OTOMATIS / MASTER PLAN V1.1 / ASTRA → SOL
+
+
+
+DOKUMEN                                                       URL
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/
+TASKS
+                                                              TASKS.md
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/docs/
+ADR REGISTER
+                                                              architecture/ADR_REGISTER.md
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/docs/
+UI overrides
+                                                              ui/IMPLEMENTATION_OVERRIDES.md
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/src/
+Flow Generation Driver
+                                                              flow_otomatis/workers/browser/google_flow_generation.py
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/src/
+Flow Download Driver
+                                                              flow_otomatis/workers/browser/google_flow_download.py
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/src/
+Local serial queue
+                                                              flow_otomatis/application/services/local_generation_queue.py
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/blob/main/src/
+Generation SQLite                                             flow_otomatis/infrastructure/persistence/
+                                                              sqlite_generation_job_repository.py
+                                                              https://github.com/inoriko920-dev/Flow-Otomatis/actions/runs/
+Latest checked main CI
+                                                              37734144006
+Flow credits Official                                         https://support.google.com/flow/answer/16526234?hl=en
+Google Flow eligibility Official                              https://support.google.com/flow/answer/16353333?hl=en
+Google Terms                                                  https://policies.google.com/terms?hl=id
+Generative AI policy                                          https://policies.google.com/terms/generative-ai/use-policy?hl=id
+
+
+
+AUDIT LIMITATIONS Inspeksi dilakukan baca-saja menggunakan repo HEAD dan DOCX V1.0; tidak menjalankan
+pytest baru, browser login, Generate, Download, mutasi database, atau modifikasi GitHub. Semua arsitektur baru
+dan tabel SQL dalam V1.1 berstatus PROPOSED sampai disetujui dan diuji.
+
+
+             AKHIR MASTER PLAN V1.1 — MENUNGGU PERSETUJUAN SEBELUM GITHUB/CODING
+
+
+                        DOKUMEN PLANNING • BUKAN IZIN CODING ATAU GENERATE     |   8 OKT 2026    |   Hal. 32

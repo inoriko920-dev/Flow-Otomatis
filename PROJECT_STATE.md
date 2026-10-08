@@ -653,3 +653,10 @@ Gemini does not depend on the Google Flow login gate:
 - Evidence/handoff: `docs/planning/audits/STEP12_RESULTS_ERROR_RECOVERY_2026-10-08.md`.
 - PR #22 merged as `1c7ade1922e45b987a45f495fb0784588a3c1291`; merged source tree equals verified PR head `a0041755e3635795c489702a67353aa2df1a63ab`.
 - STEP 12 and live Google restart/Generate/Download gates unchanged.
+
+
+## 2026-10-08 — ASTRA E12-00 alternative-format documentary intake (DOCS-ONLY)
+- Owner explicitly requested TXT/MD/other formats to avoid manual GitHub upload. PR #23 adds complete V1.0/V1.1 readable Markdown, V1.1/E12-00 TXT, and reconstructed (not original) DOCX; detailed equivalence evidence: `docs/planning/audits/E12_00_TEXT_EQUIVALENCE_AND_G0_LIMITS_2026-10-08.md`.
+- V1.1 original has 17 waves/90 task cards/15 extra tests and 42 native Word tables; GitHub text preserves all enumerated work/tests, but reconstructed DOCX does **NOT** preserve the original binary/layout. Parent V1.0 archive covers 30 page markers/45 tests.
+- E12-00 text-only documentation review: COMPLETE. **Strict G0 remains BLOCKED** until authority/original Word formatting exception is explicitly resolved. Production coding and UI additions prohibited; E12-01 may continue only as ASTRA planning.
+- STEP 12 real Flow Generate/Download and multi-account policy remains BLOCKED/UNVERIFIED; no user-credit expenditure. Prior official CI record (233 tests/30 UI/Windows build) refers to earlier code and was not re-run for this docs-only PR.

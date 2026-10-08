@@ -323,3 +323,11 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - Evidence/handoff: `docs/planning/audits/STEP12_RESULTS_ERROR_RECOVERY_2026-10-08.md`.
 - PR #22 merged as `1c7ade1922e45b987a45f495fb0784588a3c1291`; merged source tree equals verified PR head `a0041755e3635795c489702a67353aa2df1a63ab`.
 - STEP 12 and live Google restart/Generate/Download gates unchanged.
+
+
+## 2026-10-08 — E12-00 document alternatives / PR #23
+- [x] E12-00 text authority coverage checked: V1.0 30/30 page markers and 45 test IDs; V1.1 32/32 markers, 17 waves, 90 task IDs and 15 X tests; E12-00 T01–T05 present.
+- [x] V1.1 and E12-00 TXT+MD and reconstructed DOCX uploaded to the **review branch only**, verified Git SHA/size; parent V1.0 archived in MD.
+- [x] Differences recorded: 42 original V1.1 Word tables and 9 original E12-00 tables are flattened in text reconstructions; no byte-identity or visual parity claimed. See `docs/planning/audits/E12_00_TEXT_EQUIVALENCE_AND_G0_LIMITS_2026-10-08.md`.
+- [ ] **G0 strict BLOCKED**: original DOCX preservation/equivalence approval not completed. Do not begin SOL coding/Generate or edit frozen UI.
+- [ ] NEXT: E12-01 ASTRA ADR-020–023 planning review only; keep policy/credits/login/live gates blocked independently.
