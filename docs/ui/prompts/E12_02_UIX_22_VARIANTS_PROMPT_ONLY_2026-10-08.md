@@ -1,3 +1,7 @@
+
+
+> **STATUS UPDATE — 2026-10-08:** This is the historical original **PROMPT-ONLY** description, not the current UI approval state. **All 22 V2 mockups have since been CREATED, technically verified and EXPLICITLY APPROVED by the owner.** A final 27-page reference DOCX with 22 byte-identical V2 PNG has been built as a downloadable conversation artifact. The approved SHA manifest is `docs/ui/final/E12_02_APPROVED_22_UI_MANIFEST_AND_HANDOFF_2026-10-08.md`. Binary assets are **NOT YET on GitHub**, G4 overall pending, and no coding/merge permitted until all gates PASS. The per-variant old “NOT GENERATED” labels below are retained as an historical prompt snapshot, not current status.
+
 # E12-02 UIX prompt pack — ASTRA preview, STOP checkpoint
 
 **Repository baseline**: `5b74d686d44ff67f7473fe46d8fcb7a9904618bf`. **State**: PROMPT ONLY, not final UI approval.
