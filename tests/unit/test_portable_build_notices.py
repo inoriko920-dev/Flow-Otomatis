@@ -27,9 +27,7 @@ def _fake_dist_build(
     chrome.parent.mkdir(parents=True)
     chrome.write_bytes(b"chrome-synthetic")
 
-    def fake_run(
-        command: list[str], *, cwd: Path, check: bool
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(command: list[str], *, cwd: Path, check: bool) -> subprocess.CompletedProcess[str]:
         assert cwd == repo_root
         assert check
         if "generate_third_party_notices.py" in str(command[1]):
