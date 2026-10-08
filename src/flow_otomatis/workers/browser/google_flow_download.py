@@ -7,6 +7,7 @@ driver must prove the current authorized Flow UI before it can implement downloa
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -132,12 +133,9 @@ class GoogleFlowDownloadProvider:
                     "Atomic no-overwrite publication failed; partial preserved "
                     "for manual recovery. No automatic retry is allowed."
                 ) from exc
-            try:
+            # The final link is safely published; cleanup only this attempt's partial.
+            with suppress(OSError):
                 partial_path.unlink()
-            except OSError:
-                # The final link is already safely published. The own partial may
-                # remain for cleanup, but must not invalidate the confirmed final.
-                pass
             return GeneratedMediaDownloadResult(output_path=str(final_path))
 
         if evidence.state is GoogleFlowDownloadState.AUTH_REQUIRED:

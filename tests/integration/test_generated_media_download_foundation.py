@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from threading import Barrier
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -333,7 +333,7 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
     assert final.is_file()
     assert final.read_bytes() == b"fake-video"
     assert len(driver.calls) == 2
-    assert len(set(call[2] for call in driver.calls)) == 2
+    assert len({call[2] for call in driver.calls}) == 2
     recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert recorded is not None
     assert recorded.state == DownloadState.DOWNLOADED
