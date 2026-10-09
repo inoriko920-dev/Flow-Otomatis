@@ -133,9 +133,7 @@ def build(
         target = bundle_root / "approved_ui"
         target.mkdir(parents=True, exist_ok=True)
         for state in sorted(APPROVED_IMAGES):
-            approved = load_verified_reference(
-                state, supplied_directory=approved_ui_source
-            )
+            approved = load_verified_reference(state, supplied_directory=approved_ui_source)
             shutil.copy2(approved, target / approved.name)
         if len(tuple(target.glob("*.png"))) != 22:
             raise RuntimeError("Portable UI reference bundle is incomplete")
