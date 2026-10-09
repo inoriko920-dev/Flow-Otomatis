@@ -68,13 +68,25 @@ class ScenePlanningService:
         workspace = self.load_workspace(episode_id)
         return self._missing_duration_plan(workspace)
 
-    def fill_missing_recommended_durations(self, episode_id: str) -> WorkspaceState:
-        """Set only missing Flow selections in one durable update after user approval.
+    def fill_missing_recommended_durations(
+        self,
+        episode_id: str,
+        *,
+        expected_workspace: WorkspaceState | None = None,
+    ) -> WorkspaceState:
+        """Update missing Flow selections, rejecting an outdated confirmation.
 
-        Never override existing manual choices, Source Target, trims, images,
+        Never override existing manual choices, source targets, trims, images,
         prompts, or pinned import SHA-256. Invalid targets stay unselected.
+        If the operator supplied a preview snapshot, do not apply a newer
+        workspace revision without a fresh confirmation.
         """
         workspace = self.load_workspace(episode_id)
+        if expected_workspace is not None and workspace != expected_workspace:
+            raise InternalInvariantError(
+                "Workspace berubah setelah pratinjau durasi. "
+                "Muat ulang proyek dan konfirmasi pilihan terbaru."
+            )
         plan = dict(self._missing_duration_plan(workspace))
         if not plan:
             return workspace
