@@ -159,7 +159,8 @@ class GoogleSessionWorker(GoogleSessionPort):
         self._driver = driver or SystemChromeGoogleSessionDriver()
         self._timeout_ms = timeout_ms
         self._instance_id = instance_id or uuid4().hex
-        # Persisted READY belongs to history; only this instance's successful probe grants readiness.
+        # Persisted READY is history, not an active authorization.
+        # Only this instance's successful probe grants runtime readiness.
         self._current_instance_ready: set[str] = set()
 
     def list_profiles(self) -> tuple[GoogleSessionProfile, ...]:
