@@ -516,6 +516,7 @@ def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
     assert db.read_bytes() == before
     assert all(scene.image_sha256_imported is None for scene in current.scenes)
 
+
 def test_storage_rejects_resolved_db_symlink_escape_before_read_or_write(
     tmp_path: Path,
     monkeypatch,
