@@ -191,6 +191,8 @@ def build_google_login_view(
             )
     elif profile.state is GoogleSessionState.ERROR:
         layout.addWidget(info_banner("Sesi memerlukan perhatian", profile.detail, "error"))
+    elif profile.state is GoogleSessionState.UNKNOWN:
+        layout.addWidget(info_banner("Perlu verifikasi ulang", profile.detail, "info"))
     else:
         layout.addWidget(
             info_banner(

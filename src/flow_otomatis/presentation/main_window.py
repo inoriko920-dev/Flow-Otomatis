@@ -190,7 +190,7 @@ class _GoogleSessionSignals(QObject):
 class _GoogleFlowSignals(QObject):
     """Emit sanitized read-only Flow results to the Qt owner thread."""
 
-    checked = Signal(object, int)
+    checked = Signal(str, int, object)
     failed = Signal(str, int, str)
 
 
@@ -831,14 +831,24 @@ class MainWindow(QMainWindow):
                     profile_id, epoch, "Pemeriksaan Flow gagal tanpa data akun sensitif."
                 )
             else:
-                self._google_flow_signals.checked.emit(probe, epoch)
+                self._google_flow_signals.checked.emit(profile_id, epoch, probe)
 
         future.add_done_callback(completed)
 
-    def _on_google_flow_checked(self, probe: GoogleFlowAccessProbe, epoch: int) -> None:
+    def _on_google_flow_checked(
+        self,
+        requested_profile_id: str,
+        epoch: int,
+        probe: GoogleFlowAccessProbe,
+    ) -> None:
         if self._google_browser_closed:
             return
-        if self._google_flow_epochs.get(probe.profile_id) != epoch:
+        if self._google_flow_epochs.get(requested_profile_id) != epoch:
+            return
+        if probe.profile_id != requested_profile_id:
+            # Never permit a response for profile B to authorize profile A.
+            self._google_flow_busy.discard(requested_profile_id)
+            self._refresh_active_google_login(requested_profile_id)
             return
         if self._google_session_service is None:
             return
