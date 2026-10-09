@@ -7,11 +7,16 @@ from pathlib import Path
 
 from flow_otomatis.application.ports.episode_package import EpisodePackagePort
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
-from flow_otomatis.domain.errors import InternalInvariantError, SceneNotFoundError
+from flow_otomatis.domain.errors import (
+    InternalInvariantError,
+    InvalidDurationError,
+    SceneNotFoundError,
+)
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import (
     WorkspaceScene,
     derive_scene_readiness,
+    recommend_flow_duration,
     validate_selected_flow_duration,
 )
 
@@ -57,6 +62,57 @@ class ScenePlanningService:
             ),
         )
         return self._save_with_scene(workspace, updated_scene)
+
+    def preview_missing_recommended_durations(
+        self, episode_id: str
+    ) -> tuple[tuple[str, int], ...]:
+        """Show proposed local-only choices; never persist or contact the provider."""
+        workspace = self.load_workspace(episode_id)
+        return self._missing_duration_plan(workspace)
+
+    def fill_missing_recommended_durations(self, episode_id: str) -> WorkspaceState:
+        """Set only missing Flow selections in one durable update after user approval.
+
+        Never override existing manual choices, Source Target, trims, images,
+        prompts, or pinned import SHA-256. Invalid targets stay unselected.
+        """
+        workspace = self.load_workspace(episode_id)
+        plan = dict(self._missing_duration_plan(workspace))
+        if not plan:
+            return workspace
+        updated = tuple(
+            replace(
+                scene,
+                selected_flow_duration_s=plan[scene.scene_id],
+                readiness=derive_scene_readiness(
+                    target_duration_s=scene.target_duration_s,
+                    selected_flow_duration_s=plan[scene.scene_id],
+                    image_exists=scene.image_exists,
+                    motion_prompt=scene.motion_prompt,
+                ),
+            )
+            if scene.scene_id in plan and scene.selected_flow_duration_s is None
+            else scene
+            for scene in workspace.scenes
+        )
+        return self._save_and_reload(replace(workspace, scenes=updated))
+
+    @staticmethod
+    def _missing_duration_plan(workspace: WorkspaceState) -> tuple[tuple[str, int], ...]:
+        """Recalculate trusted ceil duration; skip invalid or duplicated IDs."""
+        counts: dict[str, int] = {}
+        for scene in workspace.scenes:
+            counts[scene.scene_id] = counts.get(scene.scene_id, 0) + 1
+        result: list[tuple[str, int]] = []
+        for scene in workspace.scenes:
+            if scene.selected_flow_duration_s is not None or counts[scene.scene_id] != 1:
+                continue
+            try:
+                recommended = recommend_flow_duration(scene.target_duration_s)
+            except InvalidDurationError:
+                continue
+            result.append((scene.scene_id, recommended))
+        return tuple(result)
 
     def rescan_images(self, episode_id: str) -> WorkspaceState:
         """Re-read approved-image evidence from the original package source."""
