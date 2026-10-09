@@ -21,6 +21,13 @@ def is_available_output(output_path: str | None) -> bool:
         # is replaced while the application is running.
         if candidate.is_symlink():
             return False
+        # The file itself can be a regular MP4 while an ancestor directory
+        # was later replaced with an NTFS junction or a symlink. A persisted
+        # success must not silently attest to bytes at a redirected location.
+        canonical = candidate.resolve(strict=True)
+        expected = Path(os.path.abspath(candidate))
+        if os.path.normcase(str(canonical)) != os.path.normcase(str(expected)):
+            return False
         with candidate.open("rb") as stream:
             info = os.fstat(stream.fileno())
             return stat.S_ISREG(info.st_mode) and info.st_size > 0 and bool(stream.read(1))
