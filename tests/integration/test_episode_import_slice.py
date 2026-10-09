@@ -6,6 +6,7 @@ import sqlite3
 import warnings
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from flow_otomatis.application.services.local_scene_preflight import (
     prepare_local_scene_preflight,
 )
 from flow_otomatis.domain.errors import (
+    InternalInvariantError,
     PackageSecurityError,
     PackageValidationError,
     WorkspaceAlreadyExistsError,
@@ -431,3 +433,83 @@ def test_ambiguous_zip_image_entries_never_import_or_hash(tmp_path: Path, extra_
             image_verifier=reader,
         ).import_package(package)
     assert not projects.exists()
+
+
+def test_workspace_concurrent_edits_cannot_both_commit_from_same_revision(
+    tmp_path: Path,
+) -> None:
+    """The second editor must receive a conflict, never silently lose a change."""
+    package = _write_package(tmp_path / "two_editors.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    original = EpisodeImportService(EpisodePackageReader(), repository).import_package(package)
+
+    def candidate(duration: int):
+        first = replace(
+            original.scenes[0],
+            selected_flow_duration_s=duration,
+            readiness=SceneReadiness.READY,
+        )
+        return replace(original, scenes=(first, original.scenes[1]))
+
+    choices = (candidate(8), candidate(10))
+
+    def write_once(workspace):
+        try:
+            repository.update(workspace, expected_workspace=original)
+        except InternalInvariantError:
+            return "conflict"
+        return "saved"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(write_once, choices))
+    assert sorted(outcomes) == ["conflict", "saved"]
+
+    saved = repository.load(original.episode_id)
+    assert saved in choices
+    assert saved is not None
+    assert saved.scenes[1] == original.scenes[1]
+    other = choices[1] if saved == choices[0] else choices[0]
+    with pytest.raises(InternalInvariantError, match="berubah saat disimpan"):
+        repository.update(other, expected_workspace=original)
+    assert repository.load(original.episode_id) == saved
+
+    # After an explicit refresh, another edit is allowed without data loss.
+    follow_up = replace(
+        saved,
+        scenes=(
+            saved.scenes[0],
+            replace(saved.scenes[1], motion_prompt="Fresh second editor change"),
+        ),
+    )
+    repository.update(follow_up, expected_workspace=saved)
+    assert repository.load(saved.episode_id) == follow_up
+
+
+def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
+    tmp_path: Path,
+) -> None:
+    """A stale write may not migrate/modify an older project's database."""
+    package = _write_package(tmp_path / "legacy_conflict.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    original = EpisodeImportService(EpisodePackageReader(), repository).import_package(package)
+    db = tmp_path / "projects" / original.episode_id / "project.sqlite3"
+    with sqlite3.connect(db) as connection:
+        connection.execute("ALTER TABLE scenes DROP COLUMN image_sha256_imported")
+    old = repository.load(original.episode_id)
+    assert old is not None
+    first = replace(
+        old, scenes=(
+            replace(old.scenes[0], selected_flow_duration_s=8, readiness=SceneReadiness.READY),
+            old.scenes[1],
+        )
+    )
+    repository.update(first, expected_workspace=old)
+    current = repository.load(old.episode_id)
+    assert current == first
+
+    before = db.read_bytes()
+    with pytest.raises(InternalInvariantError, match="berubah saat disimpan"):
+        repository.update(old, expected_workspace=old)
+    assert repository.load(old.episode_id) == current
+    assert db.read_bytes() == before
+    assert all(scene.image_sha256_imported is None for scene in current.scenes)
