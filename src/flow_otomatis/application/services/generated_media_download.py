@@ -166,5 +166,20 @@ class GeneratedMediaDownloadService:
 
     @staticmethod
     def _validate_segment(name: str, value: str) -> None:
-        if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        """Reject path traversal and Windows ADS/device aliases before I/O."""
+
+        forbidden = '<>:"/\\|?*'
+        device = value.split(".", 1)[0].upper()
+        reserved = (
+            {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+            | {f"COM{i}" for i in range(1, 10)}
+            | {f"LPT{i}" for i in range(1, 10)}
+        )
+        if (
+            not value
+            or value in {".", ".."}
+            or value.endswith((".", " "))
+            or any(character in forbidden or ord(character) < 32 for character in value)
+            or device in reserved
+        ):
             raise InternalInvariantError(f"Unsafe {name}: {value!r}")
