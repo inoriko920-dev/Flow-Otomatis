@@ -10,6 +10,10 @@ from flow_otomatis.application.ports.google_flow_preflight import (
     GoogleFlowAccessProbe,
     GoogleFlowAccessState,
 )
+from flow_otomatis.application.ports.google_session import (
+    GoogleSessionProfile,
+    GoogleSessionState,
+)
 from flow_otomatis.presentation.main_window import MainWindow
 
 
@@ -186,4 +190,36 @@ def test_stale_flow_probe_after_profile_storage_failure_is_revoked(qtbot) -> Non
     window._on_google_flow_checked(profile_id, 3, probe)
     assert profile_id not in window._google_flow_probes
     assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    window.close()
+
+
+def test_late_google_login_reply_cannot_hijack_unavailable_or_other_route(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.configure_production_shell()
+
+    profile = GoogleSessionProfile(
+        profile_id="profile-late-test",
+        label="Example profile",
+        state=GoogleSessionState.UNKNOWN,
+        last_checked_at=None,
+        detail="Local test only",
+    )
+    window.show_account_service_unavailable("Profil Google", read_error=True)
+    window._on_google_session_profile_ready("open", profile)
+    window._on_google_session_profile_ready("recheck", profile)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert window._active_google_profile_id is None
+
+    window.show_local_diagnostics()
+    window._on_google_session_profile_ready("open", profile)
+    assert window.fixture_code == "REAL_DIAGNOSTICS"
+
+    # An earlier request from profile A cannot replace profile B.
+    window._fixture_code = "REAL_GOOGLE_LOGIN"
+    window._active_google_profile_id = "profile-other-test"
+    window._on_google_session_profile_ready("open", profile)
+    window._on_google_session_profile_ready("recheck", profile)
+    assert window._active_google_profile_id == "profile-other-test"
+    assert window.fixture_code == "REAL_GOOGLE_LOGIN"
     window.close()
