@@ -633,9 +633,7 @@ class MainWindow(QMainWindow):
             route,
             on_home=self.show_project_hub,
             on_import=(
-                self._choose_episode_package
-                if self._episode_import_service is not None
-                else None
+                self._choose_episode_package if self._episode_import_service is not None else None
             ),
         )
         self._replace_layout_widget(self._content_layout, view)
