@@ -18,9 +18,7 @@ def main() -> int:
     if len(APPROVED_IMAGES) != 22:
         raise RuntimeError("Expected exactly 22 owner-approved assets")
     for code in sorted(APPROVED_IMAGES):
-        validated = load_verified_reference(
-            code, supplied_directory=args.assets_folder
-        )
+        validated = load_verified_reference(code, supplied_directory=args.assets_folder)
         print(f"VERIFIED {code}: {validated.name}")
     print("22/22 immutable UI PNG SHA-256 digests match approved manifest")
     return 0
