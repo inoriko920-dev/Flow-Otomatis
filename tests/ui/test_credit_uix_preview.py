@@ -536,3 +536,18 @@ def test_smart_plan_uses_two_columns_of_approved_synthetic_information(qtbot) ->
     assert dialog.findChild(QTableWidget, "UixDetailTable").rowCount() > 0
     assert not dialog.live_dispatch_enabled
     dialog.close()
+
+
+def test_approved_credit_states_are_right_aligned_readonly_drawers(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-03-A")
+    qtbot.addWidget(dialog)
+    for state in ("UIX-03-A", "UIX-03-B"):
+        dialog.set_state(state)
+        drawer = dialog.scroller.widget().findChild(QFrame, "UixCreditDrawer")
+        assert drawer is not None
+        assert drawer.maximumWidth() == 650
+        assert dialog.findChild(QTableWidget, "UixDetailTable") is not None
+        assert not dialog.live_dispatch_enabled
+    dialog.set_state("UIX-02-A")
+    assert dialog.scroller.widget().findChild(QFrame, "UixCreditDrawer") is None
+    dialog.close()
