@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.services.offline_credit_simulation import simulate
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness
@@ -305,6 +306,7 @@ class CreditUixDialog(QDialog):
         parent: QWidget | None = None,
         *,
         workspace: WorkspaceState | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
         initial_state: str = "UIX-01-A",
     ) -> None:
         super().__init__(parent)
@@ -314,6 +316,7 @@ class CreditUixDialog(QDialog):
         self.setMinimumSize(1250, 740)
         self.setStyleSheet(theme.application_stylesheet())
         self._workspace = workspace
+        self._image_verifier = image_verifier
         self._preview = simulate(_DEMO_PLAN)
         self._current_state = "UIX-01-A"
         self._last_local_plan_approved = False
@@ -1254,7 +1257,9 @@ class CreditUixDialog(QDialog):
         """Compute a read-only preview, never enqueue or start a real job."""
         if not self._using_local_inputs() or self._workspace is None:
             return
-        preview = LocalScenePreflightDialog(self._workspace, parent=self)
+        preview = LocalScenePreflightDialog(
+            self._workspace, parent=self, image_verifier=self._image_verifier
+        )
         preview.exec()
         if preview.requested_scene_id is not None:
             self._requested_scene_id = preview.requested_scene_id
