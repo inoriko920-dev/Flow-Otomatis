@@ -9,8 +9,8 @@ from pathlib import Path
 
 from flow_otomatis.application.services.offline_credit_simulation import (
     InvalidSimulationInput as InvalidSimulationInput,
-    simulate,
 )
+from flow_otomatis.application.services.offline_credit_simulation import simulate
 
 
 def main(argv: list[str] | None = None) -> int:
