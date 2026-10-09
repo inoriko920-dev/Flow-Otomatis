@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -212,6 +213,8 @@ def build_results_view(
         play.setObjectName("RealResultsOpenSelectedVideo")
         play.setEnabled(False)
         play.setToolTip("Pilih satu Scene dengan MP4 lokal yang tersedia.")
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         table.clearSelection()
 
         def update_play_selection() -> None:
