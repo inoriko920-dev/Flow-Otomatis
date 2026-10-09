@@ -117,9 +117,7 @@ def test_diagnostics_fails_closed_without_project_reader(qtbot) -> None:
     table = _diagnostics_table(window)
     assert "Belum dapat diperiksa" in table.item(0, 2).text()
     assert "secret-home" not in " ".join(
-        table.item(r, c).text()
-        for r in range(table.rowCount())
-        for c in range(table.columnCount())
+        table.item(r, c).text() for r in range(table.rowCount()) for c in range(table.columnCount())
     )
     report = window._last_diagnostics_snapshot
     assert report is not None
