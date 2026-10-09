@@ -257,6 +257,8 @@ class MainWindow(QMainWindow):
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
+        self._active_uix_preview: CreditUixDialog | None = None
+        self._uix_return_workspace: WorkspaceState | None = None
         self._google_session_signals = _GoogleSessionSignals(self)
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
@@ -465,6 +467,9 @@ class MainWindow(QMainWindow):
                 break
             old_widget = item.widget()
             if old_widget is not None:
+                if old_widget is self._active_uix_preview:
+                    self._active_uix_preview = None
+                    self._uix_return_workspace = None
                 old_widget.setParent(None)
                 old_widget.deleteLater()
         if widget is not None:
@@ -1174,19 +1179,53 @@ class MainWindow(QMainWindow):
         self.show_workspace_state(workspace)
 
     def open_credit_uix_preview(self) -> None:
-        """Open the approved UIX addendum as an offline-only temporary route."""
+        """Show 22 offline-only UI states as a REAL page in the main Qt shell."""
 
+        if self._active_uix_preview is not None:
+            # Repeated clicks cannot stack a second modal/preview route.
+            return
+        self._invalidate_agent_context()
+        workspace = self._current_workspace if self._fixture_code == "REAL_WORKSPACE" else None
         preview = CreditUixDialog(
             self,
-            workspace=self._current_workspace,
+            workspace=workspace,
             image_verifier=self._image_verifier,
             default_to_demo=True,
             app_shell=True,
         )
-        workspace = self._current_workspace
-        preview.exec()
-        if workspace is not None:
-            self._return_to_local_scene(workspace, preview.requested_scene_id)
+        # QDialog inherits QWidget; embedding it avoids another top-level
+        # window and a second copy of the approved main-app navigation.
+        preview.setWindowFlags(Qt.WindowType.Widget)
+        preview.finished.connect(lambda _result: self._return_from_uix_preview(preview))
+        self._fixture_code = "REAL_UIX22_PREVIEW"
+        self._set_navigation("Workspace")
+        self._project_state_label.setText("22 Desain UI • Simulasi Offline")
+        self._status_project.setText("22 kondisi UI • Tanpa Generate")
+        self._uix_return_workspace = workspace
+        self._active_uix_preview = preview
+        self._replace_layout_widget(self._content_layout, preview)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+        preview.show()
+
+    def _return_from_uix_preview(self, preview: CreditUixDialog) -> None:
+        """Return safely to the originating local workspace or real Beranda."""
+
+        if self._active_uix_preview is not preview:
+            return
+        workspace = self._uix_return_workspace
+        chosen_scene = preview.requested_scene_id
+        self._active_uix_preview = None
+        self._uix_return_workspace = None
+        if workspace is None or self._current_workspace is not workspace:
+            self.show_project_hub()
+            return
+        if (
+            chosen_scene is not None
+            and sum(scene.scene_id == chosen_scene for scene in workspace.scenes) == 1
+        ):
+            self._selected_scene_id = chosen_scene
+        self.show_workspace_state(workspace)
 
     def select_workspace_scene(self, scene_id: str) -> None:
         """Select only a persisted Scene row and refresh the Scene Inspector."""
