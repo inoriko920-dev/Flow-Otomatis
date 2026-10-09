@@ -73,7 +73,8 @@ def _set_metric(root: QWidget, title: str, value: str, detail: str) -> None:
 
 
 def build_results_service_unavailable_view(
-    *, on_workspace: Callable[[], object],
+    *,
+    on_workspace: Callable[[], object],
 ) -> QWidget:
     """Active local project without a configured result reader is NOT success."""
 
