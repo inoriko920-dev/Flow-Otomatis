@@ -204,7 +204,9 @@ def test_restart_gate_requires_current_ready_state(tmp_path: Path) -> None:
 
 
 
-def test_third_instance_never_inherits_historical_restart_ready_without_probe(tmp_path: Path) -> None:
+def test_third_instance_never_inherits_historical_restart_ready_without_probe(
+    tmp_path: Path,
+) -> None:
     driver = FixtureBrowserDriver()
     driver.state = GoogleSessionState.READY
     root = tmp_path / "Sessions"
