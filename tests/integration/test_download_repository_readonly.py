@@ -132,3 +132,60 @@ def test_malformed_download_row_is_typed_and_source_is_unchanged(
     with pytest.raises(StorageError):
         repository.list_for_episode("EP_LEGACY")
     assert _digest(database) == before
+
+
+def test_legacy_success_history_is_read_only_until_explicit_new_write(tmp_path: Path) -> None:
+    """Old project databases get no fake remote ID and no read-time migrations."""
+
+    projects_root = tmp_path / "projects"
+    database = _database(projects_root)
+    now = datetime(2026, 10, 10, 5, 0, tzinfo=UTC)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE download_results (
+                episode_id TEXT NOT NULL,
+                scene_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                output_path TEXT,
+                take INTEGER NOT NULL,
+                error_message TEXT,
+                PRIMARY KEY (episode_id, scene_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO download_results (
+                episode_id, scene_id, state, updated_at, output_path, take, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("EP_LEGACY", "SCENE_001", "DOWNLOADED", now.isoformat(), "legacy.mp4", 1, None),
+        )
+        connection.commit()
+
+    before = _digest(database)
+    repository = SqliteDownloadResultRepository(projects_root)
+    record = repository.get("EP_LEGACY", "SCENE_001")
+    assert record is not None
+    assert record.state == DownloadState.DOWNLOADED
+    assert record.generation_remote_result_id is None
+    assert repository.list_for_episode("EP_LEGACY") == (record,)
+    assert _digest(database) == before
+    with sqlite3.connect(database) as connection:
+        names = {str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")}
+    assert "generation_remote_result_id" not in names
+
+    from dataclasses import replace
+
+    repository.save(replace(record, generation_remote_result_id="remote:CONFIRMED"))
+    upgraded = repository.get("EP_LEGACY", "SCENE_001")
+    assert upgraded is not None
+    assert upgraded.generation_remote_result_id == "remote:CONFIRMED"
+    assert upgraded.output_path == "legacy.mp4"
+    with sqlite3.connect(database) as connection:
+        upgraded_names = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")
+        }
+    assert "generation_remote_result_id" in upgraded_names
