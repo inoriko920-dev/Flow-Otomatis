@@ -5,12 +5,22 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from flow_otomatis.domain.job import GenerationJobState
 from flow_otomatis.domain.result import DownloadState, ProjectResults
 from flow_otomatis.presentation.fixtures import get_fixture
 from flow_otomatis.presentation.screen_factory import build_screen
+from flow_otomatis.presentation.widgets import info_banner, page_header, primary_button
 
 
 def _display_scene_id(scene_id: str) -> str:
@@ -52,16 +62,42 @@ def _results_table(root: QWidget) -> QTableWidget:
     raise RuntimeError("Frozen Hasil view is missing the six-column result table")
 
 
-def _set_metric(root: QWidget, title: str, value: str) -> None:
+def _set_metric(root: QWidget, title: str, value: str, detail: str) -> None:
     for frame in root.findChildren(QFrame):
-        labels = frame.findChildren(QLabel)
-        texts = [label.text() for label in labels]
-        if title not in texts:
-            continue
-        title_index = texts.index(title)
-        if title_index + 1 < len(labels):
-            labels[title_index + 1].setText(value)
-        return
+        labels = frame.findChildren(QLabel, options=Qt.FindChildOption.FindDirectChildrenOnly)
+        if len(labels) == 3 and labels[0].text() == title:
+            labels[1].setText(value)
+            labels[2].setText(detail)
+            return
+    raise RuntimeError(f"Frozen Hasil card missing metric: {title}")
+
+
+def build_results_service_unavailable_view(
+    *, on_workspace: Callable[[], object],
+) -> QWidget:
+    """Active local project without a configured result reader is NOT success."""
+
+    root = QWidget()
+    root.setObjectName("RealResultsUnavailable")
+    layout = QVBoxLayout(root)
+    layout.setContentsMargins(22, 18, 22, 18)
+    layout.setSpacing(16)
+    layout.addWidget(page_header("Hasil", "Data hasil proyek lokal belum dapat diperiksa"))
+    layout.addWidget(
+        info_banner(
+            "PEMBACA HASIL TIDAK TERSEDIA",
+            "Workspace sudah dipilih, tetapi komponen pembaca riwayat Generate "
+            "dan Download belum tersedia. Tidak ada MP4 atau keberhasilan "
+            "Generate yang dapat dikonfirmasi dari tampilan ini.",
+            "warning",
+        )
+    )
+    back = primary_button("Kembali ke Workspace")
+    back.setObjectName("RealResultsUnavailableBack")
+    back.clicked.connect(on_workspace)
+    layout.addWidget(back, alignment=Qt.AlignmentFlag.AlignLeft)
+    layout.addStretch(1)
+    return root
 
 
 def build_results_view(
@@ -86,17 +122,38 @@ def build_results_view(
             ),
             _generate_text(scene.generate_state),
             _download_text(scene.download_state),
-            Path(scene.output_path).name if scene.output_path else "—",
+            (
+                Path(scene.output_path).name
+                if scene.download_state == DownloadState.DOWNLOADED and scene.output_path
+                else "—"
+            ),
         )
         for column, value in enumerate(values):
             table.setItem(row, column, QTableWidgetItem(value))
 
     total = len(results.scenes)
-    _set_metric(root, "Generate", f"{results.generated_count}/{total}")
-    _set_metric(root, "Download", f"{results.downloaded_count}/{total}")
-    _set_metric(root, "Perhatian", str(results.attention_count))
+    _set_metric(
+        root,
+        "Generate",
+        f"{results.generated_count}/{total}",
+        "Selesai" if total > 0 and results.generated_count == total else "Belum selesai",
+    )
+    _set_metric(
+        root,
+        "Download",
+        f"{results.downloaded_count}/{total}",
+        "Tersimpan" if results.handoff_ready else "Belum selesai",
+    )
+    _set_metric(
+        root,
+        "Perhatian",
+        str(results.attention_count),
+        "Perlu diperiksa" if results.attention_count else "Tidak ada laporan masalah",
+    )
 
     for label in root.findChildren(QLabel):
+        if label.text() == "Semua generation dan download selesai":
+            label.setText("Status dari catatan proyek lokal • tidak mengakses Google Flow")
         if label.text().startswith("60/60 video generated"):
             label.setText(
                 f"{results.generated_count}/{total} video generated • "
@@ -104,9 +161,20 @@ def build_results_view(
                 "FLOW_OTOMATIS_RESULT.json siap diekspor."
             )
 
-    if results.handoff_ready:
-        for button in root.findChildren(QPushButton):
-            if button.text() == "Tandai Siap untuk Editing":
+    for button in root.findChildren(QPushButton):
+        if button.text() == "Tandai Siap untuk Editing":
+            button.setEnabled(results.handoff_ready)
+            if results.handoff_ready:
                 button.clicked.connect(on_export_manifest)
-                break
+            else:
+                button.setToolTip("Semua file hasil harus tersedia sebelum ekspor manifest.")
+        elif button.text() in {
+            "Buka Folder Output",
+            "Retry Download Terpilih",
+            "Buka Diagnostik",
+        }:
+            # The frozen screen included illustration-only buttons.
+            # Production may not show inert actions as if they worked.
+            button.setEnabled(False)
+            button.setToolTip("Aksi ini belum tersedia dari halaman hasil lokal.")
     return root
