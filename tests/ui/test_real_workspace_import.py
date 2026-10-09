@@ -175,3 +175,27 @@ def test_real_shell_does_not_mislabel_unverified_flow_as_online(qtbot) -> None:
     assert "Tersimpan" in window._saved_badge.text()
     assert window._runtime_status.text() == "Siap digunakan"
     window.close()
+
+
+def test_production_navigation_never_reports_fake_online_or_autosave(qtbot) -> None:
+    """Frozen routes are still reachable, but their mock status is not real."""
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    # Exact screenshot/reference mode is preserved until production launch.
+    assert "Online" in window._connection_badge.text()
+    assert window._autosave_label.text() == "Autosave aktif"
+
+    window.configure_production_shell()
+    for route in ("UI-IMG-001A", "UI-IMG-003A", "UI-IMG-007A", "UI-IMG-008A"):
+        window.show_fixture(route)
+        assert window.fixture_code == route
+        assert window._connection_badge.text() == "●  Mode Lokal"
+        assert window._sidebar_connection_badge.text() == "●  Mode Lokal"
+        assert "Flow belum terverifikasi" in window._sidebar_connection_badge.toolTip()
+        assert window._saved_badge.text() == "●  Data Lokal"
+        assert window._autosave_label.text() == "Penyimpanan lokal"
+        assert "Generate Flow belum aktif" in window._runtime_status.text()
+
+    window.close()
