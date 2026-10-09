@@ -233,11 +233,9 @@ def build_results_view(
 
         def open_selected() -> None:
             row = table.currentRow()
-            if (
-                row >= 0
-                and len(table.selectionModel().selectedRows()) == 1
-                and verified_selected_mp4(results, results.scenes[row].scene_id) is not None
-            ):
+            if row >= 0 and len(table.selectionModel().selectedRows()) == 1:
+                # The main-window handler rechecks persistence and disk, and
+                # shows a safe warning when the file disappeared after paint.
                 on_open_video(results.scenes[row].scene_id)
 
         table.itemSelectionChanged.connect(update_play_selection)
