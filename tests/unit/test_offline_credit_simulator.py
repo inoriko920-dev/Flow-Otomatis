@@ -47,9 +47,7 @@ def test_total_budget_never_exceeded_even_with_sufficient_profiles() -> None:
     assert report["total_simulated_credits"] == 15
     assert len(report["assigned"]) == 1
     assert len(report["blocked"]) == 2
-    assert all(
-        item["reason"] == "SIMULATED_TOTAL_BUDGET_EXCEEDED" for item in report["blocked"]
-    )
+    assert all(item["reason"] == "SIMULATED_TOTAL_BUDGET_EXCEEDED" for item in report["blocked"])
 
 
 def test_per_profile_limit_is_stricter_than_simulated_balance() -> None:
@@ -127,7 +125,9 @@ def test_rejects_extra_sensitive_fields_and_unknown_rates() -> None:
         simulate(data)
 
 
-def test_cli_writes_new_report_without_overwriting(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_cli_writes_new_report_without_overwriting(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
     input_path = tmp_path / "input.json"
     output_path = tmp_path / "report.json"
     input_path.write_text(json.dumps(_input()), encoding="utf-8")
