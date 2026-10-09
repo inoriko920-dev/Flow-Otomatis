@@ -105,6 +105,32 @@ def verified_single_output_folder(results: ProjectResults) -> Path | None:
     return next(iter(directories)) if directories else None
 
 
+def verified_selected_mp4(results: ProjectResults, scene_id: str) -> Path | None:
+    """Verify a uniquely selected, readable MP4 without following file symlinks.
+
+    This validates local files only, not Google Flow provider authenticity.
+    """
+
+    matches = [scene for scene in results.scenes if scene.scene_id == scene_id]
+    if len(matches) != 1:
+        return None
+    scene = matches[0]
+    if scene.download_state != DownloadState.DOWNLOADED or not scene.output_path:
+        return None
+    file_path = Path(scene.output_path)
+    if not file_path.is_absolute() or file_path.suffix.lower() != ".mp4":
+        return None
+    try:
+        if file_path.is_symlink() or not is_available_output(str(file_path)):
+            return None
+        resolved = file_path.resolve(strict=True)
+        if resolved.suffix.lower() != ".mp4":
+            return None
+        return resolved
+    except OSError, RuntimeError, ValueError:
+        return None
+
+
 def build_results_service_unavailable_view(
     *,
     on_workspace: Callable[[], object],
@@ -141,6 +167,7 @@ def build_results_view(
     on_open_diagnostics: Callable[[], object] | None = None,
     on_refresh: Callable[[], object] | None = None,
     on_open_folder: Callable[[], object] | None = None,
+    on_open_video: Callable[[str], object] | None = None,
 ) -> QWidget:
     """Render real Generate/Download facts inside the frozen Hasil screen."""
 
@@ -157,6 +184,8 @@ def build_results_view(
         layout.insertWidget(1, refresh, alignment=Qt.AlignmentFlag.AlignRight)
     table = _results_table(root)
     table.setRowCount(len(results.scenes))
+    # The selected row maps to the exact Scene ID of this immutable snapshot.
+    # Never use abbreviated S001 text as a persisted identity.
 
     for row, scene in enumerate(results.scenes):
         values = (
@@ -177,6 +206,43 @@ def build_results_view(
         )
         for column, value in enumerate(values):
             table.setItem(row, column, QTableWidgetItem(value))
+
+    if on_open_video is not None:
+        play = secondary_button("Putar MP4 Terpilih")
+        play.setObjectName("RealResultsOpenSelectedVideo")
+        play.setEnabled(False)
+        play.setToolTip("Pilih satu Scene dengan MP4 lokal yang tersedia.")
+        table.clearSelection()
+
+        def update_play_selection() -> None:
+            row = table.currentRow()
+            valid = (
+                row >= 0
+                and len(table.selectionModel().selectedRows()) == 1
+                and verified_selected_mp4(results, results.scenes[row].scene_id) is not None
+            )
+            play.setEnabled(valid)
+            play.setToolTip(
+                "Buka MP4 terpilih memakai pemutar default Windows."
+                if valid
+                else "Pilih satu Scene dengan MP4 lokal yang tersedia."
+            )
+
+        def open_selected() -> None:
+            row = table.currentRow()
+            if (
+                row >= 0
+                and len(table.selectionModel().selectedRows()) == 1
+                and verified_selected_mp4(results, results.scenes[row].scene_id) is not None
+            ):
+                on_open_video(results.scenes[row].scene_id)
+
+        table.itemSelectionChanged.connect(update_play_selection)
+        play.clicked.connect(open_selected)
+        layout = root.layout()
+        if not isinstance(layout, QVBoxLayout):
+            raise RuntimeError("Approved Hasil layout lacks vertical content")
+        layout.insertWidget(1, play, alignment=Qt.AlignmentFlag.AlignRight)
 
     total = len(results.scenes)
     _set_metric(
