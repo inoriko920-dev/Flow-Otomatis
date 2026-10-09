@@ -69,7 +69,10 @@ from flow_otomatis.presentation.project_hub_view import (
     build_project_hub_unavailable_view,
     build_project_hub_view,
 )
-from flow_otomatis.presentation.results_view import build_results_view
+from flow_otomatis.presentation.results_view import (
+    build_results_service_unavailable_view,
+    build_results_view,
+)
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 from flow_otomatis.presentation.settings_view import (
     LocalSettingsSnapshot,
@@ -476,6 +479,14 @@ class MainWindow(QMainWindow):
             return
         if (
             item == "Hasil"
+            and self._production_shell
+            and self._current_workspace is not None
+            and self._local_results_service is None
+        ):
+            self.show_results_unavailable()
+            return
+        if (
+            item == "Hasil"
             and self._current_workspace is not None
             and self._local_results_service is not None
         ):
@@ -806,6 +817,24 @@ class MainWindow(QMainWindow):
         self._selected_scene_id = workspace.scenes[0].scene_id if workspace.scenes else None
         self.show_workspace_state(workspace)
         return workspace
+
+    def show_results_unavailable(self) -> None:
+        """Never replace an active project's unavailable results with demo MP4s."""
+
+        workspace = self._current_workspace
+        if workspace is None:
+            self.show_empty_project_route("Hasil")
+            return
+        self._invalidate_agent_context()
+        self._fixture_code = "REAL_RESULTS_UNAVAILABLE"
+        self._set_navigation("Hasil")
+        self._set_project_chrome(workspace, "Hasil • pembaca hasil tidak tersedia")
+        view = build_results_service_unavailable_view(
+            on_workspace=lambda: self.show_workspace_state(workspace)
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
 
     def show_results_state(self) -> None:
         """Render real local Generate/Download facts in the frozen Hasil screen."""
