@@ -199,7 +199,10 @@ def build_project_hub_unavailable_view(
         muted_label(
             "Layanan penyimpanan belum tersedia."
             if missing_service
-            else "Pembacaan penyimpanan lokal gagal. Lokasi file dan rincian internal disembunyikan."
+            else (
+                "Pembacaan penyimpanan lokal gagal. "
+                "Lokasi file dan rincian internal disembunyikan."
+            )
         )
     )
     retry = secondary_button("Coba Lagi")
