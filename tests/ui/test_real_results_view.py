@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QTableWidget
 from flow_otomatis.application.services import LocalResultsService
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.domain.result import DownloadState, ProjectResults, SceneResult
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
 from flow_otomatis.infrastructure.persistence import (
@@ -20,6 +21,7 @@ from flow_otomatis.infrastructure.persistence import (
     SqliteWorkspaceRepository,
 )
 from flow_otomatis.presentation.main_window import MainWindow
+from flow_otomatis.presentation.results_view import build_results_view
 
 
 def _visible_text(window: MainWindow) -> str:
@@ -265,3 +267,108 @@ def test_hasil_export_reports_write_failure_preserves_manifest_and_can_retry(
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert window.last_result_manifest_path == previous
     assert len(warnings) == 1
+
+
+def test_active_project_without_results_reader_shows_truthful_unavailable_ui(
+    ready_results, qtbot
+) -> None:
+    window, _service, _database = ready_results
+    original_workspace = window.current_workspace
+    assert original_workspace is not None
+    window.configure_production_shell()
+    window._local_results_service = None
+
+    window._open_navigation_item("Hasil")
+    assert window.fixture_code == "REAL_RESULTS_UNAVAILABLE"
+    assert window.current_workspace is original_workspace
+    body = window._content_layout.itemAt(0).widget()
+    assert body is not None
+    assert body.objectName() == "RealResultsUnavailable"
+    labels = " ".join(label.text() for label in body.findChildren(QLabel))
+    assert "PEMBACA HASIL TIDAK TERSEDIA" in labels
+    assert "belum tersedia" in labels
+    assert "60/60" not in labels
+    assert "EP001_SCENE" not in labels
+    assert window._right_host.isHidden()
+    back = body.findChild(QPushButton, "RealResultsUnavailableBack")
+    assert back is not None and back.isEnabled()
+    back.click()
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert window.current_workspace is original_workspace
+    window.close()
+
+
+def test_pending_result_rows_do_not_advertise_success_or_download(tmp_path, qtbot) -> None:
+    now = datetime.now(UTC)
+    pending = ProjectResults(
+        episode_id="EP_PENDING_HASIL",
+        project_name="Pending Results",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(
+            SceneResult(
+                scene_id="SCENE_001",
+                target_duration_s=4.0,
+                selected_flow_duration_s=4,
+                trim_target_s=4.0,
+                generate_state=None,
+                remote_result_id=None,
+                download_state=DownloadState.NOT_DOWNLOADED,
+                output_path=None,
+                take=1,
+                updated_at=now,
+            ),
+        ),
+    )
+    sent: list[str] = []
+    body = build_results_view(pending, on_export_manifest=lambda: sent.append("export"))
+    qtbot.addWidget(body)
+    table = next(t for t in body.findChildren(QTableWidget) if t.columnCount() == 6)
+    assert table.rowCount() == 1
+    assert [table.item(0, col).text() for col in (3, 4, 5)] == [
+        "Belum", "Belum", "—"
+    ]
+    text = " ".join(label.text() for label in body.findChildren(QLabel))
+    assert "Status dari catatan proyek lokal" in text
+    assert "Belum selesai" in text
+    assert "Tidak ada laporan masalah" in text
+    assert "Semua generation dan download selesai" not in text
+    assert "60/60" not in text
+    assert sent == []
+    body.close()
+
+
+def test_download_unavailable_does_not_display_ghost_output_filename(qtbot) -> None:
+    now = datetime.now(UTC)
+    state = ProjectResults(
+        episode_id="EP_LOST_RESULT",
+        project_name="Lost file",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(
+            SceneResult(
+                scene_id="SCENE_001",
+                target_duration_s=4.0,
+                selected_flow_duration_s=4,
+                trim_target_s=4.0,
+                generate_state=GenerationJobState.GENERATED,
+                remote_result_id="synthetic",
+                download_state=DownloadState.UNAVAILABLE,
+                output_path="/private/path/ghost-video.mp4",
+                take=1,
+                updated_at=now,
+            ),
+        ),
+    )
+    body = build_results_view(state, on_export_manifest=lambda: None)
+    qtbot.addWidget(body)
+    table = next(t for t in body.findChildren(QTableWidget) if t.columnCount() == 6)
+    assert table.item(0, 4).text() == "Tidak Tersedia"
+    assert table.item(0, 5).text() == "—"
+    for button in body.findChildren(QPushButton):
+        if button.text() in {"Retry Download Terpilih", "Buka Diagnostik"}:
+            assert not button.isEnabled()
+            assert "belum tersedia" in button.toolTip()
+    body.close()
