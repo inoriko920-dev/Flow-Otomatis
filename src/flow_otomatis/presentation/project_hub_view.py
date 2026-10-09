@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -17,6 +18,13 @@ from flow_otomatis.application.ports.workspace_repository import WorkspaceReadIs
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.fixtures import get_fixture
 from flow_otomatis.presentation.screen_factory import build_screen
+from flow_otomatis.presentation.widgets import (
+    card,
+    info_banner,
+    muted_label,
+    page_header,
+    secondary_button,
+)
 
 
 def _project_table(root: QWidget) -> QTableWidget:
@@ -160,4 +168,50 @@ def build_project_hub_view(
                 )
         elif label.text() == "1 project":
             label.setText(f"{total_entries} project")
+    return root
+
+
+def build_project_hub_unavailable_view(
+    *,
+    on_retry: Callable[[], object],
+    on_diagnostics: Callable[[], object],
+    missing_service: bool,
+) -> QWidget:
+    """Fail closed: unreadable project storage must not masquerade as 0 projects."""
+
+    root = QWidget()
+    root.setObjectName("RealProjectHubUnavailable")
+    layout = QVBoxLayout(root)
+    layout.setContentsMargins(20, 18, 20, 18)
+    layout.setSpacing(16)
+    layout.addWidget(page_header("Beranda", "Status penyimpanan proyek lokal belum diketahui"))
+    layout.addWidget(
+        info_banner(
+            "DAFTAR PROJECT BELUM DAPAT DIPERIKSA",
+            "Aplikasi tidak menghapus atau mengubah proyek yang ada. "
+            "Status ini BUKAN berarti tidak ada proyek. "
+            "Periksa Diagnostik Lokal sebelum mencoba kembali.",
+            "warning",
+        )
+    )
+    container, body = card(12)
+    body.addWidget(muted_label(
+        "Layanan penyimpanan belum tersedia."
+        if missing_service
+        else "Pembacaan penyimpanan lokal gagal. Lokasi file dan rincian internal disembunyikan."
+    ))
+    retry = secondary_button("Coba Lagi")
+    retry.setObjectName("RealProjectHubRetry")
+    retry.setEnabled(not missing_service)
+    if missing_service:
+        retry.setToolTip("Layanan daftar proyek belum dikonfigurasi.")
+    else:
+        retry.clicked.connect(on_retry)
+    body.addWidget(retry)
+    diagnostic = secondary_button("Buka Diagnostik Lokal")
+    diagnostic.setObjectName("RealProjectHubOpenDiagnostics")
+    diagnostic.clicked.connect(on_diagnostics)
+    body.addWidget(diagnostic)
+    layout.addWidget(container)
+    layout.addStretch(1)
     return root
