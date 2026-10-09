@@ -179,9 +179,7 @@ class ScenePlanningService:
                     ),
                 )
             )
-        return self._save_and_reload(
-            replace(workspace, scenes=tuple(scenes)), expected=workspace
-        )
+        return self._save_and_reload(replace(workspace, scenes=tuple(scenes)), expected=workspace)
 
     def _find_scene(self, workspace: WorkspaceState, scene_id: str) -> WorkspaceScene:
         for scene in workspace.scenes:
