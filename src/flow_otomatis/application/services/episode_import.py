@@ -5,7 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flow_otomatis.application.ports.episode_package import EpisodePackagePort
+from flow_otomatis.application.ports.episode_package import (
+    EpisodeImageVerifierPort,
+    EpisodePackagePort,
+)
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.project import WorkspaceState
@@ -23,9 +26,12 @@ class EpisodeImportService:
         self,
         package_reader: EpisodePackagePort,
         workspace_repository: WorkspaceRepositoryPort,
+        *,
+        image_verifier: EpisodeImageVerifierPort | None = None,
     ) -> None:
         self._package_reader = package_reader
         self._workspace_repository = workspace_repository
+        self._image_verifier = image_verifier
 
     def validate(self, source_path: Path) -> WorkspaceState:
         """Validate a package and build real, not-yet-persisted workspace state."""
@@ -43,6 +49,20 @@ class EpisodeImportService:
                 image_exists=evidence.image_exists,
                 motion_prompt=evidence.motion_prompt,
             )
+            image_sha256_imported: str | None = None
+            if evidence.image_exists and self._image_verifier is not None:
+                # Abort import if the source is unreadable; never store a fabricated
+                # or silently refreshed "original" checksum.
+                image_sha256_imported = self._image_verifier.image_digest(
+                    source_path, source_scene.scene_id, source_scene.image_file
+                )
+                if (
+                    len(image_sha256_imported) != 64
+                    or any(char not in "0123456789abcdef" for char in image_sha256_imported)
+                ):
+                    raise InternalInvariantError(
+                        "Source image verifier returned an invalid SHA-256 digest"
+                    )
             scenes.append(
                 WorkspaceScene(
                     scene_id=source_scene.scene_id,
@@ -57,6 +77,7 @@ class EpisodeImportService:
                     model=source_scene.model,
                     resolution=source_scene.resolution,
                     aspect_ratio=source_scene.aspect_ratio,
+                    image_sha256_imported=image_sha256_imported,
                 )
             )
 
