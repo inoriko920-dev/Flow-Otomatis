@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 from PySide6.QtWidgets import QComboBox, QFileDialog, QPushButton, QTableWidget
 
@@ -323,3 +324,97 @@ def test_preflight_nested_ui_dialog_can_return_selected_scene(qtbot, monkeypatch
     assert preview.requested_scene_id == "SCENE_002"
     assert preview.result() == preview.DialogCode.Accepted
     assert not preview.live_dispatch_enabled
+
+
+class _LocalImageReader:
+    """An in-memory spy: no provider, database, sessions, or network."""
+
+    def __init__(self, missing: tuple[str, ...] = ()) -> None:
+        self.missing = missing
+        self.calls: list[tuple[Path, str, str]] = []
+
+    def image_digest(self, source_path: Path, scene_id: str, image_file: str) -> str:
+        self.calls.append((source_path, scene_id, image_file))
+        if scene_id in self.missing:
+            raise OSError("C:/private/source/secret_image_not_found.png")
+        return "a" * 64
+
+
+def test_source_image_scan_blocks_unreadable_bytes_and_preserves_privacy() -> None:
+    verifier = _LocalImageReader(("SCENE_002",))
+    workspace = _workspace(_scene("SCENE_001"), _scene("SCENE_002"))
+    baseline = prepare_local_scene_preflight(workspace)
+    assert baseline["ready_count"] == 2
+    assert baseline["image_integrity_check"] == "NOT_RUN"
+
+    report = prepare_local_scene_preflight(workspace, image_verifier=verifier)
+    assert report["image_integrity_check"] == "LOCAL_SOURCE_BYTES_READ"
+    assert report["ready_count"] == 1
+    assert report["held_count"] == 1
+    assert report["verified_image_count"] == 1
+    assert report["unreadable_image_count"] == 1
+    assert report["image_bytes_verified"] is False
+    assert report["ready"][0]["image_evidence"] == "BYTE TERBACA"
+    assert report["held"][0]["image_evidence"] == "TIDAK TERBACA"
+    assert "BYTE GAMBAR TIDAK TERBACA" in report["held"][0]["issues"]
+    assert len(verifier.calls) == 2
+    assert "C:/private" not in json.dumps(report)
+    assert "Secret full motion prompt" not in json.dumps(report)
+
+
+def test_local_scan_fail_closed_for_invalid_digests_and_ambiguous_scene_ids() -> None:
+    class InvalidReader(_LocalImageReader):
+        def image_digest(self, source_path: Path, scene_id: str, image_file: str) -> str:
+            super().image_digest(source_path, scene_id, image_file)
+            return "bad-digest"
+
+    verifier = InvalidReader()
+    report = prepare_local_scene_preflight(
+        _workspace(_scene("SCENE_001")), image_verifier=verifier
+    )
+    assert report["ready_count"] == 0
+    assert report["unreadable_image_count"] == 1
+    assert report["live_dispatch_allowed"] is False
+
+    reader = _LocalImageReader()
+    report = prepare_local_scene_preflight(
+        _workspace(_scene("SCENE_DUP"), _scene("SCENE_DUP")),
+        image_verifier=reader,
+    )
+    assert report["ready_count"] == 0
+    assert report["unreadable_image_count"] == 2
+    assert reader.calls == []
+    assert all("ID SCENE GANDA" in row["issues"] for row in report["held"])
+
+
+def test_async_qt_image_scan_refreshes_report_without_creating_jobs(qtbot) -> None:
+    workspace = _workspace(_scene("SCENE_001"), _scene("SCENE_002"))
+    original = repr(workspace)
+    verifier = _LocalImageReader(("SCENE_002",))
+    dialog = LocalScenePreflightDialog(workspace, image_verifier=verifier)
+    qtbot.addWidget(dialog)
+    assert dialog.report["image_integrity_check"] == "NOT_RUN"
+    assert dialog.verify_button.isEnabled()
+    dialog.verify_button.click()
+    qtbot.waitUntil(
+        lambda: dialog.report["image_integrity_check"] == "LOCAL_SOURCE_BYTES_READ",
+        timeout=15000,
+    )
+    assert dialog.verify_button.isEnabled()
+    assert dialog.export_button.isEnabled()
+    assert dialog.report["held_count"] == 1
+    assert dialog.table.item(1, 5).text() == "TIDAK TERBACA"
+    assert "tidak terbaca: 1" in dialog.image_check_status.text()
+    assert dialog.report["durable_jobs_created"] is False
+    assert repr(workspace) == original
+    dialog.close()
+
+
+def test_image_byte_verification_is_unavailable_until_verifier_is_injected(qtbot) -> None:
+    dialog = LocalScenePreflightDialog(_workspace(_scene("SCENE_001")))
+    qtbot.addWidget(dialog)
+    assert not dialog.verify_button.isEnabled()
+    dialog.verify_source_images()
+    assert dialog.report["image_integrity_check"] == "NOT_RUN"
+    assert dialog.report["image_bytes_verified"] is False
+    dialog.close()
