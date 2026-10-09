@@ -1,0 +1,42 @@
+{
+  "mode": "OFFLINE_SIMULATION",
+  "profiles": [
+    {
+      "profile_id": "demo-A",
+      "simulated_balance": 20,
+      "max_spend": 20
+    },
+    {
+      "profile_id": "demo-B",
+      "simulated_balance": 20,
+      "max_spend": 20
+    }
+  ],
+  "scenes": [
+    {
+      "project_id": "demo-film",
+      "scene_id": "SCENE_001",
+      "duration_s": 10,
+      "outputs": 1
+    },
+    {
+      "project_id": "demo-film",
+      "scene_id": "SCENE_002",
+      "duration_s": 8,
+      "outputs": 1
+    },
+    {
+      "project_id": "demo-film",
+      "scene_id": "SCENE_003",
+      "duration_s": 6,
+      "outputs": 1
+    }
+  ],
+  "rates_per_video": {
+    "4": 7,
+    "6": 10,
+    "8": 12,
+    "10": 15
+  },
+  "max_total_credits": 40
+}
