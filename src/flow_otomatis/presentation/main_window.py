@@ -484,7 +484,10 @@ class MainWindow(QMainWindow):
             # A running desktop app does NOT prove Google Flow workspace access.
             self._connection_badge.setText("●  Mode Lokal")
             self._connection_badge.setStyleSheet(self._local_badge_style)
-            self._sidebar_connection_badge.setText("●  Mode Lokal • Flow belum terverifikasi")
+            self._sidebar_connection_badge.setText("●  Mode Lokal")
+            self._sidebar_connection_badge.setToolTip(
+                "Flow belum terverifikasi. Ini hanya status data/aplikasi lokal."
+            )
             self._sidebar_connection_badge.setStyleSheet(self._local_badge_style)
             self._saved_badge.setText("●  Data Lokal")
             self._saved_badge.setStyleSheet(self._local_badge_style)
@@ -494,6 +497,7 @@ class MainWindow(QMainWindow):
             self._connection_badge.setText("●  Online")
             self._connection_badge.setStyleSheet(self._connection_badge_original_style)
             self._sidebar_connection_badge.setText("●  ●  Online")
+            self._sidebar_connection_badge.setToolTip("")
             self._sidebar_connection_badge.setStyleSheet(self._sidebar_connection_original_style)
             self._saved_badge.setText("●  Tersimpan")
             self._saved_badge.setStyleSheet(self._saved_badge_original_style)
@@ -1205,7 +1209,7 @@ class MainWindow(QMainWindow):
         preview.finished.connect(lambda _result: self._return_from_uix_preview(preview))
         self._fixture_code = "REAL_UIX22_PREVIEW"
         self._set_navigation("Workspace")
-        self._project_state_label.setText("22 Desain UI • Simulasi Offline")
+        self._project_state_label.setText("UIX22 • Simulasi")
         self._status_project.setText("22 kondisi UI • Tanpa Generate")
         self._uix_return_workspace = workspace
         self._active_uix_preview = preview
