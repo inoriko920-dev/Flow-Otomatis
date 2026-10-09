@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -41,6 +42,7 @@ from flow_otomatis.presentation.widgets import (
     muted_label,
     page_header,
     primary_button,
+    status_badge,
 )
 
 
@@ -300,17 +302,98 @@ class CreditUixDialog(QDialog):
         super().__init__(parent)
         self.setObjectName("CreditUixDialog")
         self.setWindowTitle("Flow-Otomatis | Pratinjau 22 UI Multiakun (Simulasi)")
-        self.resize(1400, 845)
-        self.setMinimumSize(1000, 680)
+        self.resize(1720, 960)
+        self.setMinimumSize(1250, 740)
         self.setStyleSheet(theme.application_stylesheet())
         self._workspace = workspace
         self._preview = simulate(_DEMO_PLAN)
         self._current_state = "UIX-01-A"
         self._last_local_plan_approved = False
 
-        main = QVBoxLayout(self)
-        main.setContentsMargins(18, 14, 18, 14)
+        # Recreate the frozen desktop app proportions inside the preview, rather
+        # than presenting all 22 states as a plain floating table dialog.
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        rail = QFrame()
+        rail.setObjectName("UixSidebar")
+        rail.setFixedWidth(theme.SIDEBAR_WIDTH)
+        rail.setStyleSheet(
+            f"QFrame#UixSidebar {{ background: white; border-right: 1px solid {theme.BORDER}; }}"
+        )
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(14, 18, 14, 18)
+        rail_layout.setSpacing(12)
+        brand = QLabel("◈  Flow-Otomatis")
+        brand.setObjectName("UixBrand")
+        brand.setStyleSheet(f"font-size: 15pt; font-weight: 700; color: {theme.PRIMARY};")
+        rail_layout.addWidget(brand)
+        rail_layout.addWidget(muted_label("UIX22  •  Mode Simulasi"))
+        rail_layout.addSpacing(12)
+        for route in (
+            "Beranda", "Workspace", "Hasil", "Profil Google",
+            "Gemini Keys", "Diagnostik", "Pengaturan",
+        ):
+            item = QLabel("   " + route)
+            item.setObjectName("UixSidebarRoute")
+            item.setMinimumHeight(37)
+            if route == "Workspace":
+                item.setStyleSheet(
+                    f"background: {theme.INFO_BG}; color: {theme.PRIMARY}; "
+                    "font-weight: 600; border-radius: 6px;"
+                )
+            else:
+                item.setStyleSheet("color: #475569;")
+            rail_layout.addWidget(item)
+        rail_layout.addStretch(1)
+        rail_layout.addWidget(muted_label("Tidak mengubah proyek atau akun Google."))
+        outer.addWidget(rail)
+
+        center = QWidget()
+        center.setObjectName("UixCenter")
+        main = QVBoxLayout(center)
+        main.setContentsMargins(17, 13, 17, 13)
         main.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(page_header("Workspace / Pratinjau Multiakun", "Omni Flash 1.1  •  720p  •  16:9"))
+        top.addStretch(1)
+        top.addWidget(status_badge("OFFLINE • DATA CONTOH", "warning"))
+        main.addLayout(top)
+        outer.addWidget(center, 1)
+
+        dock = QFrame()
+        dock.setObjectName("UixRightDock")
+        dock.setFixedWidth(theme.RIGHT_DOCK_WIDTH)
+        dock.setStyleSheet(
+            f"QFrame#UixRightDock {{ background: white; border-left: 1px solid {theme.BORDER}; }}"
+        )
+        dock_layout = QVBoxLayout(dock)
+        dock_layout.setContentsMargins(16, 20, 16, 20)
+        dock_layout.setSpacing(12)
+        dock_layout.addWidget(page_header("Scene & AI Agent", "Panel kanan • tidak terhubung"))
+        dock_layout.addWidget(info_banner(
+            "BACA SAJA",
+            "Agent, login dan Generate tidak tersedia dalam pratinjau UI ini.",
+            "info",
+        ))
+        dock_layout.addWidget(QLabel("KONDISI YANG DIPILIH"))
+        self._dock_state = QLabel("UIX-01-A")
+        self._dock_state.setObjectName("UixDockState")
+        self._dock_state.setWordWrap(True)
+        self._dock_state.setStyleSheet(f"font-weight: 600; color: {theme.PRIMARY};")
+        dock_layout.addWidget(self._dock_state)
+        dock_layout.addWidget(QLabel("PENGAMAN PRODUKSI"))
+        for detail in (
+            "• Durasi Flow: 4 / 6 / 8 / 10 detik",
+            "• Target Audio/SRT tidak diubah",
+            "• Kredit provider: tidak diketahui",
+            "• Generate dan Download terpisah",
+            "• Submit uncertain tidak diulang",
+        ):
+            dock_layout.addWidget(muted_label(detail))
+        dock_layout.addStretch(1)
+        dock_layout.addWidget(status_badge("LIVE DIBLOKIR", "error"))
+        outer.addWidget(dock)
 
         main.addWidget(
             info_banner(
@@ -404,6 +487,7 @@ class CreditUixDialog(QDialog):
     def _render(self, code: str) -> None:
         scenario = SCENARIO_BY_ID[code]
         self._current_state = code
+        self._dock_state.setText(f"{code} • {scenario.title}")
         self._last_local_plan_approved = False
         root = QWidget()
         root.setObjectName(f"UixPage{code.replace('-', '')}")
