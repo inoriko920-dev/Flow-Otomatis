@@ -67,6 +67,7 @@ from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePref
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
+from flow_otomatis.presentation.settings_view import LocalSettingsSnapshot, build_local_settings_view
 from flow_otomatis.presentation.theme import (
     RIGHT_DOCK_WIDTH,
     SIDEBAR_WIDTH,
@@ -491,6 +492,9 @@ class MainWindow(QMainWindow):
         if item == "Diagnostik" and self._production_shell:
             self.show_local_diagnostics()
             return
+        if item == "Pengaturan" and self._production_shell:
+            self.show_local_settings()
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -675,6 +679,33 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Ekspor gagal", "Tidak dapat menyimpan laporan diagnostik lokal."
             )
+
+    def show_local_settings(self) -> None:
+        """Display locked settings from the actual local app/Workspace context."""
+
+        workspace = self._current_workspace
+        snapshot = LocalSettingsSnapshot(
+            active_workspace_model=workspace.model if workspace is not None else None,
+            active_workspace_resolution=(
+                workspace.resolution if workspace is not None else None
+            ),
+            active_workspace_aspect_ratio=(
+                workspace.aspect_ratio if workspace is not None else None
+            ),
+            active_workspace_scene_count=(
+                len(workspace.scenes) if workspace is not None else None
+            ),
+        )
+        self._invalidate_agent_context()
+        self._fixture_code = "REAL_SETTINGS"
+        self._set_navigation("Pengaturan")
+        self._project_label.setText("Konfigurasi lokal")
+        self._project_state_label.setText("Pengaturan • Hanya baca")
+        self._status_project.setText("Tidak ada akses provider live")
+        view = build_local_settings_view(snapshot, on_refresh=self.show_local_settings)
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
 
     def _open_local_project_from_ui(self, episode_id: str) -> None:
         """Open a Project Hub row without leaking storage/decode failures to Qt."""
