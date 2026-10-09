@@ -37,6 +37,8 @@ class LocalScenePreflightDialog(QDialog):
         self.resize(1050, 640)
         self.setStyleSheet(theme.application_stylesheet())
         self.report: dict[str, Any] = prepare_local_scene_preflight(workspace)
+        self._workspace = workspace
+        self._requested_scene_id: str | None = None
 
         layout = QVBoxLayout(self)
         heading = QLabel("Pemeriksaan Sebelum Menyusun Antrean")
@@ -85,9 +87,15 @@ class LocalScenePreflightDialog(QDialog):
                 self.table.setItem(row_index, col_index, QTableWidgetItem(str(value)))
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.resizeColumnsToContents()
+        self.table.itemSelectionChanged.connect(self._update_open_scene_action)
         layout.addWidget(self.table, 1)
 
         actions = QHBoxLayout()
+        self.open_scene_button = QPushButton("Buka Scene Terpilih di Workspace")
+        self.open_scene_button.setObjectName("LocalPreflightOpenScene")
+        self.open_scene_button.setEnabled(False)
+        self.open_scene_button.clicked.connect(self._request_open_scene)
+        actions.addWidget(self.open_scene_button)
         self.export_button = QPushButton("Ekspor Hasil Preflight JSON")
         self.export_button.setObjectName("LocalPreflightExport")
         self.export_button.clicked.connect(self.export_json)
@@ -98,6 +106,38 @@ class LocalScenePreflightDialog(QDialog):
         close.clicked.connect(self.accept)
         actions.addWidget(close)
         layout.addLayout(actions)
+        if rows:
+            self.table.setCurrentCell(0, 0)
+            self._update_open_scene_action()
+
+    @property
+    def requested_scene_id(self) -> str | None:
+        """An explicitly chosen, uniquely identifiable local Scene or None."""
+        return self._requested_scene_id
+
+    def _selected_scene_id(self) -> str | None:
+        """Never navigate to duplicate/malformed IDs or fabricated report rows."""
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        item = self.table.item(row, 0)
+        if item is None or self.table.isRowHidden(row):
+            return None
+        scene_id = item.text()
+        matches = sum(scene.scene_id == scene_id for scene in self._workspace.scenes)
+        if matches != 1:
+            return None
+        return scene_id
+
+    def _update_open_scene_action(self) -> None:
+        self.open_scene_button.setEnabled(self._selected_scene_id() is not None)
+
+    def _request_open_scene(self) -> None:
+        target = self._selected_scene_id()
+        if target is None:
+            return
+        self._requested_scene_id = target
+        self.accept()
 
     def export_json(self) -> None:
         """Create-only report; never overwrite a previous audit/export."""
