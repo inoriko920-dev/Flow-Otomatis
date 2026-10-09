@@ -450,9 +450,7 @@ def test_main_window_returns_to_exact_selected_scene_without_persistence(
 
 def test_new_uix_entry_starts_with_distinct_demo_states_then_allows_local_scan(qtbot) -> None:
     workspace = _workspace_with_mixed_real_scenes()
-    dialog = CreditUixDialog(
-        workspace=workspace, initial_state="UIX-05-C", default_to_demo=True
-    )
+    dialog = CreditUixDialog(workspace=workspace, initial_state="UIX-05-C", default_to_demo=True)
     qtbot.addWidget(dialog)
     selector = dialog.findChild(QComboBox, "UixDataSourceSelector")
     assert selector is not None
