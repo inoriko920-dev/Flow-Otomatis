@@ -129,7 +129,13 @@ def test_late_export_dir_swap_blocks_final_publish_and_cleans_temp(
     assert not list(external.iterdir())
     safe = base / "EP_EXPORT_RACE" / "exports.safe"
     assert json.loads((safe / "FLOW_OTOMATIS_RESULT.json").read_text()) == previous
-    assert not list(safe.glob("*.tmp"))
+    # The validated directory was renamed AFTER the tempfile was created.
+    # Its private temporary moved with it. Never follow the now-redirected
+    # original path to clean up: preserve this recovery file in the old,
+    # trustworthy directory rather than risk unlinking an unrelated target.
+    recovery = list(safe.glob("*.tmp"))
+    assert len(recovery) == 1
+    assert json.loads(recovery[0].read_text(encoding="utf-8"))["project_name"] == "after"
 
 
 def test_rejects_simulated_ntfs_junction_redirect_even_without_symlink_privilege(
