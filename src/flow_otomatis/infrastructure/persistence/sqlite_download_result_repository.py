@@ -46,6 +46,66 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download result: {exc}") from exc
 
+    def save_if_current_generate(
+        self, record: DownloadRecord, expected_remote_result_id: str
+    ) -> bool:
+        """Compare current Generate and persist Download in one SQLite write lock.
+
+        The BEGIN IMMEDIATE transaction serializes this check against a
+        concurrent Generate state/ID change from another process. A stale
+        result is rejected without writing any Download row or touching MP4.
+        """
+
+        if record.state != DownloadState.DOWNLOADED:
+            raise ValueError("Only DOWNLOADED records can use guarded success persistence")
+        remote_id = expected_remote_result_id.strip()
+        if not remote_id:
+            raise ValueError("Expected Generate remote ID must not be blank")
+        try:
+            with self._connect(record.episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                current = connection.execute(
+                    """
+                    SELECT 1 FROM generation_jobs
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND state = 'GENERATED'
+                      AND TRIM(COALESCE(remote_result_id, '')) = ?
+                    LIMIT 1
+                    """,
+                    (record.episode_id, record.scene_id, remote_id),
+                ).fetchone()
+                if current is None:
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO download_results (
+                        episode_id, scene_id, state, updated_at,
+                        output_path, take, error_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (episode_id, scene_id) DO UPDATE SET
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        output_path = excluded.output_path,
+                        take = excluded.take,
+                        error_message = excluded.error_message
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.state,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.error_message,
+                    ),
+                )
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError("Could not atomically verify and save Download result") from exc
+
     def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
         """Store a failure only when no prior successful history exists.
 
