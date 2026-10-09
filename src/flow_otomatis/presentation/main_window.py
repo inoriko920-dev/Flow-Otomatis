@@ -1285,10 +1285,22 @@ class MainWindow(QMainWindow):
         if self._google_browser_closed:
             return
         if action == "open":
+            # A late login response may not hijack Beranda, Diagnostik, or
+            # an unavailable profile store. Keep only the originating route.
+            if self._fixture_code not in {"REAL_GOOGLE_PROFILES", "REAL_GOOGLE_LOGIN"}:
+                return
+            if (
+                self._fixture_code == "REAL_GOOGLE_LOGIN"
+                and self._active_google_profile_id != profile.profile_id
+            ):
+                return
             self.show_google_login(profile)
             return
         if action == "recheck":
-            if self._active_google_profile_id == profile.profile_id:
+            if (
+                self._fixture_code == "REAL_GOOGLE_LOGIN"
+                and self._active_google_profile_id == profile.profile_id
+            ):
                 self.show_google_login(profile)
             return
         if self._fixture_code == "REAL_GOOGLE_PROFILES":
