@@ -359,9 +359,7 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         self._sidebar_connection_badge = status_badge("●  Online", "success")
         self._sidebar_connection_original_style = self._sidebar_connection_badge.styleSheet()
-        layout.addWidget(
-            self._sidebar_connection_badge, alignment=Qt.AlignmentFlag.AlignLeft
-        )
+        layout.addWidget(self._sidebar_connection_badge, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(muted_label("Flow-Otomatis v0.1.0"))
         return sidebar
 
