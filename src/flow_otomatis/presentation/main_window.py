@@ -48,6 +48,9 @@ from flow_otomatis.domain.errors import (
 )
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.presentation.account_service_unavailable_view import (
+    build_account_service_unavailable_view,
+)
 from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.diagnostics_view import (
     LocalDiagnosticSnapshot,
@@ -516,6 +519,12 @@ class MainWindow(QMainWindow):
         if item == "Gemini Keys" and self._gemini_key_service is not None:
             self.show_gemini_keys()
             return
+        if (
+            item in {"Profil Google", "Gemini Keys"}
+            and self._production_shell
+        ):
+            self.show_account_service_unavailable(item)
+            return
         if item == "Diagnostik" and self._production_shell:
             self.show_local_diagnostics()
             return
@@ -756,6 +765,30 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Ekspor gagal", "Tidak dapat menyimpan laporan diagnostik lokal."
             )
+
+    def show_account_service_unavailable(self, route: str) -> None:
+        """Unconfigured account services must never display fake profile data."""
+
+        if route not in {"Profil Google", "Gemini Keys"}:
+            raise ValueError("Unexpected provider service route")
+        self._invalidate_agent_context()
+        self._fixture_code = (
+            "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+            if route == "Profil Google"
+            else "REAL_GEMINI_KEYS_UNAVAILABLE"
+        )
+        self._set_navigation(route)
+        self._project_label.setText("Layanan belum dikonfigurasi")
+        self._project_state_label.setText(f"{route} • Tidak tersedia")
+        self._status_project.setText("Tidak ada bukti akses provider")
+        view = build_account_service_unavailable_view(
+            route,
+            on_home=self.show_project_hub,
+            on_diagnostics=self.show_local_diagnostics,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
 
     def show_local_settings(self) -> None:
         """Display locked settings from the actual local app/Workspace context."""
