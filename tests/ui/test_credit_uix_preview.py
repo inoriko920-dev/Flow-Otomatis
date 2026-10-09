@@ -720,6 +720,7 @@ def test_modal_groups_show_real_qt_scrim_over_readonly_workspace_and_agent(qtbot
         assert agent.width() <= 280
         assert root.findChild(QTableWidget, "UixBackdropSceneTable") is not None
         assert root.findChild(QFrame, "UixScenarioModal") is not None
+        assert "Gulir bagian tengah" in dialog.status.text()
         assert dialog.live_dispatch_enabled is False
 
     dialog.set_state("UIX-01-A")
