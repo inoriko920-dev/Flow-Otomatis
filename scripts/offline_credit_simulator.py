@@ -34,8 +34,7 @@ def _exact_keys(value: object, required: set[str], *, where: str) -> dict[str, A
 def _credit(value: object, *, where: str, allow_zero: bool = True) -> int:
     if type(value) is not int or value < (0 if allow_zero else 1) or value > _MAX_CREDITS:
         raise InvalidSimulationInput(
-            f"{where}: expected a whole number between "
-            f"{0 if allow_zero else 1} and {_MAX_CREDITS}"
+            f"{where}: expected a whole number between {0 if allow_zero else 1} and {_MAX_CREDITS}"
         )
     return value
 
@@ -93,9 +92,7 @@ def simulate(payload: object) -> dict[str, Any]:
         key = _identifier(item["profile_id"], where=f"profiles[{index}].profile_id")
         if key in remaining:
             raise InvalidSimulationInput(f"Duplicate profile ID: {key}")
-        balance = _credit(
-            item["simulated_balance"], where=f"profiles[{index}].simulated_balance"
-        )
+        balance = _credit(item["simulated_balance"], where=f"profiles[{index}].simulated_balance")
         limit = _credit(item["max_spend"], where=f"profiles[{index}].max_spend")
         remaining[key] = balance
         profile_ceiling[key] = min(limit, balance)
@@ -118,9 +115,7 @@ def simulate(payload: object) -> dict[str, Any]:
         seconds = item["duration_s"]
         if type(seconds) is not int or seconds not in _SUPPORTED_DURATIONS:
             raise InvalidSimulationInput("duration_s must be exactly 4, 6, 8 or 10")
-        outputs = _credit(
-            item["outputs"], where=f"scenes[{index}].outputs", allow_zero=False
-        )
+        outputs = _credit(item["outputs"], where=f"scenes[{index}].outputs", allow_zero=False)
         if outputs > 8:
             raise InvalidSimulationInput("outputs must be between 1 and 8")
         quoted_cost = costs[seconds] * outputs
@@ -149,9 +144,10 @@ def simulate(payload: object) -> dict[str, Any]:
         # Balance high-water first, stable opaque ID as a deterministic tie-breaker.
         selected = min(
             eligible,
-            key=lambda profile_id: (-min(
-                remaining[profile_id], profile_ceiling[profile_id] - used[profile_id]
-            ), profile_id),
+            key=lambda profile_id: (
+                -min(remaining[profile_id], profile_ceiling[profile_id] - used[profile_id]),
+                profile_id,
+            ),
         )
         remaining[selected] -= quoted_cost
         used[selected] += quoted_cost
@@ -199,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             # No-clobber: never overwrite the operator's existing plan or report.
             with args.output.open("x", encoding="utf-8", newline="\n") as stream:
                 stream.write(output)
-    except (InvalidSimulationInput, OSError, ValueError, UnicodeError) as exc:
+    except (OSError, ValueError) as exc:
         parser.exit(2, f"OFFLINE SIMULATION BLOCKED: {exc}\n")
     return 0
 
