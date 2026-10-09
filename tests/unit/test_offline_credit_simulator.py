@@ -7,7 +7,6 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
 from scripts.offline_credit_simulator import InvalidSimulationInput, main, simulate
 
 
