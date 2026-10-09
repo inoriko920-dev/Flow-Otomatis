@@ -449,3 +449,58 @@ def test_google_session_reply_for_other_profile_never_switches_account(qtbot) ->
     assert window.fixture_code == "REAL_GOOGLE_PROFILES"
     assert window._active_google_session_request is None
     window.close()
+
+
+def test_flow_preflight_fails_closed_on_unreadable_restart_gate(qtbot, monkeypatch) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_login(port.profile)
+    monkeypatch.setattr(window, "_google_flow_preflight_service", object())
+
+    def unreadable(_profile_id: str) -> GoogleSessionRestartGate:
+        raise OSError("sensitive/private-profile.sqlite")
+
+    monkeypatch.setattr(port, "get_restart_gate", unreadable)
+    window._check_active_google_flow()
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert window._active_google_profile_id is None
+    assert not window._google_flow_busy
+    assert not window._google_flow_probes
+    window.close()
+
+
+def test_flow_preflight_fails_closed_if_profile_disappears_after_gate(
+    qtbot, monkeypatch
+) -> None:
+    port = FixtureSessionPort()
+    port.check_profile(port.profile.profile_id)
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_login(port.profile)
+    monkeypatch.setattr(window, "_google_flow_preflight_service", object())
+    monkeypatch.setattr(port, "list_profiles", lambda: ())
+
+    window._check_active_google_flow()
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert not window._google_flow_busy
+    assert not window._google_flow_probes
+    window.close()
+
+
+def test_late_flow_login_refresh_fails_closed_if_profile_metadata_corrupt(
+    qtbot, monkeypatch
+) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_login(port.profile)
+
+    def unreadable() -> tuple[GoogleSessionProfile, ...]:
+        raise OSError("private-session-directory")
+
+    monkeypatch.setattr(port, "list_profiles", unreadable)
+    window._refresh_active_google_login(port.profile.profile_id)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert window._active_google_profile_id is None
+    window.close()
