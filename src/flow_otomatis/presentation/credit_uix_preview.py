@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
-    QFrame,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -42,7 +41,6 @@ from flow_otomatis.presentation.widgets import (
     muted_label,
     page_header,
     primary_button,
-    status_badge,
 )
 
 # Each entry corresponds to an exact, previously approved UIX state identifier.
@@ -184,6 +182,7 @@ class CreditUixDialog(QDialog):
         close.clicked.connect(self.accept)
         self.footer.addWidget(close)
         main.addLayout(self.footer)
+        self._group_changed(0)
         self.set_state(initial_state)
 
     @property
