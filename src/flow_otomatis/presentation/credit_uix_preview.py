@@ -538,15 +538,11 @@ class CreditUixDialog(QDialog):
         return False
 
     def _previous_state(self) -> None:
-        index = next(
-            i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state
-        )
+        index = next(i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state)
         self.set_state(UIX_SCENARIOS[max(0, index - 1)].code)
 
     def _next_state(self) -> None:
-        index = next(
-            i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state
-        )
+        index = next(i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state)
         self.set_state(UIX_SCENARIOS[min(len(UIX_SCENARIOS) - 1, index + 1)].code)
 
     def _group_changed(self, index: int) -> None:
@@ -613,9 +609,7 @@ class CreditUixDialog(QDialog):
         self.preflight_button.setVisible(local)
         self.preflight_button.setEnabled(local)
         self._current_state = code
-        current_index = next(
-            i for i, item in enumerate(UIX_SCENARIOS) if item.code == code
-        )
+        current_index = next(i for i, item in enumerate(UIX_SCENARIOS) if item.code == code)
         self.previous_state_button.setEnabled(current_index > 0)
         self.next_state_button.setEnabled(current_index < len(UIX_SCENARIOS) - 1)
         self._dock_state.setText(f"{code} • {scenario.title}")
