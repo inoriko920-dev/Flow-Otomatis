@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog, UIX_SCENARIOS
+from flow_otomatis.presentation.credit_uix_preview import UIX_SCENARIOS, CreditUixDialog
 
 
 def main() -> int:
