@@ -829,9 +829,7 @@ def test_handoff_does_not_claim_ready_when_download_row_lacks_generated_job(
     assert inconsistent.handoff_ready is False
 
     exported: list[str] = []
-    view = build_results_view(
-        inconsistent, on_export_manifest=lambda: exported.append("invalid")
-    )
+    view = build_results_view(inconsistent, on_export_manifest=lambda: exported.append("invalid"))
     qtbot.addWidget(view)
     text = " ".join(label.text() for label in view.findChildren(QLabel))
     assert "Handoff belum siap" in text
@@ -849,9 +847,7 @@ def test_handoff_does_not_claim_ready_when_download_row_lacks_generated_job(
     window.close()
 
 
-def test_handoff_ready_banner_requires_actual_generate_and_download(
-    ready_results, qtbot
-) -> None:
+def test_handoff_ready_banner_requires_actual_generate_and_download(ready_results, qtbot) -> None:
     window, service, _database = ready_results
     original = service.snapshot(window.current_workspace.episode_id)
     assert original.handoff_ready is True
