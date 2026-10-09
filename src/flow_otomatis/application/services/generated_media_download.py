@@ -49,6 +49,23 @@ class GeneratedMediaDownloadService:
         # historical DOWNLOADED row must not bypass redirected-folder checks.
         destination = self._destination_path(episode_id, scene_id, normalized_take)
 
+        # A historical MP4/SQLite DOWNLOADED row alone cannot authorize
+        # reuse. Recheck the current Generate state before any idempotent
+        # return, including when the remote job has since been invalidated.
+        jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
+        job = jobs.get(scene_id)
+        if job is None:
+            raise InternalInvariantError(f"Generation job not found: {episode_id}/{scene_id}")
+        if job.state is not GenerationJobState.GENERATED:
+            raise InternalInvariantError(
+                "Download requires a confirmed GENERATED job and never starts Generate implicitly."
+            )
+        remote_result_id = (job.remote_result_id or "").strip()
+        if not remote_result_id:
+            raise InternalInvariantError(
+                "Download requires a stable remote result identifier from Generate."
+            )
+
         existing = self._download_repository.get(episode_id, scene_id)
         if (
             existing is not None
@@ -62,21 +79,6 @@ class GeneratedMediaDownloadService:
                 and is_available_output(str(existing_path))
             ):
                 return existing
-
-        jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
-        job = jobs.get(scene_id)
-        if job is None:
-            raise InternalInvariantError(f"Generation job not found: {episode_id}/{scene_id}")
-        if job.state is not GenerationJobState.GENERATED:
-            raise InternalInvariantError(
-                "Download requires a confirmed GENERATED job and never starts Generate implicitly."
-            )
-
-        remote_result_id = (job.remote_result_id or "").strip()
-        if not remote_result_id:
-            raise InternalInvariantError(
-                "Download requires a stable remote result identifier from Generate."
-            )
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         # Recheck after directory creation: a redirected parent cannot be
