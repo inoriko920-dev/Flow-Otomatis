@@ -758,9 +758,7 @@ def test_escape_returns_from_embedded_uix_to_real_workspace(qtbot) -> None:
     window.open_credit_uix_preview()
     assert window.fixture_code == "REAL_UIX22_PREVIEW"
 
-    escape = QKeyEvent(
-        QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier
-    )
+    escape = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
     window.keyPressEvent(escape)
 
     assert escape.isAccepted()
