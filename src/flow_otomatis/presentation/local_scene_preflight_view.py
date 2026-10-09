@@ -50,9 +50,7 @@ class _ImageScanTask(QRunnable):
     @Slot()
     def run(self) -> None:
         try:
-            report = prepare_local_scene_preflight(
-                self._workspace, image_verifier=self._verifier
-            )
+            report = prepare_local_scene_preflight(self._workspace, image_verifier=self._verifier)
         except Exception:
             self._signals.failed.emit()
         else:
@@ -216,9 +214,7 @@ class LocalScenePreflightDialog(QDialog):
         signals.completed.connect(self._image_scan_complete)
         signals.failed.connect(self._image_scan_failed)
         self._scan_signals = signals
-        QThreadPool.globalInstance().start(
-            _ImageScanTask(self._workspace, self._verifier, signals)
-        )
+        QThreadPool.globalInstance().start(_ImageScanTask(self._workspace, self._verifier, signals))
 
     @Slot(object)
     def _image_scan_complete(self, report: object) -> None:
