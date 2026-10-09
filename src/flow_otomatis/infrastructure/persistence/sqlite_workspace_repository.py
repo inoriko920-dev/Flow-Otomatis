@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import datetime
+from threading import Lock
 from pathlib import Path
 
 from flow_otomatis.application.ports.workspace_repository import (
@@ -26,13 +27,25 @@ class SqliteWorkspaceRepository:
 
     def __init__(self, projects_root: Path) -> None:
         self._projects_root = projects_root
+        # Serialize Windows resolve()/mkdir within a single repository instance
+        # so another import cannot observe a half-created parent. SQLite's
+        # BEGIN IMMEDIATE still serializes transactions across processes.
+        self._create_preflight_lock = Lock()
 
     def create(self, workspace: WorkspaceState) -> None:
         """Create a workspace atomically; never replace an existing episode."""
 
-        db_path = self._db_path(workspace.episode_id)
+        with self._create_preflight_lock:
+            db_path = self._db_path(workspace.episode_id)
+            try:
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                raise StorageError("Could not create local project directory safely") from exc
+            # Recheck the full canonical target before releasing the lock;
+            # redirects or newly introduced junctions still fail closed.
+            if self._db_path(workspace.episode_id) != db_path:
+                raise StorageError("Project database path changed during creation")
         try:
-            db_path.parent.mkdir(parents=True, exist_ok=True)
             with sqlite3.connect(db_path, timeout=10.0) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 self._create_schema(connection)
