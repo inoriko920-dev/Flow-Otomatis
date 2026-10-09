@@ -684,3 +684,54 @@ def test_download_blocks_unsafe_windows_components_before_any_provider_or_write(
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
     assert not (root / "CON").exists()
     assert not (root / "EP500_DOWNLOAD" / "downloads").exists()
+
+
+
+@pytest.mark.parametrize(
+    ("late_state", "late_remote_id"),
+    [
+        (GenerationJobState.QUEUED, None),
+        (GenerationJobState.FAILED, "remote:SCENE_001"),
+        (GenerationJobState.GENERATED, "remote:replacement"),
+        (GenerationJobState.GENERATED, ""),
+    ],
+)
+def test_download_worker_result_is_not_saved_if_generate_changed_midflight(
+    tmp_path: Path, late_state: GenerationJobState, late_remote_id: str | None
+) -> None:
+    database = tmp_path / "projects" / "EP500_DOWNLOAD" / "project.sqlite3"
+
+    class MidflightJobChangeDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            # A concurrent generation worker invalidates the original result
+            # after the download wrote bytes but before the service persists.
+            with __import__("sqlite3").connect(database) as connection:
+                connection.execute(
+                    "UPDATE generation_jobs SET state = ?, remote_result_id = ? WHERE scene_id = ?",
+                    (late_state.value, late_remote_id, "SCENE_001"),
+                )
+                connection.commit()
+            return evidence
+
+    driver = MidflightJobChangeDriver()
+    root, jobs, downloads, service = _setup(tmp_path, driver)
+    published = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    with pytest.raises(InternalInvariantError, match="changed during Download"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    assert len(driver.calls) == 1
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert published.read_bytes() == b"fake-video"
+    job = jobs.list_for_episode("EP500_DOWNLOAD")[0]
+    assert job.state is late_state
+    assert job.remote_result_id == late_remote_id
