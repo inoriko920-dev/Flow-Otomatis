@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QPushButton, QTableWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QLineEdit, QPushButton, QTableWidget
 
 from flow_otomatis.presentation.credit_uix_preview import (
     SCENARIO_BY_ID,
@@ -151,4 +151,55 @@ def test_sidebar_preserves_seven_original_routes_as_non_live_labels(qtbot) -> No
         "Diagnostik",
         "Pengaturan",
     ]
+    dialog.close()
+
+
+
+def test_search_filters_visible_rows_and_updates_readonly_dock(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-05-C")
+    qtbot.addWidget(dialog)
+    search = dialog.findChild(QLineEdit, "UixTableSearch")
+    table = dialog.findChild(QTableWidget, "UixDetailTable")
+    inspector = dialog.findChild(QLabel, "UixDockSelectedRow")
+    count = dialog.findChild(QLabel, "UixFilterCount")
+    assert search is not None and table is not None
+    assert inspector is not None and count is not None
+    assert table.rowCount() == 2
+
+    search.setText("submit_uncertain")
+    assert not table.isRowHidden(0)
+    assert table.isRowHidden(1)
+    assert count.text() == "1/2 baris (contoh)"
+    assert "SCENE_008" in inspector.text()
+    assert "SUBMIT_UNCERTAIN" in inspector.text()
+    assert not dialog.live_dispatch_enabled
+
+    search.setText("does-not-exist")
+    assert all(table.isRowHidden(row) for row in range(2))
+    assert count.text() == "0/2 baris (contoh)"
+    assert "Tidak ada baris" in inspector.text()
+
+    search.clear()
+    assert not any(table.isRowHidden(row) for row in range(2))
+    assert count.text() == "2/2 baris (contoh)"
+    dialog.close()
+
+
+def test_state_switch_resets_search_and_inspector_to_current_table(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-C")
+    qtbot.addWidget(dialog)
+    search = dialog.findChild(QLineEdit, "UixTableSearch")
+    assert search is not None
+    search.setText("SCENE_005")
+    dialog.set_state("UIX-07-B")
+    current_search = dialog.findChild(QLineEdit, "UixTableSearch")
+    assert current_search is not None
+    assert current_search is not search
+    assert current_search.text() == ""
+    table = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert table.rowCount() == 12
+    assert not table.isRowHidden(0)
+    inspector = dialog.findChild(QLabel, "UixDockSelectedRow")
+    assert "SCENE_001" in inspector.text()
+    assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
