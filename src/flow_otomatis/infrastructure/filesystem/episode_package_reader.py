@@ -211,9 +211,7 @@ class EpisodePackageReader:
             # collisions rather than trust an ambiguous original image.
             canonical = path.as_posix().casefold()
             if canonical in seen:
-                raise PackageSecurityError(
-                    "ZIP contains duplicate or ambiguous file entries"
-                )
+                raise PackageSecurityError("ZIP contains duplicate or ambiguous file entries")
             seen.add(canonical)
 
     def _resolve_member(self, manifest_name: str, reference: str) -> str:
