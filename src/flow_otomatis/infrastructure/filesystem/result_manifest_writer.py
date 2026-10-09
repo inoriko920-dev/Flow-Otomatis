@@ -108,6 +108,11 @@ class ResultManifestWriter:
         # a private temporary beside the final manifest for atomic same-volume
         # publication. The existing final is never touched before publication.
         serialized = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        # Remember the actual directory identity, not just a pathname. If
+        # another process redirects/renames the parent during export, cleanup
+        # must never delete an unrelated same-named file at the new path.
+        initial_dir_stat = output_dir.stat()
+        initial_dir_identity = (initial_dir_stat.st_dev, initial_dir_stat.st_ino)
         temporary: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -130,9 +135,20 @@ class ResultManifestWriter:
                 raise InternalInvariantError("Result export target was redirected")
             os.replace(temporary, target)
         finally:
-            # Never delete a competing export's file or the previously
-            # published manifest when write/flush/replace fails.
+            # Do not follow a redirected parent during cleanup. When the
+            # directory is renamed while writing, preserve the private .tmp
+            # alongside the original manifest for explicit manual recovery.
             if temporary is not None:
-                with suppress(OSError):
-                    temporary.unlink(missing_ok=True)
+                with suppress(OSError, RuntimeError, ValueError):
+                    current_stat = output_dir.stat()
+                    current_identity = (current_stat.st_dev, current_stat.st_ino)
+                    canonical = output_dir.resolve(strict=True)
+                    expected = Path(os.path.abspath(output_dir))
+                    if (
+                        current_identity == initial_dir_identity
+                        and not output_dir.is_symlink()
+                        and os.path.normcase(str(canonical))
+                        == os.path.normcase(str(expected))
+                    ):
+                        temporary.unlink(missing_ok=True)
         return target
