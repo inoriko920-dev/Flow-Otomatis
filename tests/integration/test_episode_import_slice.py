@@ -565,15 +565,18 @@ def test_nonstandard_nested_manifest_folder_pins_and_rescans_image_bytes(
     service = EpisodeImportService(reader, repository, image_verifier=reader)
     workspace = service.import_package(package)
     assert Path(workspace.source_package_path) == package.resolve()
-    assert workspace.scenes[0].image_sha256_imported == hashlib.sha256(
-        b"synthetic-image-16"
-    ).hexdigest()
-    assert workspace.scenes[1].image_sha256_imported == hashlib.sha256(
-        b"synthetic-image-17"
-    ).hexdigest()
-    assert prepare_local_scene_preflight(
-        workspace, image_verifier=reader
-    )["image_baselines_verified"] is True
+    assert (
+        workspace.scenes[0].image_sha256_imported
+        == hashlib.sha256(b"synthetic-image-16").hexdigest()
+    )
+    assert (
+        workspace.scenes[1].image_sha256_imported
+        == hashlib.sha256(b"synthetic-image-17").hexdigest()
+    )
+    assert (
+        prepare_local_scene_preflight(workspace, image_verifier=reader)["image_baselines_verified"]
+        is True
+    )
 
     planner = ScenePlanningService(reader, repository, image_verifier=reader)
     assert planner.rescan_images(workspace.episode_id) == workspace
