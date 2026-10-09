@@ -118,7 +118,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--fixture", default=DEFAULT_FIXTURE_CODE)
     parser.add_argument("--smoke-exit-ms", type=int)
-    args, _unknown = parser.parse_known_args(list(argv) if argv is not None else sys.argv[1:])
+    command_line = list(argv) if argv is not None else sys.argv[1:]
+    args, _unknown = parser.parse_known_args(command_line)
+    explicit_fixture = any(
+        value == "--fixture" or value.startswith("--fixture=") for value in command_line
+    )
 
     app = cast(QApplication | None, QApplication.instance())
     if app is None:
@@ -127,6 +131,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.setOrganizationName("Flow-Otomatis")
 
     window = build_main_window(args.fixture)
+    if not explicit_fixture:
+        # Production starts in the real Project Hub, not a static demo fixture.
+        # Explicit --fixture always preserves the approved 30 screenshot routes.
+        window.show_project_hub()
     window.show()
 
     if args.smoke_exit_ms is not None:
