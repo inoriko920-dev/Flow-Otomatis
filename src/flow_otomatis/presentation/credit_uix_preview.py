@@ -71,8 +71,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Workspace • gambar, prompt, dan Target bermasalah",
         "warning",
         "3 scene perlu tindakan",
-        ("SCENE_004 tanpa gambar, SCENE_007 tanpa prompt, "
-         "SCENE_011 Target 11,2 detik. Jangan Generate."),
+        (
+            "SCENE_004 tanpa gambar, SCENE_007 tanpa prompt, "
+            "SCENE_011 Target 11,2 detik. Jangan Generate."
+        ),
     ),
     UixScenario(
         "UIX-01-C",
@@ -80,8 +82,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Workspace • status kredit tidak diketahui",
         "warning",
         "Tarif tidak tersedia",
-        ("Saldo akun dan kelayakan model belum dibuktikan. "
-         "Bukan nol kredit; nilainya belum diketahui."),
+        (
+            "Saldo akun dan kelayakan model belum dibuktikan. "
+            "Bukan nol kredit; nilainya belum diketahui."
+        ),
     ),
     UixScenario(
         "UIX-02-A",
@@ -89,8 +93,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Dialog • 12 scene pada tiga profil sintetis",
         "info",
         "RENCANA SIMULASI — BELUM DISETUJUI",
-        ("Periksa alokasi, estimasi kredit, Scene yang tertahan, "
-         "dan batas belanja. Tidak mengirim permintaan."),
+        (
+            "Periksa alokasi, estimasi kredit, Scene yang tertahan, "
+            "dan batas belanja. Tidak mengirim permintaan."
+        ),
     ),
     UixScenario(
         "UIX-02-B",
@@ -138,8 +144,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Workspace • perubahan gambar dan tarif",
         "warning",
         "Plan v3 tidak berlaku",
-        ("SCENE_006, versi tarif dan bukti kredit berubah. "
-         "Perlu hitung ulang, tanpa auto-reapproval."),
+        (
+            "SCENE_006, versi tarif dan bukti kredit berubah. "
+            "Perlu hitung ulang, tanpa auto-reapproval."
+        ),
     ),
     UixScenario(
         "UIX-05-A",
@@ -211,8 +219,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Workspace • bukti harga kedaluwarsa",
         "warning",
         "Tarif vDEMO-1 → vDEMO-2",
-        ("Perlu hitung ulang dan persetujuan baru. "
-         "Ini contoh versi tarif, bukan daftar harga nyata."),
+        (
+            "Perlu hitung ulang dan persetujuan baru. "
+            "Ini contoh versi tarif, bukan daftar harga nyata."
+        ),
     ),
     UixScenario(
         "UIX-08-B",
@@ -236,8 +246,10 @@ UIX_SCENARIOS: tuple[UixScenario, ...] = (
         "Hasil • contoh semua Scene selesai",
         "info",
         "Handoff 12/12 hanya ilustrasi",
-        ("Output yang dimaksud VIDEO MP4 dan manifest JSON. "
-         "Tidak ada file video asli dalam preview."),
+        (
+            "Output yang dimaksud VIDEO MP4 dan manifest JSON. "
+            "Tidak ada file video asli dalam preview."
+        ),
     ),
 )
 
