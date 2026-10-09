@@ -331,8 +331,13 @@ class CreditUixDialog(QDialog):
         rail_layout.addWidget(muted_label("UIX22  •  Mode Simulasi"))
         rail_layout.addSpacing(12)
         for route in (
-            "Beranda", "Workspace", "Hasil", "Profil Google",
-            "Gemini Keys", "Diagnostik", "Pengaturan",
+            "Beranda",
+            "Workspace",
+            "Hasil",
+            "Profil Google",
+            "Gemini Keys",
+            "Diagnostik",
+            "Pengaturan",
         ):
             item = QLabel("   " + route)
             item.setObjectName("UixSidebarRoute")
@@ -355,7 +360,9 @@ class CreditUixDialog(QDialog):
         main.setContentsMargins(17, 13, 17, 13)
         main.setSpacing(10)
         top = QHBoxLayout()
-        top.addWidget(page_header("Workspace / Pratinjau Multiakun", "Omni Flash 1.1  •  720p  •  16:9"))
+        top.addWidget(
+            page_header("Workspace / Pratinjau Multiakun", "Omni Flash 1.1  •  720p  •  16:9")
+        )
         top.addStretch(1)
         top.addWidget(status_badge("OFFLINE • DATA CONTOH", "warning"))
         main.addLayout(top)
@@ -371,11 +378,13 @@ class CreditUixDialog(QDialog):
         dock_layout.setContentsMargins(16, 20, 16, 20)
         dock_layout.setSpacing(12)
         dock_layout.addWidget(page_header("Scene & AI Agent", "Panel kanan • tidak terhubung"))
-        dock_layout.addWidget(info_banner(
-            "BACA SAJA",
-            "Agent, login dan Generate tidak tersedia dalam pratinjau UI ini.",
-            "info",
-        ))
+        dock_layout.addWidget(
+            info_banner(
+                "BACA SAJA",
+                "Agent, login dan Generate tidak tersedia dalam pratinjau UI ini.",
+                "info",
+            )
+        )
         dock_layout.addWidget(QLabel("KONDISI YANG DIPILIH"))
         self._dock_state = QLabel("UIX-01-A")
         self._dock_state.setObjectName("UixDockState")
@@ -740,8 +749,7 @@ class CreditUixDialog(QDialog):
                 for row in self._preview["assigned"][:8]
             ]
             subset.extend(
-                [f"SCENE_{index:03}", "—", "—", "—", "BELUM DIALOKASIKAN"]
-                for index in range(9, 13)
+                [f"SCENE_{index:03}", "—", "—", "—", "BELUM DIALOKASIKAN"] for index in range(9, 13)
             )
             return columns, subset
         if code == "UIX-04-B":
@@ -762,8 +770,13 @@ class CreditUixDialog(QDialog):
                 else:
                     stage = "PERLU PERHATIAN"
                 rows.append(
-                    [f"SCENE_{index:03}", "Profil A/B (contoh)", stage, "Belum",
-                     "Tidak ada bukti provider"]
+                    [
+                        f"SCENE_{index:03}",
+                        "Profil A/B (contoh)",
+                        stage,
+                        "Belum",
+                        "Tidak ada bukti provider",
+                    ]
                 )
             return ["Scene", "Profil", "Status", "Download", "Bukti"], rows
         if code == "UIX-05-C":
@@ -800,8 +813,7 @@ class CreditUixDialog(QDialog):
                     generated = "CONTOH" if index <= 6 else "—"
                     downloaded = "CONTOH" if index <= 4 else "—"
                 rows.append(
-                    [f"SCENE_{index:03}", generated, downloaded,
-                     "TIDAK ADA MP4 NYATA", "—"]
+                    [f"SCENE_{index:03}", generated, downloaded, "TIDAK ADA MP4 NYATA", "—"]
                 )
             return ["Scene", "Generate", "Download", "File lokal", "SHA-256"], rows
         group = code[4:6]
