@@ -451,7 +451,6 @@ def test_recorded_mp4_replaced_by_symlink_fails_closed_in_results_and_manifest(
     assert persisted.state == DownloadState.DOWNLOADED
 
 
-
 @pytest.mark.parametrize(
     ("stale_job_state", "stale_remote_id"),
     [
