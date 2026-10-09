@@ -131,6 +131,16 @@ class _GeminiAgentRequest:
     context_generation: int
 
 
+@dataclass(frozen=True, slots=True)
+class _GoogleSessionRequest:
+    """Bind a late Browser Worker reply to the exact initiating profile view."""
+
+    request_id: int
+    route: str
+    profile_id: str | None
+    action: str
+
+
 class _GeminiAgentSignals(QObject):
     """One independent Qt signal bridge per Agent request (not window-owned)."""
 
@@ -209,9 +219,9 @@ class _GeminiHealthTask(QRunnable):
 class _GoogleSessionSignals(QObject):
     """Marshal sanitized Browser Worker outcomes back onto the Qt thread."""
 
-    profile_ready = Signal(str, object)
-    all_ready = Signal()
-    failed = Signal(str, str)
+    profile_ready = Signal(object, object)
+    all_ready = Signal(object)
+    failed = Signal(object, str, str)
 
 
 class _GoogleFlowSignals(QObject):
@@ -278,6 +288,8 @@ class MainWindow(QMainWindow):
         self._active_agent_request: _GeminiAgentRequest | None = None
         self._agent_closed = False
         self._active_google_profile_id: str | None = None
+        self._google_session_request_id = 0
+        self._active_google_session_request: _GoogleSessionRequest | None = None
         self._last_result_manifest_path: Path | None = None
         self._last_results_snapshot: ProjectResults | None = None
         self._pending_workspace: WorkspaceState | None = None
@@ -288,7 +300,7 @@ class MainWindow(QMainWindow):
         self._last_diagnostics_snapshot: LocalDiagnosticSnapshot | None = None
         self._google_session_signals = _GoogleSessionSignals(self)
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
-        self._google_session_signals.all_ready.connect(self.show_google_profiles)
+        self._google_session_signals.all_ready.connect(self._on_google_all_ready)
         self._google_session_signals.failed.connect(self._show_google_session_error)
         self._google_flow_signals = _GoogleFlowSignals(self)
         self._google_flow_signals.checked.connect(self._on_google_flow_checked)
@@ -552,6 +564,9 @@ class MainWindow(QMainWindow):
             layout.addWidget(widget)
 
     def _set_navigation(self, item: str) -> None:
+        if item != "Profil Google":
+            # Pending session results must never hijack a different route.
+            self._active_google_session_request = None
         for name, button in self._nav_buttons.items():
             button.setChecked(name == item)
         if self._production_shell or self._fixture_code.startswith("REAL_"):
@@ -1144,6 +1159,8 @@ class MainWindow(QMainWindow):
     def show_google_profiles(self) -> None:
         """Render real credential-free Google profile/session state."""
 
+        # Returning to the list cancels any previous open/recheck intent.
+        self._active_google_session_request = None
         if self._google_session_service is None:
             if self._production_shell:
                 self.show_account_service_unavailable("Profil Google")
@@ -1227,8 +1244,9 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None:
             return
         self._invalidate_google_flow(profile_id)
+        request = self._begin_google_session_request("open", profile_id)
         future = self._google_session_service.open_login_async(profile_id)
-        self._watch_google_profile_future(future, "open", "Bantuan Login")
+        self._watch_google_profile_future(future, request, "Bantuan Login")
 
     def _reopen_active_google_login(self) -> None:
         if self._active_google_profile_id is None:
@@ -1241,23 +1259,26 @@ class MainWindow(QMainWindow):
             self.show_google_profiles()
             return
         self._invalidate_google_flow(self._active_google_profile_id)
+        request = self._begin_google_session_request("recheck", self._active_google_profile_id)
         future = self._google_session_service.check_profile_async(self._active_google_profile_id)
-        self._watch_google_profile_future(future, "recheck", "Bantuan Login")
+        self._watch_google_profile_future(future, request, "Bantuan Login")
 
     def _check_google_profile(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
         self._invalidate_google_flow(profile_id)
+        request = self._begin_google_session_request("check", profile_id)
         future = self._google_session_service.check_profile_async(profile_id)
-        self._watch_google_profile_future(future, "check", "Profil Google")
+        self._watch_google_profile_future(future, request, "Profil Google")
 
     def _check_all_google_profiles(self) -> None:
         if self._google_session_service is None:
             return
         for profile in self._google_session_service.list_profiles():
             self._invalidate_google_flow(profile.profile_id)
+        request = self._begin_google_session_request("check_all", None)
         future = self._google_session_service.check_all_async()
-        self._watch_google_all_future(future, "Profil Google")
+        self._watch_google_all_future(future, request, "Profil Google")
 
     def _invalidate_google_flow(self, profile_id: str) -> int:
         """Revoke cached Flow proof and fence callbacks after session changes."""
@@ -1365,87 +1386,110 @@ class MainWindow(QMainWindow):
         if profile is not None:
             self.show_google_login(profile)
 
+    def _begin_google_session_request(
+        self, action: str, profile_id: str | None
+    ) -> _GoogleSessionRequest:
+        self._google_session_request_id += 1
+        request = _GoogleSessionRequest(
+            request_id=self._google_session_request_id,
+            route=self._fixture_code,
+            profile_id=profile_id,
+            action=action,
+        )
+        self._active_google_session_request = request
+        return request
+
+    def _is_current_google_session_request(self, request: _GoogleSessionRequest) -> bool:
+        if self._google_browser_closed or self._active_google_session_request != request:
+            return False
+        if self._fixture_code != request.route:
+            return False
+        if request.route == "REAL_GOOGLE_LOGIN":
+            return self._active_google_profile_id == request.profile_id
+        return request.route == "REAL_GOOGLE_PROFILES"
+
     def _watch_google_profile_future(
         self,
         future: Future[GoogleSessionProfile],
-        action: str,
+        request: _GoogleSessionRequest,
         title: str,
     ) -> None:
-        """Observe only sanitized DTOs; worker callbacks emit Qt signals."""
+        """All outcomes are fenced by latest request and exact displayed route."""
 
         def completed(done: Future[GoogleSessionProfile]) -> None:
             try:
                 profile = done.result()
             except FlowOtomatisError as exc:
-                self._google_session_signals.failed.emit(title, str(exc))
+                self._google_session_signals.failed.emit(request, title, str(exc))
             except Exception:
                 self._google_session_signals.failed.emit(
-                    title,
-                    "Operasi sesi Google gagal tanpa mengekspos detail browser.",
+                    request, title, "Operasi sesi Google gagal tanpa mengekspos detail browser."
                 )
             else:
-                self._google_session_signals.profile_ready.emit(action, profile)
+                self._google_session_signals.profile_ready.emit(request, profile)
 
         future.add_done_callback(completed)
 
     def _watch_google_all_future(
         self,
         future: Future[tuple[GoogleSessionProfile, ...]],
+        request: _GoogleSessionRequest,
         title: str,
     ) -> None:
         def completed(done: Future[tuple[GoogleSessionProfile, ...]]) -> None:
             try:
                 done.result()
             except FlowOtomatisError as exc:
-                self._google_session_signals.failed.emit(title, str(exc))
+                self._google_session_signals.failed.emit(request, title, str(exc))
             except Exception:
                 self._google_session_signals.failed.emit(
-                    title,
-                    "Operasi sesi Google gagal tanpa mengekspos detail browser.",
+                    request, title, "Operasi sesi Google gagal tanpa mengekspos detail browser."
                 )
             else:
-                self._google_session_signals.all_ready.emit()
+                self._google_session_signals.all_ready.emit(request)
 
         future.add_done_callback(completed)
 
     def _on_google_session_profile_ready(
         self,
-        action: str,
+        request: _GoogleSessionRequest,
         profile: GoogleSessionProfile,
     ) -> None:
-        if self._google_browser_closed:
+        if not self._is_current_google_session_request(request):
             return
-        if action == "open":
-            # A late login response may not hijack Beranda, Diagnostik, or
-            # an unavailable profile store. Keep only the originating route.
-            if self._fixture_code not in {"REAL_GOOGLE_PROFILES", "REAL_GOOGLE_LOGIN"}:
-                return
-            if (
-                self._fixture_code == "REAL_GOOGLE_LOGIN"
-                and self._active_google_profile_id != profile.profile_id
-            ):
-                return
+        if request.profile_id != profile.profile_id:
+            # An incorrect response must not take control of another account.
+            self._active_google_session_request = None
+            return
+        self._active_google_session_request = None
+        if request.action == "open":
             self.show_google_login(profile)
-            return
-        if action == "recheck":
-            if (
-                self._fixture_code == "REAL_GOOGLE_LOGIN"
-                and self._active_google_profile_id == profile.profile_id
-            ):
-                self.show_google_login(profile)
-            return
-        if self._fixture_code == "REAL_GOOGLE_PROFILES":
+        elif request.action == "recheck":
+            self.show_google_login(profile)
+        elif request.action == "check":
             self.show_google_profiles()
 
-    def _show_google_session_error(self, title: str, message: str) -> None:
-        if not self._google_browser_closed:
-            QMessageBox.warning(self, title, message)
+    def _on_google_all_ready(self, request: _GoogleSessionRequest) -> None:
+        if not self._is_current_google_session_request(request):
+            return
+        if request.action == "check_all":
+            self._active_google_session_request = None
+            self.show_google_profiles()
+
+    def _show_google_session_error(
+        self, request: _GoogleSessionRequest, title: str, message: str
+    ) -> None:
+        if not self._is_current_google_session_request(request):
+            return
+        self._active_google_session_request = None
+        QMessageBox.warning(self, title, message)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Bound how long Qt waits while Browser Worker cleans up."""
 
         self._agent_closed = True
         self._google_browser_closed = True
+        self._active_google_session_request = None
         for profile_id in tuple(self._google_flow_epochs):
             self._invalidate_google_flow(profile_id)
         self._invalidate_agent_context()
