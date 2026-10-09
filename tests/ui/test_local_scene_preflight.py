@@ -442,6 +442,7 @@ def test_partial_missing_scene_is_not_claimed_as_all_image_bytes_verified() -> N
     assert only_missing["image_bytes_verified"] is False
     assert only_missing["held_count"] == 1
 
+
 def test_sha256_rescan_preserves_selected_scene_after_ready_to_held_reorder(qtbot) -> None:
     """Never navigate to another Scene merely because byte results reorder rows."""
     workspace = _workspace(
