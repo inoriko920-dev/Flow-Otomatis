@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -391,6 +392,11 @@ class CreditUixDialog(QDialog):
         self._dock_state.setWordWrap(True)
         self._dock_state.setStyleSheet(f"font-weight: 600; color: {theme.PRIMARY};")
         dock_layout.addWidget(self._dock_state)
+        dock_layout.addWidget(QLabel("RINCIAN BARIS TERPILIH"))
+        self._dock_row = muted_label("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
+        self._dock_row.setObjectName("UixDockSelectedRow")
+        self._dock_row.setMinimumHeight(86)
+        dock_layout.addWidget(self._dock_row)
         dock_layout.addWidget(QLabel("PENGAMAN PRODUKSI"))
         for detail in (
             "• Durasi Flow: 4 / 6 / 8 / 10 detik",
@@ -497,6 +503,7 @@ class CreditUixDialog(QDialog):
         scenario = SCENARIO_BY_ID[code]
         self._current_state = code
         self._dock_state.setText(f"{code} • {scenario.title}")
+        self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
         self._last_local_plan_approved = False
         root = QWidget()
         root.setObjectName(f"UixPage{code.replace('-', '')}")
@@ -516,6 +523,17 @@ class CreditUixDialog(QDialog):
         columns, rows = self._data_for(code)
         content, content_layout = card(7)
         content_layout.addWidget(self._section_title(code))
+        finder = QHBoxLayout()
+        search = QLineEdit()
+        search.setObjectName("UixTableSearch")
+        search.setClearButtonEnabled(True)
+        search.setPlaceholderText("Cari Scene, profil, status, atau bukti...")
+        search.setAccessibleName("Cari data dalam tabel pratinjau")
+        finder.addWidget(search, 1)
+        matches = muted_label(f"{len(rows)} baris (contoh)")
+        matches.setObjectName("UixFilterCount")
+        finder.addWidget(matches)
+        content_layout.addLayout(finder)
         table = QTableWidget(len(rows), len(columns))
         table.setObjectName("UixDetailTable")
         table.setHorizontalHeaderLabels(columns)
@@ -530,6 +548,12 @@ class CreditUixDialog(QDialog):
                 table.setItem(row_index, col_index, item)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         table.resizeRowsToContents()
+        table.itemSelectionChanged.connect(lambda view=table: self._selected_row_details(view))
+        search.textChanged.connect(
+            lambda query, view=table, label=matches: self._filter_rows(view, label, query)
+        )
+        if rows:
+            table.setCurrentCell(0, 0)
         content_layout.addWidget(table)
         layout.addWidget(content)
 
@@ -583,6 +607,48 @@ class CreditUixDialog(QDialog):
         if previous is not None:
             previous.deleteLater()
         self.status.setText(f"{code} • 22 keadaan UI tersedia • hanya simulasi offline")
+
+    def _selected_row_details(self, table: QTableWidget) -> None:
+        """Read-only inspector for the actual selected row, never a provider action."""
+        index = table.currentRow()
+        if index < 0 or table.isRowHidden(index):
+            self._dock_row.setText("Tidak ada baris yang dipilih.")
+            return
+        values = [
+            f"{table.horizontalHeaderItem(column).text()}: "
+            f"{table.item(index, column).text() if table.item(index, column) else '—'}"
+            for column in range(table.columnCount())
+        ]
+        self._dock_row.setText("\n".join(values))
+
+    def _filter_rows(
+        self, table: QTableWidget, count_label: QLabel, query: str
+    ) -> None:
+        """Filter only visible synthetic/local table data without changing totals."""
+        needle = query.strip().casefold()
+        visible = 0
+        for row_index in range(table.rowCount()):
+            found = any(
+                needle in table.item(row_index, col).text().casefold()
+                for col in range(table.columnCount())
+                if table.item(row_index, col) is not None
+            )
+            table.setRowHidden(row_index, not found)
+            visible += int(found)
+        count_label.setText(f"{visible}/{table.rowCount()} baris (contoh)")
+        current = table.currentRow()
+        if current < 0 or table.isRowHidden(current):
+            replacement = next(
+                (row for row in range(table.rowCount()) if not table.isRowHidden(row)),
+                -1,
+            )
+            if replacement < 0:
+                table.clearSelection()
+                self._dock_row.setText("Tidak ada baris yang cocok dengan pencarian.")
+            else:
+                table.setCurrentCell(replacement, 0)
+        else:
+            self._selected_row_details(table)
 
     def _section_title(self, code: str) -> QLabel:
         headings = {
