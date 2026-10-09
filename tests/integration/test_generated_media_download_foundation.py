@@ -563,3 +563,46 @@ def test_download_worker_rejects_parent_redirected_during_async_download(
     partials = list(target.parent.glob("*.part"))
     assert len(partials) == 1
     assert partials[0].read_bytes() == b"fake-video"
+
+
+def test_existing_download_must_match_requested_take_before_idempotent_reuse(
+    tmp_path: Path,
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    first = service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=1)
+    second = service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+
+    assert first.take == 1
+    assert second.take == 2
+    assert first.output_path != second.output_path
+    assert second.output_path is not None
+    assert second.output_path.endswith("SCENE_001__take_02.mp4")
+    assert Path(first.output_path or "").read_bytes() == b"fake-video"
+    assert Path(second.output_path).read_bytes() == b"fake-video"
+    assert Path(second.output_path).is_relative_to(root)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == second
+    assert len(driver.calls) == 2
+    assert service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2) == second
+    assert len(driver.calls) == 2
+
+
+def test_existing_success_does_not_bypass_redirected_download_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    success = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    before_calls = len(driver.calls)
+    original_junction = Path.is_junction
+
+    def redirect_after_success(self: Path) -> bool:
+        return self == directory or original_junction(self)
+
+    monkeypatch.setattr(Path, "is_junction", redirect_after_success)
+    with pytest.raises(InternalInvariantError, match="redirected"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == success
+    assert len(driver.calls) == before_calls
