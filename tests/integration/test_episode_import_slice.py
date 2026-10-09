@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import sqlite3
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -8,7 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
+from flow_otomatis.application.services.local_scene_preflight import (
+    prepare_local_scene_preflight,
+)
 from flow_otomatis.domain.errors import (
     PackageSecurityError,
     PackageValidationError,
@@ -319,3 +324,84 @@ def test_atomic_create_allows_only_one_concurrent_creator(tmp_path: Path) -> Non
 
     assert sorted(outcomes) == ["created", "duplicate"]
     assert repository.load(workspace.episode_id) == workspace
+
+
+def test_import_pins_sha256_and_detects_same_path_image_modification(tmp_path: Path) -> None:
+    """Changing bytes at a valid source path must not inherit initial approval."""
+    package = _write_folder_package(tmp_path / "episode", _manifest())
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    service = EpisodeImportService(reader, repository, image_verifier=reader)
+    workspace = service.import_package(package)
+    original = repository.load(workspace.episode_id)
+    assert original == workspace
+    expected_hash = hashlib.sha256(b"synthetic-image-17").hexdigest()
+    assert workspace.scenes[1].image_sha256_imported == expected_hash
+    assert len(workspace.scenes[0].image_sha256_imported or "") == 64
+
+    initial = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert initial["baseline_match_count"] == 2
+    assert initial["baseline_mismatch_count"] == 0
+    assert initial["baseline_missing_count"] == 0
+    assert initial["image_baselines_verified"] is True
+
+    image = (
+        package
+        / "08_APPROVED_IMAGES"
+        / "EP001__IMAGE__SCENE_017__v1.0.png"
+    )
+    image.write_bytes(b"modified-image-17")
+    changed = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert changed["baseline_match_count"] == 1
+    assert changed["baseline_mismatch_count"] == 1
+    assert changed["image_baselines_verified"] is False
+    assert changed["held_count"] == 2
+    assert any(
+        "GAMBAR BERUBAH SEJAK IMPOR" in row["issues"]
+        for row in changed["held"]
+    )
+    assert "modified-image" not in json.dumps(changed)
+    assert str(tmp_path) not in json.dumps(changed)
+    assert repository.load(workspace.episode_id) == original
+
+    planning = ScenePlanningService(reader, repository)
+    planning.select_flow_duration(workspace.episode_id, "SCENE_016", 8)
+    reloaded = repository.load(workspace.episode_id)
+    assert reloaded is not None
+    assert reloaded.scenes[1].image_sha256_imported == expected_hash
+
+
+def test_legacy_workspace_loads_without_baseline_and_migrates_only_on_write(
+    tmp_path: Path,
+) -> None:
+    """Old projects must not be rewritten or assigned fake historical digests."""
+    package = _write_package(tmp_path / "episode.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    reader = EpisodePackageReader()
+    legacy = EpisodeImportService(reader, repository).import_package(package)
+    db = tmp_path / "projects" / legacy.episode_id / "project.sqlite3"
+
+    # Emulate the previously released scenes schema with no digest column.
+    with sqlite3.connect(db) as connection:
+        connection.execute("ALTER TABLE scenes DROP COLUMN image_sha256_imported")
+    initial_bytes = db.read_bytes()
+    restored = repository.load(legacy.episode_id)
+    assert restored == legacy
+    assert all(scene.image_sha256_imported is None for scene in restored.scenes)
+    assert db.read_bytes() == initial_bytes
+
+    report = prepare_local_scene_preflight(restored, image_verifier=reader)
+    assert report["baseline_missing_count"] == 2
+    assert report["baseline_match_count"] == 0
+    assert report["image_baselines_verified"] is False
+    assert "GAMBAR BERUBAH SEJAK IMPOR" not in json.dumps(report)
+
+    planner = ScenePlanningService(reader, repository)
+    updated = planner.select_flow_duration(legacy.episode_id, "SCENE_016", 8)
+    assert updated.scenes[0].selected_flow_duration_s == 8
+    assert all(scene.image_sha256_imported is None for scene in updated.scenes)
+    with sqlite3.connect(db) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(scenes)")
+        }
+    assert "image_sha256_imported" in columns
