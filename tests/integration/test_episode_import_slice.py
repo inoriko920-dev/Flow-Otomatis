@@ -548,3 +548,43 @@ def test_storage_rejects_resolved_db_symlink_escape_before_read_or_write(
     assert not outside.exists()
     assert not db_path.exists()
     assert not root.exists()
+
+
+@pytest.mark.parametrize("folder_name", ["nested-package", "nested-package.zip"])
+def test_nonstandard_nested_manifest_folder_pins_and_rescans_image_bytes(
+    tmp_path: Path, folder_name: str
+) -> None:
+    """Directory image evidence must use the approved folder, not its nested manifest."""
+    package = _write_folder_package(tmp_path / folder_name, _manifest())
+    default_prompts = package / "09_FLOW_PROMPTS_AND_TAKES"
+    custom_prompts = package / "CUSTOM_PROMPTS"
+    default_prompts.rename(custom_prompts)
+
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    service = EpisodeImportService(reader, repository, image_verifier=reader)
+    workspace = service.import_package(package)
+    assert Path(workspace.source_package_path) == package.resolve()
+    assert workspace.scenes[0].image_sha256_imported == hashlib.sha256(
+        b"synthetic-image-16"
+    ).hexdigest()
+    assert workspace.scenes[1].image_sha256_imported == hashlib.sha256(
+        b"synthetic-image-17"
+    ).hexdigest()
+    assert prepare_local_scene_preflight(
+        workspace, image_verifier=reader
+    )["image_baselines_verified"] is True
+
+    planner = ScenePlanningService(reader, repository, image_verifier=reader)
+    assert planner.rescan_images(workspace.episode_id) == workspace
+
+    # A direct manifest import never inherits the broader folder's access.
+    with pytest.raises(PackageSecurityError):
+        reader.load(custom_prompts / "FLOW_OTOMATIS_IMPORT.json")
+
+    source_image = package / "08_APPROVED_IMAGES" / "EP001__IMAGE__SCENE_017__v1.0.png"
+    source_image.write_bytes(b"tampered-after-import")
+    with pytest.raises(PackageValidationError) as error:
+        planner.rescan_images(workspace.episode_id)
+    assert error.value.code == "IMAGE_CHANGED_SINCE_IMPORT"
+    assert repository.load(workspace.episode_id) == workspace
