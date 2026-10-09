@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from flow_otomatis.domain.project import WorkspaceState
-from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QLineEdit, QPushButton, QTableWidget
 
+from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.presentation.credit_uix_preview import (
     SCENARIO_BY_ID,
     UIX_SCENARIOS,
