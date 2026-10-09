@@ -1256,6 +1256,9 @@ class CreditUixDialog(QDialog):
             return
         preview = LocalScenePreflightDialog(self._workspace, parent=self)
         preview.exec()
+        if preview.requested_scene_id is not None:
+            self._requested_scene_id = preview.requested_scene_id
+            self.accept()
 
     def compare_with_approved_ui(self) -> None:
         """Inspect frozen UI image next to Qt; never alter the reference file."""
