@@ -294,6 +294,7 @@ class SqliteWorkspaceRepository:
         return self._projects_root / episode_id / "project.sqlite3"
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
+        """Create new schema or migrate old Scene rows only on an explicit write."""
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS project (
@@ -306,18 +307,10 @@ class SqliteWorkspaceRepository:
                 imported_at TEXT NOT NULL,
                 model TEXT NOT NULL,
                 resolution TEXT NOT NULL,
-                aspect_ratio TEXT NOT NULL,
-                image_sha256_imported TEXT
+                aspect_ratio TEXT NOT NULL
             )
             """
         )
-        columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(scenes)").fetchall()
-        }
-        if "image_sha256_imported" not in columns:
-            # Write-side migration only; read-only loads of legacy databases never
-            # alter or rewrite user projects.
-            connection.execute("ALTER TABLE scenes ADD COLUMN image_sha256_imported TEXT")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS scenes (
@@ -333,7 +326,15 @@ class SqliteWorkspaceRepository:
                 trim_target_s REAL NOT NULL,
                 model TEXT NOT NULL,
                 resolution TEXT NOT NULL,
-                aspect_ratio TEXT NOT NULL
+                aspect_ratio TEXT NOT NULL,
+                image_sha256_imported TEXT
             )
             """
         )
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(scenes)").fetchall()
+        }
+        if "image_sha256_imported" not in columns:
+            # Old projects are not rewritten on read. Explicit write migrations
+            # never invent a checksum baseline for previously imported images.
+            connection.execute("ALTER TABLE scenes ADD COLUMN image_sha256_imported TEXT")
