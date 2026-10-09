@@ -73,6 +73,10 @@ class GeneratedMediaDownloadService:
 
         destination = self._destination_path(episode_id, scene_id, normalized_take)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        # Recheck after directory creation: a redirected parent cannot be
+        # accepted as the published result folder even if it appeared late.
+        if self._destination_path(episode_id, scene_id, normalized_take) != destination:
+            raise InternalInvariantError("Project download destination changed unexpectedly.")
         if destination.is_symlink() or destination.exists():
             raise InternalInvariantError(
                 "Download destination already exists and will not be overwritten; "
@@ -123,7 +127,32 @@ class GeneratedMediaDownloadService:
         return record
 
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
-        directory = (self._projects_root / episode_id / "downloads").resolve()
+        # Do not resolve away an existing symlink/junction before checking it.
+        # Otherwise downloads/ -> another folder becomes an apparently valid
+        # canonical destination outside this application's project.
+        root = self._projects_root.expanduser().absolute()
+        project = root / episode_id
+        directory = project / "downloads"
+        try:
+            if any(
+                node.is_symlink() or node.is_junction()
+                for node in (root, project, directory)
+            ):
+                raise InternalInvariantError(
+                    "Project download directory is redirected; manual reconciliation required."
+                )
+            canonical_root = root.resolve()
+            if (
+                project.resolve() != canonical_root / episode_id
+                or directory.resolve() != canonical_root / episode_id / "downloads"
+            ):
+                raise InternalInvariantError(
+                    "Project download path escaped its configured project root."
+                )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise InternalInvariantError(
+                "Project download directory cannot be safely verified."
+            ) from exc
         return directory / f"{scene_id}__take_{take:02d}.mp4"
 
     @staticmethod
