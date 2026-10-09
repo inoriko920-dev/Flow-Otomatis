@@ -345,21 +345,14 @@ def test_import_pins_sha256_and_detects_same_path_image_modification(tmp_path: P
     assert initial["baseline_missing_count"] == 0
     assert initial["image_baselines_verified"] is True
 
-    image = (
-        package
-        / "08_APPROVED_IMAGES"
-        / "EP001__IMAGE__SCENE_017__v1.0.png"
-    )
+    image = package / "08_APPROVED_IMAGES" / "EP001__IMAGE__SCENE_017__v1.0.png"
     image.write_bytes(b"modified-image-17")
     changed = prepare_local_scene_preflight(workspace, image_verifier=reader)
     assert changed["baseline_match_count"] == 1
     assert changed["baseline_mismatch_count"] == 1
     assert changed["image_baselines_verified"] is False
     assert changed["held_count"] == 2
-    assert any(
-        "GAMBAR BERUBAH SEJAK IMPOR" in row["issues"]
-        for row in changed["held"]
-    )
+    assert any("GAMBAR BERUBAH SEJAK IMPOR" in row["issues"] for row in changed["held"])
     assert "modified-image" not in json.dumps(changed)
     assert str(tmp_path) not in json.dumps(changed)
     assert repository.load(workspace.episode_id) == original
@@ -401,7 +394,5 @@ def test_legacy_workspace_loads_without_baseline_and_migrates_only_on_write(
     assert updated.scenes[0].selected_flow_duration_s == 8
     assert all(scene.image_sha256_imported is None for scene in updated.scenes)
     with sqlite3.connect(db) as connection:
-        columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(scenes)")
-        }
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(scenes)")}
     assert "image_sha256_imported" in columns
