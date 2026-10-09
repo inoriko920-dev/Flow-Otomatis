@@ -614,11 +614,13 @@ class CreditUixDialog(QDialog):
         if index < 0 or table.isRowHidden(index):
             self._dock_row.setText("Tidak ada baris yang dipilih.")
             return
-        values = [
-            f"{table.horizontalHeaderItem(column).text()}: "
-            f"{table.item(index, column).text() if table.item(index, column) else '—'}"
-            for column in range(table.columnCount())
-        ]
+        values: list[str] = []
+        for column in range(table.columnCount()):
+            header = table.horizontalHeaderItem(column)
+            item = table.item(index, column)
+            title = header.text() if header is not None else f"Kolom {column + 1}"
+            value = item.text() if item is not None else "—"
+            values.append(f"{title}: {value}")
         self._dock_row.setText("\n".join(values))
 
     def _filter_rows(self, table: QTableWidget, count_label: QLabel, query: str) -> None:
@@ -626,11 +628,12 @@ class CreditUixDialog(QDialog):
         needle = query.strip().casefold()
         visible = 0
         for row_index in range(table.rowCount()):
-            found = any(
-                needle in table.item(row_index, col).text().casefold()
-                for col in range(table.columnCount())
-                if table.item(row_index, col) is not None
-            )
+            values: list[str] = []
+            for col in range(table.columnCount()):
+                item = table.item(row_index, col)
+                if item is not None:
+                    values.append(item.text())
+            found = any(needle in text.casefold() for text in values)
             table.setRowHidden(row_index, not found)
             visible += int(found)
         count_label.setText(f"{visible}/{table.rowCount()} baris (contoh)")
