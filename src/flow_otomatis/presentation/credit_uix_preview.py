@@ -622,7 +622,7 @@ class CreditUixDialog(QDialog):
         content_layout.addWidget(table)
         layout.addWidget(content)
 
-        if code == "UIX-04-A":
+        if code == "UIX-04-A" and not local:
             approval_card, approval_layout = card()
             approval_layout.addWidget(
                 muted_label(
@@ -671,7 +671,10 @@ class CreditUixDialog(QDialog):
         self.scroller.setWidget(root)
         if previous is not None:
             previous.deleteLater()
-        self.status.setText(f"{code} • 22 keadaan UI tersedia • hanya simulasi offline")
+        self.status.setText(
+            f"{code} • {'scan input lokal baca saja' if local else 'simulasi 12 Scene offline'} "
+            "• Generate live diblokir"
+        )
 
     def _selected_row_details(self, table: QTableWidget) -> None:
         """Read-only inspector for the actual selected row, never a provider action."""
@@ -732,7 +735,10 @@ class CreditUixDialog(QDialog):
             "08": "Harga, sumber dan kebijakan",
             "09": "Generate / Download / berkas video",
         }
-        label = QLabel(headings[code[4:6]])
+        label = QLabel(
+            "Kesiapan input Scene Workspace nyata • hanya baca" if self._using_local_inputs()
+            else headings[code[4:6]]
+        )
         label.setObjectName("SectionTitle")
         return label
 
@@ -752,17 +758,16 @@ class CreditUixDialog(QDialog):
                 ),
                 ("Input Bermasalah", str(workspace.blocking_count), "cek gambar/prompt", "error"),
             ]
-        count = len(self._workspace.scenes) if self._workspace is not None else 12
         demo_assigned = len(self._preview["assigned"])
         demo_blocked = len(self._preview["blocked"])
-        if code == "UIX-01-B" and self._workspace is None:
+        if code == "UIX-01-B":
             return [
                 ("Scene Contoh", "12", "data ilustrasi", "info"),
                 ("Siap Lokal", "9", "contoh 9 siap", "success"),
                 ("Perlu Perhatian", "3", "gambar/prompt/Target", "warning"),
                 ("Kredit Nyata", "—", "tidak diketahui", "warning"),
             ]
-        if code == "UIX-01-C" and self._workspace is None:
+        if code == "UIX-01-C":
             return [
                 ("Scene contoh", "12", "input lokal valid", "info"),
                 ("Tarif Provider", "—", "belum terverifikasi", "warning"),
@@ -770,19 +775,6 @@ class CreditUixDialog(QDialog):
                 ("Live", "BLOKIR", "bukan saldo nol", "error"),
             ]
         if group == "01":
-            if self._workspace is not None:
-                count_ready = self._workspace.ready_count
-                return [
-                    ("Scene Lokal", str(count), "dari Workspace", "info"),
-                    ("Siap Lokal", str(count_ready), "bukan siap Generate live", "success"),
-                    (
-                        "Perlu Perhatian",
-                        str(self._workspace.blocking_count),
-                        "input/durasi",
-                        "warning",
-                    ),
-                    ("Kredit Provider", "—", "belum terverifikasi", "warning"),
-                ]
             return [
                 ("Scene contoh", "12", "data ilustrasi", "info"),
                 ("Siap / perlu", "10 / 2", "skenario UIX-01-A", "success"),
@@ -1038,20 +1030,6 @@ class CreditUixDialog(QDialog):
             return ["Scene", "Generate", "Download", "File lokal", "SHA-256"], rows
         group = code[4:6]
         if group == "01":
-            if self._workspace is not None:
-                return (
-                    ["Scene", "Target", "Durasi Flow", "Input", "Status Lokal"],
-                    [
-                        [
-                            scene.scene_id,
-                            f"{scene.target_duration_s:g}s",
-                            str(scene.selected_flow_duration_s or "Belum dipilih"),
-                            "Gambar ada" if scene.image_exists else "Gambar hilang",
-                            str(scene.readiness),
-                        ]
-                        for scene in self._workspace.scenes
-                    ],
-                )
             rows = []
             for i in range(1, 13):
                 name = f"SCENE_{i:03}"
@@ -1217,19 +1195,54 @@ class CreditUixDialog(QDialog):
         )
         dialog.exec()
 
-    def export_preview(self) -> None:
-        """Safely export a synthetic report without overwriting an existing file."""
-        filename, _selected = QFileDialog.getSaveFileName(
-            self, "Simpan laporan simulasi", "laporan_simulasi.json", "JSON (*.json)"
-        )
-        if not filename:
-            return
-        payload = {
+    def _report_payload(self) -> dict[str, Any]:
+        """Separate local readiness evidence from wholly fictional credit reports."""
+        if self._using_local_inputs():
+            workspace = self._workspace
+            assert workspace is not None
+            return {
+                "mode": "LOCAL_SCENE_READINESS_REPORT",
+                "provider_evidence": "NONE",
+                "live_dispatch_allowed": False,
+                "ui_reference_state": self._current_state,
+                "episode_id": workspace.episode_id,
+                "project_name": workspace.project_name,
+                "scene_count": len(workspace.scenes),
+                "ready_count": workspace.ready_count,
+                "needs_duration_selection": workspace.duration_selection_count,
+                "blocking_count": workspace.blocking_count,
+                "scenes": [
+                    {
+                        "scene_id": scene.scene_id,
+                        "target_duration_s": scene.target_duration_s,
+                        "recommended_flow_duration_s": scene.recommended_flow_duration_s,
+                        "selected_flow_duration_s": scene.selected_flow_duration_s,
+                        "image_exists": scene.image_exists,
+                        "prompt_present": bool(scene.motion_prompt.strip()),
+                        "readiness": str(scene.readiness),
+                    }
+                    for scene in workspace.scenes
+                ],
+            }
+        return {
             "ui_reference_state": self._current_state,
             "reference_coverage": len(UIX_SCENARIOS),
             "simulation_plan_approved_locally": self._last_local_plan_approved,
             **self._preview,
         }
+
+    def export_preview(self) -> None:
+        """Export one clearly labeled mode using exclusive creation (no overwrite)."""
+        local = self._using_local_inputs()
+        filename, _selected = QFileDialog.getSaveFileName(
+            self,
+            "Simpan scan lokal" if local else "Simpan laporan simulasi",
+            "scan_scene_lokal.json" if local else "laporan_simulasi.json",
+            "JSON (*.json)",
+        )
+        if not filename:
+            return
+        payload = self._report_payload()
         try:
             with Path(filename).open("x", encoding="utf-8") as output:
                 json.dump(payload, output, indent=2, ensure_ascii=False)
