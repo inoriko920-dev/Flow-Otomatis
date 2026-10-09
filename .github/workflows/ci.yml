@@ -256,16 +256,18 @@ jobs:
           artifacts/e12_uix22
           artifacts/uix_review
 
-      - name: Build separate UI preview EXE
-        run: >
-          uv run python -m PyInstaller
-          --noconfirm --clean --onefile --windowed
-          --name Flow-Otomatis-UIX22-Offline-Preview
-          --distpath dist/uix22
-          --workpath build/uix22
-          --specpath build/uix22-spec
-          --add-data ".ci-approved-ui/docs/ui/final/assets;approved_ui"
-          scripts/credit_uix_preview.py
+      - name: Build separate UI preview EXE with absolute approved PNG path
+        shell: pwsh
+        run: |
+          $approved = (Resolve-Path ".ci-approved-ui/docs/ui/final/assets").Path
+          uv run python -m PyInstaller --noconfirm --clean --onefile --windowed --name Flow-Otomatis-UIX22-Offline-Preview --distpath dist/uix22 --workpath build/uix22 --specpath build/uix22-spec --add-data "${approved};approved_ui" scripts/credit_uix_preview.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed to bundle approved UI references" }
+
+      - name: Smoke-check all 22 approved PNGs inside frozen EXE
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe" -ArgumentList "--verify-approved-images" -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "EXE approved-reference integrity check failed" }
 
       - name: Check UI preview EXE
         shell: pwsh
