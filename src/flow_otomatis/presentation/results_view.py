@@ -246,6 +246,23 @@ def build_results_view(
         layout.insertWidget(1, play, alignment=Qt.AlignmentFlag.AlignRight)
 
     total = len(results.scenes)
+    if not results.handoff_ready:
+        # The frozen pending/error compositions have no handoff banner.
+        # The production-only renderer must explicitly say "not ready"
+        # instead of silently leaving the all-complete sample metrics.
+        layout = root.layout()
+        if not isinstance(layout, QVBoxLayout):
+            raise RuntimeError("Approved Hasil layout lacks vertical content")
+        layout.insertWidget(
+            1,
+            info_banner(
+                "Handoff belum siap",
+                f"{results.generated_count}/{total} video generated • "
+                f"{results.downloaded_count}/{total} video downloaded • "
+                "Lengkapi Generate dan MP4 lokal sebelum ekspor handoff.",
+                "warning",
+            ),
+        )
     _set_metric(
         root,
         "Generate",
