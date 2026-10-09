@@ -406,9 +406,7 @@ def test_legacy_workspace_loads_without_baseline_and_migrates_only_on_write(
         "EP001_STEVE_JOBS_COMPLETE/08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__V1.0.PNG",
     ],
 )
-def test_ambiguous_zip_image_entries_never_import_or_hash(
-    tmp_path: Path, extra_name: str
-) -> None:
+def test_ambiguous_zip_image_entries_never_import_or_hash(tmp_path: Path, extra_name: str) -> None:
     package = _write_package(tmp_path / "duplicate_images.zip", _manifest())
     # zipfile deliberately allows duplicate names; a read-by-name then resolves
     # the last member, which is not an acceptable source for pinned SHA-256.
