@@ -498,10 +498,11 @@ def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
     old = repository.load(original.episode_id)
     assert old is not None
     first = replace(
-        old, scenes=(
+        old,
+        scenes=(
             replace(old.scenes[0], selected_flow_duration_s=8, readiness=SceneReadiness.READY),
             old.scenes[1],
-        )
+        ),
     )
     repository.update(first, expected_workspace=old)
     current = repository.load(old.episode_id)
