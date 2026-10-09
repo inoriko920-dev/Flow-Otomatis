@@ -65,8 +65,9 @@ class SqliteWorkspaceRepository:
                         scene_order, scene_id, image_file, image_exists,
                         motion_prompt, target_duration_s,
                         recommended_flow_duration_s, selected_flow_duration_s,
-                        readiness, trim_target_s, model, resolution, aspect_ratio
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        readiness, trim_target_s, model, resolution, aspect_ratio,
+                        image_sha256_imported
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -83,6 +84,7 @@ class SqliteWorkspaceRepository:
                             scene.model,
                             scene.resolution,
                             scene.aspect_ratio,
+                            scene.image_sha256_imported,
                         )
                         for index, scene in enumerate(workspace.scenes)
                     ],
@@ -132,8 +134,9 @@ class SqliteWorkspaceRepository:
                         scene_order, scene_id, image_file, image_exists,
                         motion_prompt, target_duration_s,
                         recommended_flow_duration_s, selected_flow_duration_s,
-                        readiness, trim_target_s, model, resolution, aspect_ratio
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        readiness, trim_target_s, model, resolution, aspect_ratio,
+                        image_sha256_imported
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -150,6 +153,7 @@ class SqliteWorkspaceRepository:
                             scene.model,
                             scene.resolution,
                             scene.aspect_ratio,
+                            scene.image_sha256_imported,
                         )
                         for index, scene in enumerate(workspace.scenes)
                     ],
@@ -278,6 +282,12 @@ class SqliteWorkspaceRepository:
             model=str(row["model"]),
             resolution=str(row["resolution"]),
             aspect_ratio=str(row["aspect_ratio"]),
+            image_sha256_imported=(
+                str(row["image_sha256_imported"])
+                if "image_sha256_imported" in row.keys()
+                and row["image_sha256_imported"] is not None
+                else None
+            ),
         )
 
     def _db_path(self, episode_id: str) -> Path:
@@ -296,10 +306,18 @@ class SqliteWorkspaceRepository:
                 imported_at TEXT NOT NULL,
                 model TEXT NOT NULL,
                 resolution TEXT NOT NULL,
-                aspect_ratio TEXT NOT NULL
+                aspect_ratio TEXT NOT NULL,
+                image_sha256_imported TEXT
             )
             """
         )
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(scenes)").fetchall()
+        }
+        if "image_sha256_imported" not in columns:
+            # Write-side migration only; read-only loads of legacy databases never
+            # alter or rewrite user projects.
+            connection.execute("ALTER TABLE scenes ADD COLUMN image_sha256_imported TEXT")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS scenes (
