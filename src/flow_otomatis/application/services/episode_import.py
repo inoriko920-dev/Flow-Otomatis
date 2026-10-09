@@ -84,7 +84,14 @@ class EpisodeImportService:
             schema_version=manifest.schema_version,
             episode_id=manifest.episode_id,
             project_name=manifest.project_name,
-            source_package_path=str(snapshot.source_path),
+            # Preserve the selected folder for later image verification and
+            # rescan. A nested manifest alone cannot reconstruct the operator's
+            # approved package-root boundary for nonstandard folder layouts.
+            source_package_path=str(
+                source_path.expanduser().resolve()
+                if source_path.expanduser().resolve().is_dir()
+                else snapshot.source_path
+            ),
             created_at=manifest.created_at,
             imported_at=datetime.now(UTC),
             model=manifest.production_profile.model,
