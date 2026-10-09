@@ -9,9 +9,32 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.domain.errors import InternalInvariantError
-from flow_otomatis.domain.result import ProjectResults
+from flow_otomatis.domain.result import DownloadState, ProjectResults, SceneResult
 from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
-from test_result_manifest_atomic_writes import _results
+
+
+def _results(project_name: str) -> ProjectResults:
+    return ProjectResults(
+        episode_id="EP_EXPORT_RACE",
+        project_name=project_name,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(
+            SceneResult(
+                scene_id="SCENE_001",
+                target_duration_s=4.0,
+                selected_flow_duration_s=4,
+                trim_target_s=4.0,
+                generate_state=None,
+                remote_result_id=None,
+                download_state=DownloadState.NOT_DOWNLOADED,
+                output_path=None,
+                take=1,
+                updated_at=None,
+            ),
+        ),
+    )
 
 
 def _link_directory(link: Path, destination: Path) -> None:
