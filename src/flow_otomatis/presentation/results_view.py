@@ -241,7 +241,9 @@ def build_results_view(
         elif button.text() == "Retry Download Terpilih":
             # No live provider retry without entitlement and explicit consent.
             button.setEnabled(False)
-            button.setToolTip("Retry Download belum tersedia: Generate live Google Flow belum diaktifkan.")
+            button.setToolTip(
+                "Retry Download belum tersedia: Generate live Google Flow belum diaktifkan."
+            )
 
     if on_open_diagnostics is not None and not diagnostics_button_found:
         # Ready Hasil (003C) has Export + Folder but no Diagnostik button;
