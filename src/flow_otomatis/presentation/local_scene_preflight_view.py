@@ -257,27 +257,43 @@ class LocalScenePreflightDialog(QDialog):
             f"{report['held_count']} ditahan"
         )
         rows = [*report["ready"], *report["held"]]
-        self.table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            values = (
-                row["scene_id"],
-                f"{row['target_duration_s']:g}s"
-                if row["target_duration_s"] is not None
-                else "INVALID",
-                f"{row['flow_duration_s']}s"
-                if row["flow_duration_s"] is not None
-                else "Belum valid",
-                row["status"],
-                "; ".join(row["issues"]) if row["issues"] else "Tidak ada",
-                row["image_evidence"],
-                row["baseline_evidence"],
-            )
-            for col_index, value in enumerate(values):
-                self.table.setItem(row_index, col_index, QTableWidgetItem(str(value)))
-        if rows:
-            self.table.setCurrentCell(0, 0)
-        else:
-            self.table.clearSelection()
+        # A byte scan can move an image from READY to HELD and reorder rows.
+        # Preserve the user's *Scene identity*, not the old row index, to
+        # avoid accidentally opening a different Scene after verification.
+        selected_scene_id = self._selected_scene_id()
+        self.table.blockSignals(True)
+        try:
+            self.table.setRowCount(len(rows))
+            for row_index, row in enumerate(rows):
+                values = (
+                    row["scene_id"],
+                    f"{row['target_duration_s']:g}s"
+                    if row["target_duration_s"] is not None
+                    else "INVALID",
+                    f"{row['flow_duration_s']}s"
+                    if row["flow_duration_s"] is not None
+                    else "Belum valid",
+                    row["status"],
+                    "; ".join(row["issues"]) if row["issues"] else "Tidak ada",
+                    row["image_evidence"],
+                    row["baseline_evidence"],
+                )
+                for col_index, value in enumerate(values):
+                    self.table.setItem(row_index, col_index, QTableWidgetItem(str(value)))
+            if rows:
+                target_row = next(
+                    (
+                        index
+                        for index, row in enumerate(rows)
+                        if selected_scene_id is not None and row["scene_id"] == selected_scene_id
+                    ),
+                    0,
+                )
+                self.table.setCurrentCell(target_row, 0)
+            else:
+                self.table.clearSelection()
+        finally:
+            self.table.blockSignals(False)
         self._update_open_scene_action()
 
     def export_json(self) -> None:
