@@ -45,6 +45,9 @@ class GeneratedMediaDownloadService:
         self._validate_segment("episode_id", episode_id)
         self._validate_segment("scene_id", scene_id)
         normalized_take = max(int(take), 1)
+        # Validate the project output root even on an idempotent read. A
+        # historical DOWNLOADED row must not bypass redirected-folder checks.
+        destination = self._destination_path(episode_id, scene_id, normalized_take)
 
         existing = self._download_repository.get(episode_id, scene_id)
         if (
@@ -52,8 +55,12 @@ class GeneratedMediaDownloadService:
             and existing.state == DownloadState.DOWNLOADED
             and existing.output_path is not None
         ):
-            existing_path = Path(existing.output_path)
-            if is_available_output(str(existing_path)):
+            existing_path = Path(existing.output_path).expanduser().absolute()
+            if (
+                existing.take == normalized_take
+                and existing_path == destination
+                and is_available_output(str(existing_path))
+            ):
                 return existing
 
         jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
@@ -71,7 +78,6 @@ class GeneratedMediaDownloadService:
                 "Download requires a stable remote result identifier from Generate."
             )
 
-        destination = self._destination_path(episode_id, scene_id, normalized_take)
         destination.parent.mkdir(parents=True, exist_ok=True)
         # Recheck after directory creation: a redirected parent cannot be
         # accepted as the published result folder even if it appeared late.
