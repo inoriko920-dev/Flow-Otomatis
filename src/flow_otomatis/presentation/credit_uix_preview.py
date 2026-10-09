@@ -271,9 +271,9 @@ GROUPS = (
 _DEMO_PLAN: dict[str, Any] = {
     "mode": "OFFLINE_SIMULATION",
     "profiles": [
-        {"profile_id": "Profil-A", "simulated_balance": 45, "max_spend": 40},
-        {"profile_id": "Profil-B", "simulated_balance": 35, "max_spend": 30},
-        {"profile_id": "Profil-C", "simulated_balance": 20, "max_spend": 20},
+        {"profile_id": "Profil-A", "simulated_balance": 80, "max_spend": 80},
+        {"profile_id": "Profil-B", "simulated_balance": 80, "max_spend": 80},
+        {"profile_id": "Profil-C", "simulated_balance": 80, "max_spend": 80},
     ],
     "scenes": [
         {
@@ -285,7 +285,7 @@ _DEMO_PLAN: dict[str, Any] = {
         for number in range(1, 13)
     ],
     "rates_per_video": {"4": 7, "6": 10, "8": 12, "10": 15},
-    "max_total_credits": 90,
+    "max_total_credits": 200,
 }
 
 
@@ -615,6 +615,69 @@ class CreditUixDialog(QDialog):
                 ("Siap / perlu", "10 / 2", "skenario UIX-01-A", "success"),
                 ("Profil live", "0", "tidak ada verifikasi", "warning"),
                 ("Kredit provider", "—", "tidak diketahui", "warning"),
+            ]
+        if code == "UIX-01-B" and self._workspace is None:
+            return [
+                ("Scene Contoh", "12", "data ilustrasi", "info"),
+                ("Siap Lokal", "9", "contoh 9 siap", "success"),
+                ("Perlu Perhatian", "3", "gambar/prompt/Target", "warning"),
+                ("Kredit Nyata", "—", "tidak diketahui", "warning"),
+            ]
+        if code == "UIX-01-C" and self._workspace is None:
+            return [
+                ("Scene contoh", "12", "input lokal valid", "info"),
+                ("Tarif Provider", "—", "belum terverifikasi", "warning"),
+                ("Saldo Provider", "—", "tidak diketahui", "warning"),
+                ("Live", "BLOKIR", "bukan saldo nol", "error"),
+            ]
+        if code == "UIX-02-B":
+            return [
+                ("Scene contoh", "12", "data simulasi", "info"),
+                ("Terbagi", "8", "contoh subset", "success"),
+                ("Tertahan", "4", "anggaran contoh", "warning"),
+                ("Generate Live", "BLOKIR", "tanpa izin provider", "error"),
+            ]
+        if code == "UIX-02-C":
+            return [
+                ("Scene contoh", "12", "data simulasi", "info"),
+                ("Akun layak nyata", "0", "tidak diverifikasi", "warning"),
+                ("Belum dialokasikan", "12", "tidak ada akun layak", "error"),
+                ("Generate Live", "BLOKIR", "periksa kebijakan", "error"),
+            ]
+        if code == "UIX-03-A":
+            return [
+                ("Saldo ilustrasi", "38", "bukan angka aktual", "info"),
+                ("Reservasi contoh", "12", "hanya ilustrasi", "warning"),
+                ("Tersedia contoh", "26", "tidak bisa digunakan", "info"),
+                ("Saldo live", "—", "tidak diverifikasi", "warning"),
+            ]
+        if code == "UIX-05-B":
+            return [
+                ("Generated contoh", "5", "bukan remote", "info"),
+                ("Await download", "2", "contoh terpisah", "warning"),
+                ("Antre", "3", "tidak dikirim", "info"),
+                ("Perhatian", "2", "jangan retry", "error"),
+            ]
+        if code == "UIX-05-C":
+            return [
+                ("Kasus contoh", "SCENE_008", "Profil B saja", "warning"),
+                ("Submit", "UNCERTAIN", "tidak boleh retry", "error"),
+                ("Cadangan", "HELD", "contoh, bukan debit", "warning"),
+                ("Profil A", "MANDIRI", "tidak dipindah", "success"),
+            ]
+        if code == "UIX-09-A":
+            return [
+                ("Generated contoh", "6", "tidak ada video nyata", "info"),
+                ("Downloaded contoh", "4", "tidak ada MP4 nyata", "warning"),
+                ("Perlu perhatian", "2", "data ilustrasi", "warning"),
+                ("Checksum aktual", "—", "tidak tersedia", "warning"),
+            ]
+        if code == "UIX-09-B":
+            return [
+                ("Scene contoh", "12/12", "hanya ilustrasi", "info"),
+                ("Video MP4 nyata", "0", "tidak ada file", "warning"),
+                ("Manifest nyata", "—", "belum dibuat", "info"),
+                ("Klaim selesai", "TIDAK", "contoh saja", "success"),
             ]
         if group in {"02", "04", "07", "08"}:
             return [
