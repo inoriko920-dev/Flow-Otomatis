@@ -906,19 +906,32 @@ class CreditUixDialog(QDialog):
         ]
 
     def _actions_for(self, code: str) -> tuple[tuple[str, str], ...]:
-        group = code[4:6]
-        destinations = {
-            "01": (("Tinjau Perencanaan", "UIX-02-A"), ("Lihat Masalah", "UIX-01-B")),
-            "02": (("Rincian Kredit", "UIX-03-A"), ("Tinjau Anggaran", "UIX-04-A")),
-            "03": (("Lihat Plan", "UIX-02-A"), ("Saldo Kadaluarsa", "UIX-03-B")),
-            "04": (("Lihat Monitor", "UIX-05-A"), ("Revisi Kadaluarsa", "UIX-04-B")),
-            "05": (("Periksa Ketidakpastian", "UIX-06-A"), ("Jeda Parsial", "UIX-05-B")),
-            "06": (("Kembali ke Monitor", "UIX-05-A"), ("Ke Hasil", "UIX-09-A")),
-            "07": (("Tinjau Rekonsiliasi", "UIX-06-A"), ("Rencana Baru", "UIX-02-A")),
-            "08": (("Hitung Ulang", "UIX-02-A"), ("Alur Simulasi", "UIX-05-A")),
-            "09": (("Lihat Masalah", "UIX-06-A"), ("Handoff contoh", "UIX-09-B")),
+        """Show state-specific review routes, never a simulated live submission."""
+        destinations: dict[str, tuple[tuple[str, str], ...]] = {
+            "UIX-01-A": (("Tinjau Perencanaan", "UIX-02-A"), ("Lihat Masalah", "UIX-01-B")),
+            "UIX-01-B": (("Periksa Scan", "UIX-01-A"), ("Periksa Kredit", "UIX-01-C")),
+            "UIX-01-C": (("Rincian Kredit", "UIX-03-B"), ("Alur Manual", "UIX-08-B")),
+            "UIX-02-A": (("Rincian Kredit", "UIX-03-A"), ("Tinjau Approval", "UIX-04-A")),
+            "UIX-02-B": (("Tinjau Subset", "UIX-07-A"), ("Periksa Profil", "UIX-03-B")),
+            "UIX-02-C": (("Periksa Profil", "UIX-03-B"), ("Baca Persyaratan", "UIX-08-B")),
+            "UIX-03-A": (("Tinjau Rencana", "UIX-02-A"), ("Saldo Kadaluarsa", "UIX-03-B")),
+            "UIX-03-B": (("Sumber Kredit", "UIX-08-B"), ("Akun Tidak Layak", "UIX-02-C")),
+            "UIX-04-A": (("Monitor Contoh", "UIX-05-A"), ("Plan Kadaluarsa", "UIX-04-B")),
+            "UIX-04-B": (("Hitung Ulang", "UIX-02-A"), ("Lihat Perubahan", "UIX-08-A")),
+            "UIX-05-A": (("Jeda Parsial", "UIX-05-B"), ("Submit Uncertain", "UIX-05-C")),
+            "UIX-05-B": (("Periksa Hasil", "UIX-09-A"), ("Kembali Monitor", "UIX-05-A")),
+            "UIX-05-C": (("Tinjau Bukti", "UIX-06-A"), ("Jeda Profil B", "UIX-06-B")),
+            "UIX-06-A": (("Konflik Akun", "UIX-06-B"), ("Hasil Contoh", "UIX-06-C")),
+            "UIX-06-B": (("Monitor Profil", "UIX-05-C"), ("Periksa Kredit", "UIX-03-B")),
+            "UIX-06-C": (("Ke Hasil", "UIX-09-A"), ("Kembali Monitor", "UIX-05-A")),
+            "UIX-07-A": (("Scene Terkunci", "UIX-07-B"), ("Rencana Baru", "UIX-02-A")),
+            "UIX-07-B": (("Lihat Rekonsiliasi", "UIX-06-A"), ("Kembali Replan", "UIX-07-A")),
+            "UIX-08-A": (("Hitung Ulang", "UIX-02-A"), ("Baca Kebijakan", "UIX-08-B")),
+            "UIX-08-B": (("Gunakan Simulasi", "UIX-02-A"), ("Periksa Sumber", "UIX-03-B")),
+            "UIX-09-A": (("Handoff Contoh", "UIX-09-B"), ("Lihat Masalah", "UIX-06-A")),
+            "UIX-09-B": (("Hasil Parsial", "UIX-09-A"), ("Kembali Workspace", "UIX-01-A")),
         }
-        return destinations[group]
+        return destinations[code]
 
     def _approve_preview(self) -> None:
         self._last_local_plan_approved = True
