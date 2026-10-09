@@ -173,9 +173,7 @@ def test_workspace_confirmation_refuses_changes_made_during_modal(
     window.close()
 
 
-def test_keyboard_row_navigation_updates_real_scene_inspector(
-    tmp_path: Path, qtbot
-) -> None:
+def test_keyboard_row_navigation_updates_real_scene_inspector(tmp_path: Path, qtbot) -> None:
     reader = EpisodePackageReader()
     repository = SqliteWorkspaceRepository(tmp_path / "projects")
     importer = EpisodeImportService(reader, repository)
