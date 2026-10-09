@@ -767,7 +767,15 @@ class CreditUixDialog(QDialog):
             content.setMinimumWidth(420)
             two_columns = QHBoxLayout()
             two_columns.setSpacing(12)
-            two_columns.addWidget(content, 3)
+            if code in {"UIX-08-A", "UIX-08-B"}:
+                # Keep the existing read-only table as an inspectable Qt model,
+                # but present the owner-approved policy/tariff summary as rows.
+                content.setParent(root)
+                content.hide()
+                left_panel = self._approved_policy_details(code)
+            else:
+                left_panel = content
+            two_columns.addWidget(left_panel, 3)
             two_columns.addWidget(self._scenario_detail_panel(code), 2)
             layout.addLayout(two_columns)
         else:
@@ -927,6 +935,66 @@ class CreditUixDialog(QDialog):
         self._requested_scene_id = target
         self.accept()
 
+    def _approved_policy_details(self, code: str) -> QWidget:
+        """Approved read-only tariff/policy rows, without fake live balance."""
+
+        if code == "UIX-08-A":
+            heading = "Versi tarif & sumber data"
+            explanation = "Perubahan tarif wajib diperiksa sebelum persetujuan."
+            entries: tuple[tuple[str, str, str], ...] = (
+                ("Rencana sebelumnya", "vDEMO-1", "Kedaluwarsa"),
+                ("Katalog terbaru", "vDEMO-2", "Belum dicek"),
+                ("Sumber resmi", "—", "Belum dicek"),
+            )
+            footer = "Model tetap: Omni Flash 1.1 • 720p • 16:9 • 4/6/8/10 detik"
+        else:
+            heading = "Pemeriksaan Kebijakan"
+            explanation = "Status review, bukan penetapan izin Google."
+            entries = (
+                ("Otomasi Google Flow", "BELUM DIVERIFIKASI", ""),
+                ("Multi-akun bersamaan", "BELUM DIVERIFIKASI", ""),
+                ("Kelayakan tiap profil", "BELUM DIVERIFIKASI", ""),
+                ("Bukti & tanggal peninjauan", "BELUM TERSEDIA", ""),
+            )
+            footer = "Status UNKNOWN tidak sama dengan izin ataupun larangan pasti."
+
+        frame, body = card(8)
+        frame.setObjectName("UixApprovedPolicyDetail" if code == "UIX-08-B" else "UixApprovedTariffDetail")
+        body.addWidget(section_header(heading))
+        body.addWidget(muted_label(explanation))
+        for index, entry in enumerate(entries):
+            line = QWidget()
+            line.setObjectName("UixApprovedPolicyRow")
+            row = QHBoxLayout(line)
+            row.setContentsMargins(7, 8, 7, 8)
+            row.setSpacing(10)
+            if index % 2:
+                line.setStyleSheet(f"background: {theme.SURFACE_ALT}; border-radius: 4px;")
+            field = QLabel(entry[0])
+            field.setWordWrap(True)
+            row.addWidget(field, 3)
+            status = QLabel(entry[1])
+            status.setObjectName("UixApprovedRowStatus")
+            status.setWordWrap(True)
+            if code == "UIX-08-B":
+                status.setStyleSheet(f"color: {theme.WARNING}; font-weight: 600;")
+            row.addWidget(status, 2)
+            if entry[2]:
+                note = QLabel(entry[2])
+                note.setObjectName("UixApprovedRowNote")
+                note.setWordWrap(True)
+                row.addWidget(note, 2)
+            body.addWidget(line)
+        body.addWidget(
+            info_banner(
+                "PRATINJAU TANPA AKSES LIVE",
+                footer,
+                "info",
+            )
+        )
+        body.addStretch(1)
+        return frame
+
     def _scenario_detail_panel(self, code: str) -> QWidget:
         """Render approved UIX-02/08 right-hand content in Qt; synthetic only."""
 
@@ -938,19 +1006,19 @@ class CreditUixDialog(QDialog):
         rows: dict[str, tuple[tuple[str, str], ...]] = {
             "UIX-02-A": (),
             "UIX-08-A": (
-                ("Rencana sebelumnya", "v3 • TIDAK BERLAKU"),
-                ("Tarif lama", "vDEMO-1 • kadaluarsa"),
-                ("Tarif baru", "vDEMO-2 • belum dicek"),
-                ("Estimasi baru", "BELUM TERSEDIA"),
-                ("Hitung ulang / Generate", "DINONAKTIFKAN"),
+                ("Rencana yang disetujui", "v3 — TIDAK BERLAKU"),
+                ("Estimasi biaya v3", "105 kredit (simulasi)"),
+                ("Estimasi biaya v4", "Belum tersedia"),
+                ("Selisih tarif baru", "Tidak dapat dihitung"),
+                ("Perlu dihitung ulang", "10 scene siap"),
             ),
             "UIX-08-B": (
-                ("Scene siap • contoh", "10 scene"),
-                ("Perlu perhatian • contoh", "2 scene"),
-                ("Bukti izin multiakun", "BELUM ADA"),
+                ("Scene siap dari hasil scan", "10 scene"),
+                ("Scene butuh perhatian", "2 scene"),
+                ("Profil dengan izin live terbukti", "Belum ada bukti"),
                 ("Saldo live terverifikasi", "—"),
-                ("Tarif resmi", "TIDAK DIKETAHUI"),
-                ("Mulai Batch / Generate", "DINONAKTIFKAN"),
+                ("Tarif resmi terkini", "Belum diketahui"),
+                ("Mulai Batch / Generate / rotasi", "DINONAKTIFKAN"),
             ),
         }
         panel, body = card(9)
