@@ -203,7 +203,6 @@ def test_restart_gate_requires_current_ready_state(tmp_path: Path) -> None:
     assert gate.ready_after_restart is False
 
 
-
 def test_third_instance_never_inherits_historical_restart_ready_without_probe(
     tmp_path: Path,
 ) -> None:
