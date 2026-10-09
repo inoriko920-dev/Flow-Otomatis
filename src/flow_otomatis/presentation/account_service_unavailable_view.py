@@ -61,8 +61,7 @@ def build_account_service_unavailable_view(
     layout.addWidget(
         info_banner(
             "STATUS LAYANAN TIDAK DIKETAHUI" if read_error else "LAYANAN TIDAK TERSEDIA",
-            detail
-            + " Tidak ada status login, akses Flow, saldo, atau kuota yang "
+            detail + " Tidak ada status login, akses Flow, saldo, atau kuota yang "
             "boleh disimpulkan dari layar ini.",
             "warning",
         )
