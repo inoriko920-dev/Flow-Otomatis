@@ -65,7 +65,10 @@ from flow_otomatis.presentation.google_profiles_view import (
     build_google_profiles_view,
 )
 from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
-from flow_otomatis.presentation.project_hub_view import build_project_hub_view
+from flow_otomatis.presentation.project_hub_view import (
+    build_project_hub_unavailable_view,
+    build_project_hub_view,
+)
 from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 from flow_otomatis.presentation.settings_view import (
@@ -592,10 +595,19 @@ class MainWindow(QMainWindow):
         """Render real local recent projects using the frozen Project Hub."""
 
         if self._project_library_service is None:
-            self.show_fixture("UI-IMG-001A")
+            if self._production_shell:
+                self._show_project_hub_unavailable(missing_service=True)
+            else:
+                self.show_fixture("UI-IMG-001A")
             return
         self._invalidate_agent_context()
-        scan = self._project_library_service.scan_recent()
+        try:
+            scan = self._project_library_service.scan_recent()
+        except FlowOtomatisError, OSError, ValueError:
+            # A broken/unreadable library does NOT prove there are no projects.
+            # Keep raw filesystem paths and exception details off the screen.
+            self._show_project_hub_unavailable(missing_service=False)
+            return
         workspaces = scan.workspaces
         self._fixture_code = "REAL_PROJECT_HUB"
         self._set_navigation("Beranda")
@@ -614,6 +626,24 @@ class MainWindow(QMainWindow):
             on_import=self._choose_episode_package,
             on_preview_ui=self.open_credit_uix_preview,
             import_available=self._episode_import_service is not None,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def _show_project_hub_unavailable(self, *, missing_service: bool) -> None:
+        """Expose a safe retry path, not a misleading empty project list."""
+
+        self._invalidate_agent_context()
+        self._fixture_code = "REAL_PROJECT_HUB_UNAVAILABLE"
+        self._set_navigation("Beranda")
+        self._project_label.setText("Project lokal")
+        self._project_state_label.setText("Beranda • Belum dapat diperiksa")
+        self._status_project.setText("Status project tidak diketahui")
+        view = build_project_hub_unavailable_view(
+            on_retry=self.show_project_hub,
+            on_diagnostics=self.show_local_diagnostics,
+            missing_service=missing_service,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
