@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QStackedLayout,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -634,9 +635,29 @@ class CreditUixDialog(QDialog):
         self._open_scene_button = None
         root = QWidget()
         root.setObjectName(f"UixPage{code.replace('-', '')}")
-        page_layout = QVBoxLayout(root)
-        page_layout.setContentsMargins(10, 4, 10, 12)
-        page_layout.setSpacing(12)
+        modal_state = not local and code[4:6] in {"02", "04", "07", "08"}
+        if modal_state:
+            # Actual Qt layered dialog over a noninteractive Workspace
+            # background; never assert that simulated credits are live.
+            stack = QStackedLayout(root)
+            stack.setContentsMargins(0, 0, 0, 0)
+            stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
+            stack.addWidget(self._approved_workspace_backdrop())
+            scrim = QFrame(root)
+            scrim.setObjectName("UixModalScrim")
+            scrim.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            scrim.setStyleSheet(
+                "QFrame#UixModalScrim { background-color: rgba(15, 23, 42, 145); }"
+            )
+            page_layout = QVBoxLayout(scrim)
+            page_layout.setContentsMargins(12, 12, 12, 12)
+            page_layout.setSpacing(12)
+            stack.addWidget(scrim)
+            stack.setCurrentWidget(scrim)
+        else:
+            page_layout = QVBoxLayout(root)
+            page_layout.setContentsMargins(10, 4, 10, 12)
+            page_layout.setSpacing(12)
         if not local and code[4:6] == "03":
             # UIX-03-A/B are approved account-credit drawers, not Workspace
             # pages. Keep any account and balance values strictly simulated.
@@ -652,9 +673,10 @@ class CreditUixDialog(QDialog):
             layout.setSpacing(10)
             page_layout.addWidget(drawer, alignment=Qt.AlignmentFlag.AlignRight)
             page_layout.addStretch(1)
-        elif not local and code[4:6] in {"02", "04", "07", "08"}:
+        elif modal_state:
             # Approved groups use temporary centered planning/approval/policy
-            # dialogs; keep the seven frozen app routes unchanged behind them.
+            # dialogs over a dimmed, read-only Workspace and agent backdrop.
+            page_layout.addStretch(1)
             modal = QFrame(root)
             modal.setObjectName("UixScenarioModal")
             modal.setMaximumWidth(1120)
@@ -974,6 +996,91 @@ class CreditUixDialog(QDialog):
             return
         self._requested_scene_id = target
         self.accept()
+
+    def _approved_workspace_backdrop(self) -> QWidget:
+        """Noninteractive local/illustrative Workspace beneath policy modals.
+
+        Approved UIX-02/04/07/08 use modal sheets over the Workspace/AI panel,
+        not a generic modal on a blank page. Never read remote account state.
+        """
+
+        backdrop = QWidget()
+        backdrop.setObjectName("UixWorkspaceBackdrop")
+        outer = QHBoxLayout(backdrop)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
+        workspace = self._workspace
+        workspace_title = (
+            f"{workspace.episode_id} • {workspace.project_name}"
+            if workspace is not None
+            else "EP001 • Workspace Contoh"
+        )
+        source_label = (
+            "Workspace lokal • hanya-baca"
+            if workspace is not None
+            else "WORKSPACE SIMULASI • DATA CONTOH"
+        )
+        panel = QFrame()
+        panel.setObjectName("UixBackdropWorkspace")
+        panel.setStyleSheet(
+            f"QFrame#UixBackdropWorkspace {{ background: {theme.SURFACE_ALT}; }}"
+        )
+        left = QVBoxLayout(panel)
+        left.setContentsMargins(16, 16, 16, 16)
+        left.setSpacing(14)
+        left.addWidget(page_header("Workspace / Scene", workspace_title))
+        left.addWidget(status_badge(source_label, "info"))
+        cards = QHBoxLayout()
+        count = len(workspace.scenes) if workspace is not None else 60
+        for title, value in (
+            ("TOTAL SCENE", str(count)),
+            ("VIDEO FLOW", "BELUM GENERATE"),
+            ("KREDIT PROVIDER", "TIDAK DIKETAHUI"),
+        ):
+            cards.addWidget(metric_card(title, value, "Tidak ada data live", "info"))
+        left.addLayout(cards)
+        table = QTableWidget()
+        table.setObjectName("UixBackdropSceneTable")
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(("SCENE", "TARGET", "INPUT", "STATUS"))
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        scene_names = (
+            tuple(scene.scene_id for scene in workspace.scenes[:5])
+            if workspace is not None
+            else ("SCENE_001", "SCENE_002", "SCENE_003", "SCENE_004")
+        )
+        table.setRowCount(len(scene_names))
+        for row, name in enumerate(scene_names):
+            for column, value in enumerate(
+                (name, "Flow 720p", "Periksa file", "BELUM GENERATE")
+            ):
+                table.setItem(row, column, QTableWidgetItem(value))
+        table.horizontalHeader().setStretchLastSection(True)
+        left.addWidget(table, 1)
+        outer.addWidget(panel, 1)
+
+        agent = QFrame()
+        agent.setObjectName("UixBackdropAgentDock")
+        agent.setFixedWidth(min(theme.RIGHT_DOCK_WIDTH, 280))
+        agent.setStyleSheet(
+            f"QFrame#UixBackdropAgentDock {{ background: white; "
+            f"border-left: 1px solid {theme.BORDER}; }}"
+        )
+        right = QVBoxLayout(agent)
+        right.setContentsMargins(15, 16, 15, 16)
+        right.addWidget(page_header("Scene & AI Agent", "Read-only UI contoh"))
+        right.addWidget(
+            info_banner(
+                "PROVIDER TIDAK TERSAMBUNG",
+                "Panel latar hanya menjelaskan tata letak; ini bukan status login.",
+                "warning",
+            )
+        )
+        right.addStretch(1)
+        right.addWidget(status_badge("LIVE GENERATE DIBLOKIR", "error"))
+        outer.addWidget(agent)
+        return backdrop
 
     def _approved_policy_details(self, code: str) -> QWidget:
         """Approved read-only tariff/policy rows, without fake live balance."""
