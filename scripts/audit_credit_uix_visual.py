@@ -13,6 +13,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtWidgets import QApplication
 
 from flow_otomatis.presentation.credit_uix_preview import UIX_SCENARIOS
 
@@ -38,6 +39,10 @@ def main() -> int:
     parser.add_argument("rendered_captures", type=Path)
     parser.add_argument("review_output", type=Path)
     args = parser.parse_args()
+    # QPainter.drawText requires a Qt GUI application for font metrics on Windows.
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
     args.review_output.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, object]] = []
 
