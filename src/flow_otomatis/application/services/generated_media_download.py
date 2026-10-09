@@ -152,7 +152,13 @@ class GeneratedMediaDownloadService:
             output_path=str(output),
             take=normalized_take,
         )
-        self._download_repository.save(record)
+        if not self._download_repository.save_if_current_generate(record, remote_result_id):
+            # The result changed after the second read but before commit.
+            # Keep the MP4 bytes and historical rows for manual reconciliation.
+            raise InternalInvariantError(
+                "Generate result changed during atomic Download save; "
+                "local video needs reconciliation."
+            )
         return record
 
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
