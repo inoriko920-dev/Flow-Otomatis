@@ -317,6 +317,8 @@ class CreditUixDialog(QDialog):
         self._current_state = "UIX-01-A"
         self._last_local_plan_approved = False
         self._approved_reference_folder: Path | None = None
+        self._requested_scene_id: str | None = None
+        self._open_scene_button: QPushButton | None = None
 
         # Recreate the frozen desktop app proportions inside the preview, rather
         # than presenting all 22 states as a plain floating table dialog.
@@ -487,6 +489,11 @@ class CreditUixDialog(QDialog):
         return self._current_state
 
     @property
+    def requested_scene_id(self) -> str | None:
+        """Selected local Scene to open in the main Workspace after dialog closes."""
+        return self._requested_scene_id
+
+    @property
     def live_dispatch_enabled(self) -> bool:
         """Fail-closed public UI guard; no real provider is ever wired here."""
         return False
@@ -555,6 +562,7 @@ class CreditUixDialog(QDialog):
         self._dock_state.setText(f"{code} • {scenario.title}")
         self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
         self._last_local_plan_approved = False
+        self._open_scene_button = None
         root = QWidget()
         root.setObjectName(f"UixPage{code.replace('-', '')}")
         layout = QVBoxLayout(root)
@@ -588,9 +596,23 @@ class CreditUixDialog(QDialog):
         search = QLineEdit()
         search.setObjectName("UixTableSearch")
         search.setClearButtonEnabled(True)
-        search.setPlaceholderText("Cari Scene, profil, status, atau bukti...")
+        search.setPlaceholderText(
+            "Cari ID Scene atau input lokal..." if local
+            else "Cari Scene, profil, status, atau bukti..."
+        )
         search.setAccessibleName("Cari data dalam tabel pratinjau")
         finder.addWidget(search, 1)
+        readiness_filter = QComboBox()
+        readiness_filter.setObjectName("UixReadinessFilter")
+        if local:
+            readiness_filter.addItem("Semua kesiapan", None)
+            readiness_filter.addItem("Perlu diperbaiki", "PROBLEM")
+            readiness_filter.addItem("Perlu pilih durasi", "PILIH DURASI")
+            readiness_filter.addItem("Siap lokal", "SIAP LOKAL")
+            readiness_filter.addItem("Gambar hilang", "GAMBAR HILANG")
+            readiness_filter.addItem("Prompt hilang", "PROMPT HILANG")
+            readiness_filter.addItem("Durasi invalid", "DURASI INVALID")
+            finder.addWidget(readiness_filter)
         matches = muted_label(f"{len(rows)} baris ({'lokal' if local else 'contoh'})")
         matches.setObjectName("UixFilterCount")
         finder.addWidget(matches)
@@ -610,11 +632,20 @@ class CreditUixDialog(QDialog):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         table.resizeRowsToContents()
         table.itemSelectionChanged.connect(lambda view=table: self._selected_row_details(view))
-        search.textChanged.connect(
-            lambda query, view=table, label=matches, is_local=local: self._filter_rows(
-                view, label, query, is_local
+        def refresh_filtered_rows() -> None:
+            self._filter_rows(
+                table,
+                matches,
+                search.text(),
+                local,
+                readiness_filter.currentData() if local else None,
             )
-        )
+
+        search.textChanged.connect(lambda _query: refresh_filtered_rows())
+        if local:
+            readiness_filter.currentIndexChanged.connect(
+                lambda _index: refresh_filtered_rows()
+            )
         if rows:
             table.setCurrentCell(0, 0)
         content_layout.addWidget(table)
@@ -640,6 +671,16 @@ class CreditUixDialog(QDialog):
             layout.addWidget(approval_card)
 
         actions = QHBoxLayout()
+        if local:
+            open_scene = primary_button("Buka Scene Terpilih di Workspace")
+            open_scene.setObjectName("UixOpenSceneInWorkspace")
+            open_scene.setEnabled(False)
+            open_scene.clicked.connect(
+                lambda _checked=False, view=table: self._request_open_scene(view)
+            )
+            self._open_scene_button = open_scene
+            actions.addWidget(open_scene)
+            self._selected_row_details(table)
         for title, target in self._actions_for(code):
             button = QPushButton(title)
             button.setObjectName("UixAction")
@@ -675,9 +716,14 @@ class CreditUixDialog(QDialog):
         )
 
     def _selected_row_details(self, table: QTableWidget) -> None:
-        """Read-only inspector for the actual selected row, never a provider action."""
+        """Read-only inspector and safe local navigation state for the visible row."""
         index = table.currentRow()
-        if index < 0 or table.isRowHidden(index):
+        valid_row = index >= 0 and not table.isRowHidden(index)
+        if self._open_scene_button is not None:
+            self._open_scene_button.setEnabled(
+                valid_row and self._valid_scene_id(table, index) is not None
+            )
+        if not valid_row:
             self._dock_row.setText("Tidak ada baris yang dipilih.")
             return
         values: list[str] = []
@@ -690,7 +736,12 @@ class CreditUixDialog(QDialog):
         self._dock_row.setText("\n".join(values))
 
     def _filter_rows(
-        self, table: QTableWidget, count_label: QLabel, query: str, is_local: bool = False
+        self,
+        table: QTableWidget,
+        count_label: QLabel,
+        query: str,
+        is_local: bool = False,
+        readiness: str | None = None,
     ) -> None:
         """Filter only visible synthetic/local table data without changing totals."""
         needle = query.strip().casefold()
@@ -702,6 +753,16 @@ class CreditUixDialog(QDialog):
                 if item is not None:
                     values.append(item.text())
             found = any(needle in text.casefold() for text in values)
+            if is_local and readiness:
+                status = values[-1] if values else ""
+                if readiness == "PROBLEM":
+                    found = found and status in {
+                        "GAMBAR HILANG",
+                        "PROMPT HILANG",
+                        "DURASI INVALID",
+                    }
+                else:
+                    found = found and status == readiness
             table.setRowHidden(row_index, not found)
             visible += int(found)
         count_label.setText(
@@ -720,6 +781,29 @@ class CreditUixDialog(QDialog):
                 table.setCurrentCell(replacement, 0)
         else:
             self._selected_row_details(table)
+        if visible == 0 and self._open_scene_button is not None:
+            self._open_scene_button.setEnabled(False)
+
+    def _valid_scene_id(self, table: QTableWidget, row: int) -> str | None:
+        """Only a real persisted Scene can be handed back to the main Workspace."""
+        if not self._using_local_inputs() or self._workspace is None or row < 0:
+            return None
+        item = table.item(row, 0)
+        if item is None or table.isRowHidden(row):
+            return None
+        candidate = item.text()
+        return (
+            candidate
+            if any(scene.scene_id == candidate for scene in self._workspace.scenes)
+            else None
+        )
+
+    def _request_open_scene(self, table: QTableWidget) -> None:
+        target = self._valid_scene_id(table, table.currentRow())
+        if target is None:
+            return
+        self._requested_scene_id = target
+        self.accept()
 
     def _section_title(self, code: str) -> QLabel:
         headings = {
