@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from flow_otomatis.application.file_integrity import is_available_output
+from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.result import DownloadState, ProjectResults
 
 
@@ -20,10 +21,47 @@ class ResultManifestWriter:
     def __init__(self, projects_root: Path) -> None:
         self._projects_root = projects_root
 
+    def _verified_export_directory(self, episode_id: str) -> Path:
+        """Reject redirected project/export parents, including Windows junctions."""
+
+        if (
+            not episode_id
+            or episode_id in {".", ".."}
+            or "/" in episode_id
+            or "\\" in episode_id
+            or "\x00" in episode_id
+        ):
+            raise InternalInvariantError("Unsafe episode identity for result export")
+
+        root = self._projects_root.expanduser()
+        project = root / episode_id
+        exports = project / "exports"
+        # Validate every component before allowing creation in the next one.
+        # Path.resolve(strict=True) detects NTFS junctions as well as symlinks.
+        for directory in (root, project, exports):
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                canonical = directory.resolve(strict=True)
+                expected = Path(os.path.abspath(directory))
+                if (
+                    not directory.is_dir()
+                    or directory.is_symlink()
+                    or os.path.normcase(str(canonical)) != os.path.normcase(str(expected))
+                ):
+                    raise InternalInvariantError(
+                        "Result export directory redirects outside its project"
+                    )
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise InternalInvariantError(
+                    "Result export directory cannot be safely verified"
+                ) from exc
+        return exports
+
     def write(self, results: ProjectResults) -> Path:
-        output_dir = self._projects_root / results.episode_id / "exports"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = self._verified_export_directory(results.episode_id)
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
+        if target.is_symlink():
+            raise InternalInvariantError("Result export target is a redirected file")
 
         # A file may vanish after snapshot(): recheck during export as well.
         verified_scenes = tuple(
@@ -85,6 +123,11 @@ class ResultManifestWriter:
                 output.write(serialized)
                 output.flush()
                 os.fsync(output.fileno())
+            # A project directory may have changed while the temp file was
+            # being written. Fail closed before publishing outside the root.
+            self._verified_export_directory(results.episode_id)
+            if target.is_symlink():
+                raise InternalInvariantError("Result export target was redirected")
             os.replace(temporary, target)
         finally:
             # Never delete a competing export's file or the previously
