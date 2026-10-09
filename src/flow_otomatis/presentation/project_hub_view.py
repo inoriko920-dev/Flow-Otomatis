@@ -195,11 +195,13 @@ def build_project_hub_unavailable_view(
         )
     )
     container, body = card(12)
-    body.addWidget(muted_label(
-        "Layanan penyimpanan belum tersedia."
-        if missing_service
-        else "Pembacaan penyimpanan lokal gagal. Lokasi file dan rincian internal disembunyikan."
-    ))
+    body.addWidget(
+        muted_label(
+            "Layanan penyimpanan belum tersedia."
+            if missing_service
+            else "Pembacaan penyimpanan lokal gagal. Lokasi file dan rincian internal disembunyikan."
+        )
+    )
     retry = secondary_button("Coba Lagi")
     retry.setObjectName("RealProjectHubRetry")
     retry.setEnabled(not missing_service)
