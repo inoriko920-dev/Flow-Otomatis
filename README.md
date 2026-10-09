@@ -1,5 +1,10 @@
 # Flow-Otomatis
 
+## Coba preview Windows 11 (uji login, belum live Generate)
+
+- **[Panduan unduh dan uji portable Windows 11](docs/handoff/current/WINDOWS_11_PREVIEW_DOWNLOAD_AND_MANUAL_LOGIN_CHECK_2026-10-09.md)** — link artifact resmi yang sementara tersedia sampai 22 Oktober 2026, langkah ekstraksi, dan uji READY setelah restart.
+- Google Flow Generate/Download live dan otomatisasi multiakun **belum dibuka**; dokumen ini tidak mengubah izin, gate, atau release.
+
 ## Verified update — 8 October 2026
 - STEP 12 ASTRA bug audit B01–B06: **OFFLINE PASS** (R00–R04).
 - Independent release integrity hardening: **PASS**, PR #18 merged `baff19bb7c28612837d24001b9db9ee4a84251e5`.
