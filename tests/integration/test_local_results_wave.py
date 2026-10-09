@@ -386,7 +386,6 @@ def test_local_failure_from_second_service_cannot_clobber_success(
     assert service.snapshot("EP400_RESULTS").handoff_ready is True
 
 
-
 @pytest.mark.parametrize("unsafe_kind", ["relative", "wrong_extension", "symlink"])
 def test_record_downloaded_never_certifies_invalid_or_linked_mp4(
     tmp_path: Path, unsafe_kind: str
