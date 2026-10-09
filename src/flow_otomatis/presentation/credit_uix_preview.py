@@ -597,7 +597,8 @@ class CreditUixDialog(QDialog):
         search.setObjectName("UixTableSearch")
         search.setClearButtonEnabled(True)
         search.setPlaceholderText(
-            "Cari ID Scene atau input lokal..." if local
+            "Cari ID Scene atau input lokal..."
+            if local
             else "Cari Scene, profil, status, atau bukti..."
         )
         search.setAccessibleName("Cari data dalam tabel pratinjau")
@@ -632,6 +633,7 @@ class CreditUixDialog(QDialog):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         table.resizeRowsToContents()
         table.itemSelectionChanged.connect(lambda view=table: self._selected_row_details(view))
+
         def refresh_filtered_rows() -> None:
             self._filter_rows(
                 table,
@@ -643,9 +645,7 @@ class CreditUixDialog(QDialog):
 
         search.textChanged.connect(lambda _query: refresh_filtered_rows())
         if local:
-            readiness_filter.currentIndexChanged.connect(
-                lambda _index: refresh_filtered_rows()
-            )
+            readiness_filter.currentIndexChanged.connect(lambda _index: refresh_filtered_rows())
         if rows:
             table.setCurrentCell(0, 0)
         content_layout.addWidget(table)
