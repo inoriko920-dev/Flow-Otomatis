@@ -433,6 +433,10 @@ def test_main_window_returns_to_exact_selected_scene_without_persistence(
     window.show_workspace_state(workspace)
 
     def choose_scene(preview: CreditUixDialog) -> int:
+        # Demo-first UIX22 does not silently replace real local Scene inputs.
+        selector = preview.findChild(QComboBox, "UixDataSourceSelector")
+        assert selector is not None
+        selector.setCurrentIndex(selector.findData("local"))
         assert preview._using_local_inputs()
         table = preview.findChild(QTableWidget, "UixDetailTable")
         table.setCurrentCell(2, 0)
