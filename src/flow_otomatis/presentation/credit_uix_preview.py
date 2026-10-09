@@ -596,6 +596,20 @@ class CreditUixDialog(QDialog):
         count = len(self._workspace.scenes) if self._workspace is not None else 12
         demo_assigned = len(self._preview["assigned"])
         demo_blocked = len(self._preview["blocked"])
+        if code == "UIX-01-B" and self._workspace is None:
+            return [
+                ("Scene Contoh", "12", "data ilustrasi", "info"),
+                ("Siap Lokal", "9", "contoh 9 siap", "success"),
+                ("Perlu Perhatian", "3", "gambar/prompt/Target", "warning"),
+                ("Kredit Nyata", "—", "tidak diketahui", "warning"),
+            ]
+        if code == "UIX-01-C" and self._workspace is None:
+            return [
+                ("Scene contoh", "12", "input lokal valid", "info"),
+                ("Tarif Provider", "—", "belum terverifikasi", "warning"),
+                ("Saldo Provider", "—", "tidak diketahui", "warning"),
+                ("Live", "BLOKIR", "bukan saldo nol", "error"),
+            ]
         if group == "01":
             if self._workspace is not None:
                 count_ready = self._workspace.ready_count
@@ -615,20 +629,6 @@ class CreditUixDialog(QDialog):
                 ("Siap / perlu", "10 / 2", "skenario UIX-01-A", "success"),
                 ("Profil live", "0", "tidak ada verifikasi", "warning"),
                 ("Kredit provider", "—", "tidak diketahui", "warning"),
-            ]
-        if code == "UIX-01-B" and self._workspace is None:
-            return [
-                ("Scene Contoh", "12", "data ilustrasi", "info"),
-                ("Siap Lokal", "9", "contoh 9 siap", "success"),
-                ("Perlu Perhatian", "3", "gambar/prompt/Target", "warning"),
-                ("Kredit Nyata", "—", "tidak diketahui", "warning"),
-            ]
-        if code == "UIX-01-C" and self._workspace is None:
-            return [
-                ("Scene contoh", "12", "input lokal valid", "info"),
-                ("Tarif Provider", "—", "belum terverifikasi", "warning"),
-                ("Saldo Provider", "—", "tidak diketahui", "warning"),
-                ("Live", "BLOKIR", "bukan saldo nol", "error"),
             ]
         if code == "UIX-02-B":
             return [
