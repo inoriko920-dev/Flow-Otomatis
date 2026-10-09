@@ -510,11 +510,31 @@ def test_approved_dialog_scenarios_keep_centered_native_modal_surface(qtbot) -> 
         assert root is not None
         modal = root.findChild(QFrame, "UixScenarioModal")
         assert modal is not None
-        assert modal.maximumWidth() == 950
+        assert modal.maximumWidth() == 1120
         assert root.findChild(QTableWidget, "UixDetailTable") is not None
+        if code in {"UIX-08-A", "UIX-08-B"}:
+            details = root.findChild(QFrame, "UixScenarioSidePanel")
+            assert details is not None
+            assert "Dampak" in " ".join(
+                label.text() for label in details.findChildren(QLabel)
+            )
         assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.set_state("UIX-05-C")
     root = dialog.scroller.widget()
     assert root is not None
     assert root.findChild(QFrame, "UixScenarioModal") is None
+    dialog.close()
+
+
+def test_smart_plan_uses_two_columns_of_approved_synthetic_information(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-A")
+    qtbot.addWidget(dialog)
+    side = dialog.findChild(QFrame, "UixScenarioSidePanel")
+    assert side is not None
+    text = " ".join(label.text() for label in side.findChildren(QLabel))
+    assert "Distribusi per Profil" in text
+    assert "Profil A" in text
+    assert "Data simulasi" in text
+    assert dialog.findChild(QTableWidget, "UixDetailTable").rowCount() > 0
+    assert not dialog.live_dispatch_enabled
     dialog.close()
