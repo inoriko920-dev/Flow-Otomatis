@@ -23,7 +23,10 @@ from flow_otomatis.infrastructure.persistence import (
     SqliteWorkspaceRepository,
 )
 from flow_otomatis.presentation.main_window import MainWindow
-from flow_otomatis.presentation.results_view import build_results_view, verified_single_output_folder
+from flow_otomatis.presentation.results_view import (
+    build_results_view,
+    verified_single_output_folder,
+)
 
 
 def _visible_text(window: MainWindow) -> str:
@@ -539,15 +542,11 @@ def test_stale_hasil_refresh_callback_cannot_reload_after_navigation(
     window.close()
 
 
-def test_real_hasil_open_verified_local_output_folder(
-    ready_results, qtbot, monkeypatch
-) -> None:
+def test_real_hasil_open_verified_local_output_folder(ready_results, qtbot, monkeypatch) -> None:
     window, service, _database = ready_results
     window.show_results_state()
     captured: list[object] = []
-    monkeypatch.setattr(
-        QDesktopServices, "openUrl", lambda url: captured.append(url) or True
-    )
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: captured.append(url) or True)
     button = window.findChild(QPushButton, "RealResultsOpenFolder")
     assert button is not None and button.isEnabled()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
@@ -570,9 +569,7 @@ def test_results_open_folder_fails_closed_if_mp4_disappears(
     original.unlink()
     opened: list[str] = []
     warnings: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True
-    )
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True)
     monkeypatch.setattr(
         QMessageBox, "warning", lambda _window, title, detail: warnings.append((title, detail))
     )
@@ -595,9 +592,7 @@ def test_results_open_folder_ignores_stale_page_callback_after_refresh(
     window.show_results_state()
     assert window._last_results_snapshot is not prior
     opened: list[str] = []
-    monkeypatch.setattr(
-        QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True
-    )
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True)
     window._open_result_folder_from_ui(prior)
     assert opened == []
     window.close()
@@ -630,9 +625,7 @@ def test_results_open_folder_does_not_choose_between_distinct_directories(
     window.close()
 
 
-def test_results_open_folder_windows_failure_is_redacted(
-    ready_results, qtbot, monkeypatch
-) -> None:
+def test_results_open_folder_windows_failure_is_redacted(ready_results, qtbot, monkeypatch) -> None:
     window, _service, _database = ready_results
     window.show_results_state()
     messages: list[tuple[str, str]] = []
@@ -644,6 +637,9 @@ def test_results_open_folder_windows_failure_is_redacted(
     assert button is not None and button.isEnabled()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert messages == [
-        ("Folder Output Tidak Dapat Dibuka", "Windows belum dapat membuka folder MP4 yang tersedia.")
+        (
+            "Folder Output Tidak Dapat Dibuka",
+            "Windows belum dapat membuka folder MP4 yang tersedia.",
+        )
     ]
     window.close()
