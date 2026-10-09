@@ -606,3 +606,83 @@ def test_existing_success_does_not_bypass_redirected_download_directory(
 
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == success
     assert len(driver.calls) == before_calls
+
+
+@pytest.mark.parametrize(
+    ("new_state", "remote_result_id", "expected_error"),
+    [
+        (GenerationJobState.FAILED, "remote:SCENE_001", "GENERATED"),
+        (GenerationJobState.QUEUED, "remote:SCENE_001", "GENERATED"),
+        (GenerationJobState.GENERATED, None, "remote result identifier"),
+    ],
+)
+def test_confirmed_mp4_reuse_requires_current_generated_job(
+    tmp_path: Path,
+    new_state: GenerationJobState,
+    remote_result_id: str | None,
+    expected_error: str,
+) -> None:
+    """Historical MP4 files cannot bypass a later Generate invalidation."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    completed = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert completed.state == DownloadState.DOWNLOADED
+    assert len(driver.calls) == 1
+    assert Path(completed.output_path or "").read_bytes() == b"fake-video"
+
+    with __import__("sqlite3").connect(
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ) as connection:
+        connection.execute(
+            """
+            UPDATE generation_jobs SET state = ?, remote_result_id = ?
+            WHERE job_id = ?
+            """,
+            (
+                new_state.value,
+                remote_result_id,
+                "EP500_DOWNLOAD:SCENE_001:GENERATE",
+            ),
+        )
+        connection.commit()
+
+    with pytest.raises(InternalInvariantError, match=expected_error):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    # Fail closed, but never erase a previously confirmed local file or row.
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == completed
+    assert Path(completed.output_path or "").read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("episode_id", "scene_id"),
+    [
+        ("EP500_DOWNLOAD:alternate", "SCENE_001"),
+        ("EP500_DOWNLOAD.", "SCENE_001"),
+        ("EP500_DOWNLOAD ", "SCENE_001"),
+        ("CON", "SCENE_001"),
+        ("PRN.txt", "SCENE_001"),
+        ("LPT9", "SCENE_001"),
+        ("EP500_DOWNLOAD", "SCENE_001:other"),
+        ("EP500_DOWNLOAD", "SCENE_001?"),
+        ("EP500_DOWNLOAD", "SCENE_001."),
+        ("EP500_DOWNLOAD", "AUX.mp4"),
+        ("EP500_DOWNLOAD", "SCENE_001\\evil"),
+        ("EP500_DOWNLOAD", "SCENE_001\x00bad"),
+    ],
+)
+def test_download_blocks_unsafe_windows_components_before_any_provider_or_write(
+    tmp_path: Path, episode_id: str, scene_id: str
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+
+    with pytest.raises(InternalInvariantError, match="Unsafe"):
+        service.download_scene(episode_id, scene_id)
+
+    assert driver.calls == []
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert not (root / "CON").exists()
+    assert not (root / "EP500_DOWNLOAD" / "downloads").exists()
