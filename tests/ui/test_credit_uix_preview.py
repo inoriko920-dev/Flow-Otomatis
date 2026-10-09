@@ -74,3 +74,78 @@ def test_navigation_groups_match_22_screens(qtbot) -> None:
             item.code.startswith(f"UIX-{index + 1:02}-") for item in UIX_SCENARIOS
         )
     dialog.close()
+
+
+def test_each_approved_variant_has_safe_contextual_navigation(qtbot) -> None:
+    dialog = CreditUixDialog()
+    qtbot.addWidget(dialog)
+    assert len(UIX_SCENARIOS) == 22
+    for scenario in UIX_SCENARIOS:
+        routes = dialog._actions_for(scenario.code)
+        assert len(routes) == 2
+        assert all(target in SCENARIO_BY_ID for _label, target in routes)
+        dialog.set_state(scenario.code)
+        assert dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled() is False
+    dialog.close()
+
+
+def test_no_eligible_profiles_never_looks_like_success(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-C")
+    qtbot.addWidget(dialog)
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 12
+    assert all(rows.item(i, 4).text() == "TIDAK ADA AKUN LAYAK" for i in range(12))
+    assert all(rows.item(i, 1).text() == "—" for i in range(12))
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_partial_budget_and_stale_plan_show_separate_statuses(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-B")
+    qtbot.addWidget(dialog)
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 12
+    assert sum(rows.item(i, 4).text() == "SIMULASI" for i in range(12)) == 8
+    assert sum(rows.item(i, 4).text() == "BELUM DIALOKASIKAN" for i in range(12)) == 4
+
+    dialog.set_state("UIX-04-B")
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 3
+    assert "HITUNG ULANG" in [
+        rows.item(i, 3).text() for i in range(rows.rowCount())
+    ]
+    dialog.close()
+
+
+def test_uncertain_submit_remains_held_and_handoff_never_claims_real_mp4(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-05-C")
+    qtbot.addWidget(dialog)
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.item(0, 2).text() == "SUBMIT_UNCERTAIN"
+    assert "HELD" in rows.item(0, 3).text()
+
+    dialog.set_state("UIX-09-B")
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 12
+    assert all(rows.item(i, 3).text() == "TIDAK ADA MP4 NYATA" for i in range(12))
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_sidebar_preserves_seven_original_routes_as_non_live_labels(qtbot) -> None:
+    from PySide6.QtWidgets import QFrame, QLabel
+
+    dialog = CreditUixDialog()
+    qtbot.addWidget(dialog)
+    sidebar = dialog.findChild(QFrame, "UixSidebar")
+    dock = dialog.findChild(QFrame, "UixRightDock")
+    assert sidebar is not None
+    assert dock is not None
+    assert sidebar.width() == 216
+    assert dock.width() == 376
+    routes = sidebar.findChildren(QLabel, "UixSidebarRoute")
+    assert [r.text().strip() for r in routes] == [
+        "Beranda", "Workspace", "Hasil", "Profil Google",
+        "Gemini Keys", "Diagnostik", "Pengaturan",
+    ]
+    dialog.close()
