@@ -196,6 +196,8 @@ class EpisodePackageReader:
             ) from exc
 
     def _validate_archive_names(self, names: list[str]) -> None:
+        """Refuse ambiguous ZIP entries before resolving manifest/image members."""
+        seen: set[str] = set()
         for raw_name in names:
             if "\x00" in raw_name:
                 raise PackageSecurityError("Archive contains a NUL path")
@@ -204,6 +206,15 @@ class EpisodePackageReader:
                 raise PackageSecurityError(f"Unsafe archive entry: {raw_name}")
             if path.parts and ":" in path.parts[0]:
                 raise PackageSecurityError(f"Unsafe archive drive path: {raw_name}")
+            # zipfile.open(name) resolves duplicates using the last entry.
+            # Reject identical names, slash aliases and Windows case-folding
+            # collisions rather than trust an ambiguous original image.
+            canonical = path.as_posix().casefold()
+            if canonical in seen:
+                raise PackageSecurityError(
+                    "ZIP contains duplicate or ambiguous file entries"
+                )
+            seen.add(canonical)
 
     def _resolve_member(self, manifest_name: str, reference: str) -> str:
         base_parts = list(PurePosixPath(manifest_name).parent.parts)
