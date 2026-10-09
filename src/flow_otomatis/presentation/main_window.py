@@ -966,9 +966,7 @@ class MainWindow(QMainWindow):
         if confirm != QMessageBox.StandardButton.Yes:
             return None
         try:
-            workspace = self._scene_planning_service.fill_missing_recommended_durations(
-                episode_id
-            )
+            workspace = self._scene_planning_service.fill_missing_recommended_durations(episode_id)
         except FlowOtomatisError as exc:
             QMessageBox.warning(self, "Tidak Dapat Mengisi Durasi", str(exc))
             return None
