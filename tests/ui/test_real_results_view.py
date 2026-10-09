@@ -863,7 +863,6 @@ def test_handoff_ready_banner_requires_actual_generate_and_download(ready_result
     window.close()
 
 
-
 def test_results_ui_rejects_stale_download_status_and_video_action(ready_results, qtbot) -> None:
     window, service, database = ready_results
     original = service.snapshot(window.current_workspace.episode_id)
