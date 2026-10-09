@@ -40,6 +40,7 @@ def build_project_hub_view(
     on_open: Callable[[str], object],
     on_import: Callable[[], object],
     on_preview_ui: Callable[[], object] | None = None,
+    import_available: bool = True,
 ) -> QWidget:
     """Render healthy and isolated unreadable projects in the frozen layout."""
 
@@ -49,7 +50,11 @@ def build_project_hub_view(
 
     import_button = _button(root, "Impor Paket Episode")
     if import_button is not None:
-        import_button.clicked.connect(on_import)
+        import_button.setEnabled(import_available)
+        if import_available:
+            import_button.clicked.connect(on_import)
+        else:
+            import_button.setToolTip("Layanan impor paket episode belum tersedia.")
         if on_preview_ui is not None:
             actions = import_button.parentWidget()
             actions_layout = actions.layout() if actions is not None else None
@@ -63,7 +68,32 @@ def build_project_hub_view(
                 preview_button.clicked.connect(on_preview_ui)
                 actions_layout.insertWidget(1, preview_button)
 
+    create_button = _button(root, "Buat Project")
+    if create_button is not None:
+        # There is no second/empty project-creation path: a valid package
+        # is required to establish real persisted Workspace/Scene records.
+        create_button.setText("Buat Project dari Paket")
+        create_button.setObjectName("ProjectHubCreateFromPackage")
+        create_button.setEnabled(import_available)
+        if import_available:
+            create_button.clicked.connect(on_import)
+        else:
+            create_button.setToolTip("Impor paket harus tersedia untuk membuat project.")
+
+    open_button = _button(root, "Buka Project")
+    if open_button is not None:
+        open_button.setObjectName("ProjectHubOpenProject")
+        open_button.setEnabled(bool(total_entries))
+        if not total_entries:
+            open_button.setToolTip("Belum ada project lokal yang bisa dibuka.")
+
     if not total_entries:
+        for label in root.findChildren(QLabel):
+            if "buat project baru, atau buka project" in label.text():
+                label.setText(
+                    "Impor paket episode untuk membuat Workspace pertama. "
+                    "Project tersimpan akan muncul di daftar ini."
+                )
         return root
 
     table = _project_table(root)
@@ -108,7 +138,6 @@ def build_project_hub_view(
     table.cellDoubleClicked.connect(open_row)
     table.setCurrentCell(0, 0)
 
-    open_button = _button(root, "Buka Project")
     if open_button is not None:
         open_button.clicked.connect(lambda: open_row(table.currentRow()))
 
