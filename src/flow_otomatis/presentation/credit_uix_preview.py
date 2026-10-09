@@ -621,9 +621,7 @@ class CreditUixDialog(QDialog):
         ]
         self._dock_row.setText("\n".join(values))
 
-    def _filter_rows(
-        self, table: QTableWidget, count_label: QLabel, query: str
-    ) -> None:
+    def _filter_rows(self, table: QTableWidget, count_label: QLabel, query: str) -> None:
         """Filter only visible synthetic/local table data without changing totals."""
         needle = query.strip().casefold()
         visible = 0
