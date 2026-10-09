@@ -408,7 +408,7 @@ def test_record_downloaded_never_certifies_invalid_or_linked_mp4(
         shortcut = tmp_path / "shortcut.mp4"
         try:
             shortcut.symlink_to(real)
-        except (OSError, NotImplementedError):
+        except OSError, NotImplementedError:
             pytest.skip("Creating symbolic links is not supported by this Windows runner")
         path = str(shortcut)
 
@@ -431,7 +431,7 @@ def test_recorded_mp4_replaced_by_symlink_fails_closed_in_results_and_manifest(
     output.rename(moved)
     try:
         output.symlink_to(moved)
-    except (OSError, NotImplementedError):
+    except OSError, NotImplementedError:
         pytest.skip("Creating symbolic links is not supported by this Windows runner")
 
     snapshot = service.snapshot("EP400_RESULTS")
