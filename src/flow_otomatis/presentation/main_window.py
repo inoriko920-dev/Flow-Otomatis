@@ -1462,9 +1462,7 @@ class MainWindow(QMainWindow):
             self._active_google_session_request = None
             return
         self._active_google_session_request = None
-        if request.action == "open":
-            self.show_google_login(profile)
-        elif request.action == "recheck":
+        if request.action in {"open", "recheck"}:
             self.show_google_login(profile)
         elif request.action == "check":
             self.show_google_profiles()
