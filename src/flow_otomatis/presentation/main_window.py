@@ -232,6 +232,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1180, 700)
 
         self._fixture_code = fixture_code
+        self._production_shell = False
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
@@ -329,6 +330,20 @@ class MainWindow(QMainWindow):
 
         return self._last_result_manifest_path
 
+    def configure_production_shell(self) -> None:
+        """Never present frozen mock Online/Autosave badges in a real app run.
+
+        Explicit --fixture visual-capture sessions remain pixel-identical.
+        This is UI presentation only, not a Google Flow network probe.
+        """
+
+        self._production_shell = True
+        current_route = next(
+            (name for name, button in self._nav_buttons.items() if button.isChecked()),
+            "Beranda",
+        )
+        self._set_navigation(current_route)
+
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
         sidebar.setObjectName("Sidebar")
@@ -404,7 +419,8 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         self._status_project = muted_label("0 project")
         layout.addWidget(self._status_project)
-        layout.addWidget(muted_label("Autosave aktif"))
+        self._autosave_label = muted_label("Autosave aktif")
+        layout.addWidget(self._autosave_label)
         return statusbar
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -480,7 +496,7 @@ class MainWindow(QMainWindow):
     def _set_navigation(self, item: str) -> None:
         for name, button in self._nav_buttons.items():
             button.setChecked(name == item)
-        if self._fixture_code.startswith("REAL_"):
+        if self._production_shell or self._fixture_code.startswith("REAL_"):
             # A running desktop app does NOT prove Google Flow workspace access.
             self._connection_badge.setText("●  Mode Lokal")
             self._connection_badge.setStyleSheet(self._local_badge_style)
@@ -492,6 +508,7 @@ class MainWindow(QMainWindow):
             self._saved_badge.setText("●  Data Lokal")
             self._saved_badge.setStyleSheet(self._local_badge_style)
             self._runtime_status.setText("Mode lokal • Generate Flow belum aktif")
+            self._autosave_label.setText("Penyimpanan lokal")
         else:
             # Exact approved frozen STEP 09 reference appearance.
             self._connection_badge.setText("●  Online")
@@ -502,6 +519,7 @@ class MainWindow(QMainWindow):
             self._saved_badge.setText("●  Tersimpan")
             self._saved_badge.setStyleSheet(self._saved_badge_original_style)
             self._runtime_status.setText("Siap digunakan")
+            self._autosave_label.setText("Autosave aktif")
 
     def _set_project_chrome(self, workspace: WorkspaceState, surface: str) -> None:
         self._project_label.setText(f"{workspace.episode_id} • {workspace.project_name}")
