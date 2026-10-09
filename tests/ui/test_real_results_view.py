@@ -370,3 +370,58 @@ def test_download_unavailable_does_not_display_ghost_output_filename(qtbot) -> N
             assert not button.isEnabled()
             assert "belum tersedia" in button.toolTip()
     body.close()
+
+
+def test_hasil_diagnostics_button_opens_real_local_view_without_fake_provider(
+    ready_results, qtbot
+) -> None:
+    window, _service, _database = ready_results
+    workspace = window.current_workspace
+    assert workspace is not None
+    window.configure_production_shell()
+    window.show_results_state()
+
+    button = window.findChild(QPushButton, "RealResultsOpenDiagnostics")
+    assert button is not None and button.isEnabled()
+    assert "lokal" in button.toolTip()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert window.fixture_code == "REAL_DIAGNOSTICS"
+    assert window.current_workspace is workspace
+    assert window._nav_buttons["Diagnostik"].isChecked()
+    assert "Mode Lokal" in window._connection_badge.text()
+    assert window.findChild(QTableWidget, "RealLocalDiagnosticsTable") is not None
+    window.close()
+
+
+def test_stale_hasil_callbacks_cannot_open_diagnostics_or_export_different_episode(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, _service, _database = ready_results
+    workspace = window.current_workspace
+    assert workspace is not None
+    episode_id = workspace.episode_id
+    exports: list[str] = []
+
+    def export_spy() -> Path:
+        exports.append("export")
+        return Path("unused.json")
+
+    monkeypatch.setattr(window, "export_current_result_manifest", export_spy)
+    window.show_results_state()
+    # Navigating away makes all saved callback closures from Hasil stale.
+    window.show_workspace_state(workspace)
+    window._open_diagnostics_from_results(episode_id)
+    window._export_result_manifest_from_ui(episode_id)
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert exports == []
+    assert window.last_result_manifest_path is None
+
+    # The episode guard also applies if the app is currently showing Hasil
+    # for some other selected Workspace.
+    window.show_results_state()
+    window._open_diagnostics_from_results("EP_OTHER")
+    window._export_result_manifest_from_ui("EP_OTHER")
+    assert window.fixture_code == "REAL_RESULTS"
+    assert exports == []
+    window.close()
