@@ -7,6 +7,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QFont, QKeyEvent
@@ -49,6 +50,7 @@ from flow_otomatis.domain.errors import (
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.account_service_unavailable_view import (
+    UnavailableServiceRoute,
     build_account_service_unavailable_view,
 )
 from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
@@ -779,7 +781,7 @@ class MainWindow(QMainWindow):
         self._project_state_label.setText(f"{route} • Tidak tersedia")
         self._status_project.setText("Tidak ada bukti akses provider")
         view = build_account_service_unavailable_view(
-            route,
+            cast(UnavailableServiceRoute, route),
             on_home=self.show_project_hub,
             on_diagnostics=self.show_local_diagnostics,
         )
