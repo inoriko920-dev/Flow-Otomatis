@@ -52,6 +52,15 @@ class LocalResultsService:
         for scene in workspace.scenes:
             job = jobs.get(scene.scene_id)
             download = downloads.get(scene.scene_id)
+            # A readable old MP4 alone does not attest to a current
+            # GENERATED job. Reconciliation is read-only: retain historical
+            # download rows and bytes, but show UNAVAILABLE until a coherent
+            # Generate result can be verified again.
+            verified_generate = (
+                job is not None
+                and job.state is GenerationJobState.GENERATED
+                and bool((job.remote_result_id or "").strip())
+            )
             scenes.append(
                 SceneResult(
                     scene_id=scene.scene_id,
@@ -64,7 +73,10 @@ class LocalResultsService:
                         (
                             DownloadState.UNAVAILABLE
                             if download.state == DownloadState.DOWNLOADED
-                            and not is_available_output(download.output_path)
+                            and (
+                                not verified_generate
+                                or not is_available_output(download.output_path)
+                            )
                             else download.state
                         )
                         if download is not None
@@ -101,9 +113,13 @@ class LocalResultsService:
 
         jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
         job = jobs.get(scene_id)
-        if job is None or job.state is not GenerationJobState.GENERATED:
+        if (
+            job is None
+            or job.state is not GenerationJobState.GENERATED
+            or not (job.remote_result_id or "").strip()
+        ):
             raise InternalInvariantError(
-                "Download cannot be marked successful before Generate is GENERATED"
+                "Download requires a current GENERATED job with a stable remote result ID"
             )
         # Inspect the original path BEFORE resolving it. Resolving first
         # would silently follow a symlink and falsely attest to an MP4 that
