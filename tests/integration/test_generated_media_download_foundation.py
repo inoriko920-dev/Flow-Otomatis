@@ -378,7 +378,6 @@ def test_conditional_failure_cannot_replace_historical_downloaded_record(tmp_pat
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
 
 
-
 def test_download_worker_never_publishes_a_linked_partial_even_if_driver_claims_success(
     tmp_path: Path,
 ) -> None:
