@@ -28,6 +28,7 @@ class DownloadRecord:
     output_path: str | None = None
     take: int = 1
     error_message: str | None = None
+    generation_remote_result_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,7 @@ class SceneResult:
     output_path: str | None
     take: int
     updated_at: datetime | None
+    download_generation_result_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

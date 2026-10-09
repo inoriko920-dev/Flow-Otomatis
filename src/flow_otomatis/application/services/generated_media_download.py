@@ -75,6 +75,7 @@ class GeneratedMediaDownloadService:
             existing_path = Path(existing.output_path).expanduser().absolute()
             if (
                 existing.take == normalized_take
+                and existing.generation_remote_result_id == remote_result_id
                 and existing_path == destination
                 and is_available_output(str(existing_path))
             ):
@@ -151,6 +152,7 @@ class GeneratedMediaDownloadService:
             updated_at=datetime.now(UTC),
             output_path=str(output),
             take=normalized_take,
+            generation_remote_result_id=remote_result_id,
         )
         if not self._download_repository.save_if_current_generate(record, remote_result_id):
             # The result changed after the second read but before commit.

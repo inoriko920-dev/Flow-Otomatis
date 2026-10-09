@@ -829,3 +829,23 @@ def test_atomic_download_commit_disallows_non_success_or_blank_expected_result(
     with pytest.raises(ValueError, match="must not be blank"):
         downloads.save_if_current_generate(confirmed, "  ")
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == confirmed
+
+
+def test_download_does_not_reuse_mp4_from_another_generated_result(tmp_path: Path) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(original.output_path or "")
+    assert original.generation_remote_result_id == "remote:SCENE_001"
+
+    with __import__("sqlite3").connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:NEW_GENERATED", "SCENE_001"),
+        )
+        db.commit()
+    with pytest.raises(InternalInvariantError, match="will not be overwritten"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert video.read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1

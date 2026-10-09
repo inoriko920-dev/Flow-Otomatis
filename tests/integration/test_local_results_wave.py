@@ -212,7 +212,8 @@ def test_migration_preserves_generated_result_and_existing_download(tmp_path: Pa
     assert migrated[0].created_at == now
     assert migrated[0].updated_at == now
     assert snapshot.generated_count == 1
-    assert snapshot.downloaded_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.scenes[0].download_state == DownloadState.UNAVAILABLE
     assert snapshot.scenes[0].remote_result_id == "remote:kept"
     assert snapshot.scenes[0].output_path == str(output.resolve())
 
@@ -574,3 +575,42 @@ def test_direct_local_result_record_rejects_generate_change_during_atomic_commit
 
     assert video.read_bytes() == b"synthetic-video"
     assert repository.get("EP400_RESULTS", "SCENE_001") is None
+
+
+def test_new_generated_id_never_reattests_old_download_or_exports_mp4(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    assert original.scenes[0].download_generation_result_id == "remote:R03"
+
+    with sqlite3.connect(tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3") as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:NEW_GENERATED", "SCENE_001"),
+        )
+        db.commit()
+    latest = service.snapshot("EP400_RESULTS")
+    assert latest.scenes[0].generate_state is GenerationJobState.GENERATED
+    assert latest.scenes[0].remote_result_id == "remote:NEW_GENERATED"
+    assert latest.scenes[0].download_generation_result_id == "remote:R03"
+    assert latest.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert not latest.handoff_ready
+    payload = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_manifest_rejects_changed_generated_id_even_when_download_exists(
+    tmp_path: Path,
+) -> None:
+    service, _video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    tampered = replace(
+        original,
+        scenes=(replace(original.scenes[0], remote_result_id="remote:NEW_GENERATED"),),
+    )
+    path = ResultManifestWriter(tmp_path / "projects").write(tampered)
+    assert json.loads(path.read_text(encoding="utf-8"))["scenes"][0]["download_status"] == (
+        "UNAVAILABLE"
+    )

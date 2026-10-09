@@ -75,6 +75,8 @@ class LocalResultsService:
                             if download.state == DownloadState.DOWNLOADED
                             and (
                                 not verified_generate
+                                or download.generation_remote_result_id
+                                != (job.remote_result_id or "").strip()
                                 or not is_available_output(download.output_path)
                             )
                             else download.state
@@ -84,6 +86,9 @@ class LocalResultsService:
                     ),
                     output_path=download.output_path if download is not None else None,
                     take=download.take if download is not None else 1,
+                    download_generation_result_id=(
+                        download.generation_remote_result_id if download is not None else None
+                    ),
                     updated_at=(
                         download.updated_at
                         if download is not None
@@ -144,6 +149,7 @@ class LocalResultsService:
             updated_at=datetime.now(UTC),
             output_path=str(local_output),
             take=max(take, 1),
+            generation_remote_result_id=(job.remote_result_id or "").strip(),
         )
         if not self._download_repository.save_if_current_generate(
             record, (job.remote_result_id or "").strip()

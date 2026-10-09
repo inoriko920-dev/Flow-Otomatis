@@ -23,14 +23,16 @@ class SqliteDownloadResultRepository:
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
-                        output_path, take, error_message
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (episode_id, scene_id) DO UPDATE SET
                         state = excluded.state,
                         updated_at = excluded.updated_at,
                         output_path = excluded.output_path,
                         take = excluded.take,
-                        error_message = excluded.error_message
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
                     """,
                     (
                         record.episode_id,
@@ -40,6 +42,7 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.error_message,
+                        record.generation_remote_result_id,
                     ),
                 )
                 connection.commit()
@@ -82,14 +85,16 @@ class SqliteDownloadResultRepository:
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
-                        output_path, take, error_message
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (episode_id, scene_id) DO UPDATE SET
                         state = excluded.state,
                         updated_at = excluded.updated_at,
                         output_path = excluded.output_path,
                         take = excluded.take,
-                        error_message = excluded.error_message
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
                     """,
                     (
                         record.episode_id,
@@ -99,6 +104,7 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.error_message,
+                        remote_id,
                     ),
                 )
                 connection.commit()
@@ -121,14 +127,16 @@ class SqliteDownloadResultRepository:
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
-                        output_path, take, error_message
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (episode_id, scene_id) DO UPDATE SET
                         state = excluded.state,
                         updated_at = excluded.updated_at,
                         output_path = excluded.output_path,
                         take = excluded.take,
-                        error_message = excluded.error_message
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
                     WHERE download_results.state <> ?
                     """,
                     (
@@ -139,6 +147,7 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.error_message,
+                        record.generation_remote_result_id,
                         DownloadState.DOWNLOADED,
                     ),
                 )
@@ -233,10 +242,17 @@ class SqliteDownloadResultRepository:
                 output_path TEXT,
                 take INTEGER NOT NULL,
                 error_message TEXT,
+                generation_remote_result_id TEXT,
                 PRIMARY KEY (episode_id, scene_id)
             )
             """
         )
+        # A legacy schema is only migrated on a real write, not on get/list.
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")}
+        if "generation_remote_result_id" not in columns:
+            connection.execute(
+                "ALTER TABLE download_results ADD COLUMN generation_remote_result_id TEXT"
+            )
 
     def _row_to_record(self, row: sqlite3.Row) -> DownloadRecord:
         from datetime import datetime
@@ -249,4 +265,10 @@ class SqliteDownloadResultRepository:
             output_path=(str(row["output_path"]) if row["output_path"] is not None else None),
             take=int(row["take"]),
             error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
+            generation_remote_result_id=(
+                str(row["generation_remote_result_id"])
+                if "generation_remote_result_id" in row.keys()
+                and row["generation_remote_result_id"] is not None
+                else None
+            ),
         )
