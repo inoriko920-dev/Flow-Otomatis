@@ -160,7 +160,10 @@ def prepare_local_scene_preflight(
         "durable_jobs_created": False,
         "credit_balance_verified": False,
         "image_bytes_verified": (
-            image_verifier is not None and checked_images > 0 and failed_images == 0
+            image_verifier is not None
+            and len(workspace.scenes) > 0
+            and checked_images == len(workspace.scenes)
+            and failed_images == 0
         ),
         "image_integrity_check": (
             "LOCAL_SOURCE_BYTES_READ" if image_verifier is not None else "NOT_RUN"
