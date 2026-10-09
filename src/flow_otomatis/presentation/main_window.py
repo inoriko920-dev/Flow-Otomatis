@@ -519,10 +519,7 @@ class MainWindow(QMainWindow):
         if item == "Gemini Keys" and self._gemini_key_service is not None:
             self.show_gemini_keys()
             return
-        if (
-            item in {"Profil Google", "Gemini Keys"}
-            and self._production_shell
-        ):
+        if item in {"Profil Google", "Gemini Keys"} and self._production_shell:
             self.show_account_service_unavailable(item)
             return
         if item == "Diagnostik" and self._production_shell:
