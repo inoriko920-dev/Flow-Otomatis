@@ -174,7 +174,7 @@ jobs:
           if ($data.mode -ne 'OFFLINE_SIMULATION' -or $data.live_dispatch_allowed -ne $false) {
             throw "Offline-only dispatch invariant failed"
           }
-          if ($data.total_simulated_credits -ne 37 -or $data.assigned.Count -ne 3) {
+          if ($data.total_simulated_credits -ne 27 -or $data.assigned.Count -ne 2 -or $data.blocked.Count -ne 1) {
             throw "Synthetic sample results changed unexpectedly"
           }
 
