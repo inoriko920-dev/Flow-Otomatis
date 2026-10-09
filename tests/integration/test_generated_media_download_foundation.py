@@ -631,9 +631,7 @@ def test_confirmed_mp4_reuse_requires_current_generated_job(
     assert len(driver.calls) == 1
     assert Path(completed.output_path or "").read_bytes() == b"fake-video"
 
-    with __import__("sqlite3").connect(
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ) as connection:
+    with __import__("sqlite3").connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as connection:
         connection.execute(
             """
             UPDATE generation_jobs SET state = ?, remote_result_id = ?
