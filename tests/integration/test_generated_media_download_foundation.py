@@ -784,3 +784,50 @@ def test_atomic_download_commit_allows_matching_generated_result(tmp_path: Path)
     record = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == record
     assert record.state == DownloadState.DOWNLOADED
+
+
+def test_atomic_download_commit_rejects_stale_replacement_without_erasing_history(
+    tmp_path: Path,
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(original.output_path or "")
+    assert video.read_bytes() == b"fake-video"
+
+    with __import__("sqlite3").connect(
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ) as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:NEW_RESULT", "SCENE_001"),
+        )
+        connection.commit()
+
+    from dataclasses import replace
+
+    rival = replace(
+        original,
+        output_path=str(video.with_name("rival.mp4")),
+        updated_at=datetime.now(UTC),
+    )
+    assert downloads.save_if_current_generate(rival, "remote:SCENE_001") is False
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert video.read_bytes() == b"fake-video"
+
+
+def test_atomic_download_commit_disallows_non_success_or_blank_expected_result(
+    tmp_path: Path,
+) -> None:
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    confirmed = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="Only DOWNLOADED"):
+        downloads.save_if_current_generate(
+            replace(confirmed, state=DownloadState.FAILED), "remote:SCENE_001"
+        )
+    with pytest.raises(ValueError, match="must not be blank"):
+        downloads.save_if_current_generate(confirmed, "  ")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == confirmed
