@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.domain.job import GenerationJobState
 from flow_otomatis.domain.result import DownloadState, ProjectResults
 from flow_otomatis.presentation.fixtures import get_fixture
@@ -78,6 +79,33 @@ def _set_metric(root: QWidget, title: str, value: str, detail: str) -> None:
     raise RuntimeError(f"Frozen Hasil card missing metric: {title}")
 
 
+
+def verified_single_output_folder(results: ProjectResults) -> Path | None:
+    """One existing local MP4 folder, or no unambiguous safe action.
+
+    Multiple output folders are deliberately not opened arbitrarily.
+    We verify actual nonempty output bytes, not database Download labels alone.
+    """
+
+    directories: set[Path] = set()
+    for scene in results.scenes:
+        if scene.download_state != DownloadState.DOWNLOADED or not scene.output_path:
+            continue
+        file_path = Path(scene.output_path)
+        if file_path.suffix.lower() != ".mp4" or not is_available_output(str(file_path)):
+            return None
+        try:
+            target = file_path.resolve(strict=True)
+        except OSError, RuntimeError:
+            return None
+        if not target.parent.is_dir():
+            return None
+        directories.add(target.parent)
+        if len(directories) > 1:
+            return None
+    return next(iter(directories)) if directories else None
+
+
 def build_results_service_unavailable_view(
     *,
     on_workspace: Callable[[], object],
@@ -113,6 +141,7 @@ def build_results_view(
     on_export_manifest: Callable[[], object],
     on_open_diagnostics: Callable[[], object] | None = None,
     on_refresh: Callable[[], object] | None = None,
+    on_open_folder: Callable[[], object] | None = None,
 ) -> QWidget:
     """Render real Generate/Download facts inside the frozen Hasil screen."""
 
@@ -198,10 +227,22 @@ def build_results_view(
                 button.setToolTip("Periksa keadaan aplikasi dan proyek lokal.")
             else:
                 button.setToolTip("Navigasi Diagnostik belum tersedia.")
-        elif button.text() in {"Buka Folder Output", "Retry Download Terpilih"}:
-            # No safe verified folder-open or retry action has been integrated.
+        elif button.text() == "Buka Folder Output":
+            folder = verified_single_output_folder(results)
+            button.setObjectName("RealResultsOpenFolder")
+            button.setEnabled(folder is not None and on_open_folder is not None)
+            if button.isEnabled() and on_open_folder is not None:
+                button.clicked.connect(on_open_folder)
+                button.setToolTip("Buka folder MP4 lokal yang sudah diverifikasi.")
+            else:
+                button.setToolTip(
+                    "Tidak ada satu folder MP4 lokal yang valid. "
+                    "File dapat hilang atau tersimpan di beberapa folder."
+                )
+        elif button.text() == "Retry Download Terpilih":
+            # No live provider retry without entitlement and explicit consent.
             button.setEnabled(False)
-            button.setToolTip("Aksi ini belum tersedia dari halaman hasil lokal.")
+            button.setToolTip("Retry Download Google Flow belum diaktifkan.")
 
     if on_open_diagnostics is not None and not diagnostics_button_found:
         # Ready Hasil (003C) has Export + Folder but no Diagnostik button;
