@@ -613,6 +613,7 @@ class MainWindow(QMainWindow):
             on_open=self._open_local_project_from_ui,
             on_import=self._choose_episode_package,
             on_preview_ui=self.open_credit_uix_preview,
+            import_available=self._episode_import_service is not None,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
