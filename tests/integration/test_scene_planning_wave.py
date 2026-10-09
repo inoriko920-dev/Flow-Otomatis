@@ -202,9 +202,7 @@ def test_bulk_duration_rejects_stale_preview_and_keeps_newer_manual_choice(
     # Another editor writes a different manual choice while confirmation is open.
     manually_selected = planner.select_flow_duration(original.episode_id, "SCENE_016", 10)
     with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
-        planner.fill_missing_recommended_durations(
-            original.episode_id, expected_workspace=original
-        )
+        planner.fill_missing_recommended_durations(original.episode_id, expected_workspace=original)
     assert planner.load_workspace(original.episode_id) == manually_selected
     assert planner.load_workspace(original.episode_id).scenes[0].selected_flow_duration_s == 10
 
@@ -222,11 +220,7 @@ def test_bulk_duration_stale_preview_rejects_changed_target_even_if_ceil_is_same
         scenes=(replace(scene, target_duration_s=7.55, trim_target_s=7.55),),
     )
     repository.update(newer)
-    assert planner.preview_missing_recommended_durations(original.episode_id) == (
-        ("SCENE_016", 8),
-    )
+    assert planner.preview_missing_recommended_durations(original.episode_id) == (("SCENE_016", 8),)
     with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
-        planner.fill_missing_recommended_durations(
-            original.episode_id, expected_workspace=original
-        )
+        planner.fill_missing_recommended_durations(original.episode_id, expected_workspace=original)
     assert planner.load_workspace(original.episode_id) == newer
