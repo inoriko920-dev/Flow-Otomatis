@@ -769,6 +769,9 @@ class CreditUixDialog(QDialog):
                 # Keep the existing read-only table as an inspectable Qt model,
                 # but present the owner-approved policy/tariff summary as rows.
                 content.setParent(root)
+                # Preserve the read-only table model for diagnostics, but keep
+                # both its container and widget out of the approved UI.
+                table.hide()
                 content.hide()
                 left_panel = self._approved_policy_details(code)
             else:
