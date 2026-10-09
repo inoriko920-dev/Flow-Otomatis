@@ -334,7 +334,17 @@ class SqliteWorkspaceRepository:
         # malformed IDs before any directory is created or opened.
         if re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{2,127}", episode_id) is None:
             raise StorageError("Invalid episode ID for local project storage")
-        return self._projects_root / episode_id / "project.sqlite3"
+        db_path = self._projects_root / episode_id / "project.sqlite3"
+        try:
+            # An ID can be perfectly valid while its project folder or DB file
+            # is a link redirecting storage outside the configured root.
+            # Resolve before any read, mkdir or SQLite open.
+            root = self._projects_root.resolve()
+            if not db_path.resolve().is_relative_to(root):
+                raise StorageError("Project database resolves outside the local storage root")
+        except (OSError, RuntimeError) as exc:
+            raise StorageError("Could not resolve local project storage path") from exc
+        return db_path
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
         """Create new schema or migrate old Scene rows only on an explicit write."""
