@@ -119,7 +119,7 @@ class LocalResultsService:
             )
         try:
             local_output = original.resolve(strict=True)
-        except OSError, RuntimeError, ValueError as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             raise InternalInvariantError("Download output path cannot be verified") from exc
         record = DownloadRecord(
             episode_id=episode_id,
