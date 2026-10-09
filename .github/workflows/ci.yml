@@ -206,3 +206,59 @@ jobs:
             docs/examples/OFFLINE_SIMULATOR_DEMO.json
           if-no-files-found: error
           retention-days: 14
+
+
+  uix22-qt-windows:
+    needs: quality
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          architecture: "x64"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check "uv==0.12.23"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --all-groups
+
+      - name: Render all 22 real Qt states
+        run: uv run python scripts/capture_credit_uix.py artifacts/e12_uix22
+
+      - name: Verify 22 screenshot files
+        shell: pwsh
+        run: |
+          $screens = @(Get-ChildItem -Path artifacts/e12_uix22 -Filter 'UIX-*.png')
+          if ($screens.Count -ne 22) { throw "Expected exactly 22 UI renders" }
+
+      - name: Build separate UI preview EXE
+        run: >
+          uv run python -m PyInstaller
+          --noconfirm --clean --onefile --windowed
+          --name Flow-Otomatis-UIX22-Offline-Preview
+          --distpath dist/uix22
+          --workpath build/uix22
+          --specpath build/uix22-spec
+          scripts/credit_uix_preview.py
+
+      - name: Check UI preview EXE
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe")) {
+            throw "UIX22 Windows EXE missing"
+          }
+
+      - name: Upload UI preview executable and captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-UIX22-Offline-Win11-x64
+          path: |
+            dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe
+            artifacts/e12_uix22
+          if-no-files-found: error
+          retention-days: 14
