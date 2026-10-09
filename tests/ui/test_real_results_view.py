@@ -25,6 +25,7 @@ from flow_otomatis.infrastructure.persistence import (
 from flow_otomatis.presentation.main_window import MainWindow
 from flow_otomatis.presentation.results_view import (
     build_results_view,
+    verified_selected_mp4,
     verified_single_output_folder,
 )
 
@@ -642,4 +643,143 @@ def test_results_open_folder_windows_failure_is_redacted(ready_results, qtbot, m
             "Windows belum dapat membuka folder MP4 yang tersedia.",
         )
     ]
+    window.close()
+
+
+def test_play_selected_local_mp4_opens_exact_verified_scene(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    window.show_results_state()
+    play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    assert play is not None and not play.isEnabled()
+    table = next(
+        t for t in window.findChildren(QTableWidget) if t.columnCount() == 6
+    )
+    table.selectRow(0)
+    assert play.isEnabled()
+    assert "default Windows" in play.toolTip()
+    captured: list[object] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: captured.append(url) or True)
+    qtbot.mouseClick(play, Qt.MouseButton.LeftButton)
+    assert len(captured) == 1
+    assert captured[0].isLocalFile()
+    results = service.snapshot(window.current_workspace.episode_id)
+    assert Path(captured[0].toLocalFile()) == verified_selected_mp4(results, "SCENE_001")
+    assert window.fixture_code == "REAL_RESULTS"
+    window.close()
+
+
+def test_play_selected_local_mp4_requires_download_and_one_row(qtbot) -> None:
+    now = datetime.now(UTC)
+    pending = ProjectResults(
+        episode_id="EP_PLAY_PENDING",
+        project_name="Pending",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(
+            SceneResult(
+                scene_id="SCENE_001",
+                target_duration_s=4.0,
+                selected_flow_duration_s=4,
+                trim_target_s=4.0,
+                generate_state=None,
+                remote_result_id=None,
+                download_state=DownloadState.NOT_DOWNLOADED,
+                output_path=None,
+                take=1,
+                updated_at=now,
+            ),
+        ),
+    )
+    selected: list[str] = []
+    view = build_results_view(
+        pending,
+        on_export_manifest=lambda: None,
+        on_open_video=lambda scene_id: selected.append(scene_id),
+    )
+    qtbot.addWidget(view)
+    button = view.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    table = next(t for t in view.findChildren(QTableWidget) if t.columnCount() == 6)
+    assert button is not None and not button.isEnabled()
+    table.selectRow(0)
+    assert not button.isEnabled()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert selected == []
+    assert verified_selected_mp4(pending, "SCENE_001") is None
+    view.close()
+
+
+def test_play_local_mp4_disappearance_is_rejected_after_selection(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    window.show_results_state()
+    play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    table = next(t for t in window.findChildren(QTableWidget) if t.columnCount() == 6)
+    table.selectRow(0)
+    assert play is not None and play.isEnabled()
+    results = service.snapshot(window.current_workspace.episode_id)
+    Path(results.scenes[0].output_path).unlink()
+    opened: list[str] = []
+    warnings: list[tuple[str, str]] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _window, title, msg: warnings.append((title, msg))
+    )
+    qtbot.mouseClick(play, Qt.MouseButton.LeftButton)
+    assert opened == []
+    assert warnings and warnings[0][0] == "Video Lokal Tidak Tersedia"
+    window.close()
+
+
+def test_play_local_mp4_ignores_stale_result_page_after_refresh(
+    ready_results, monkeypatch
+) -> None:
+    window, _service, _database = ready_results
+    window.show_results_state()
+    old = window._last_results_snapshot
+    assert old is not None
+    window.show_results_state()
+    opened: list[str] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True)
+    window._open_result_video_from_ui(old, "SCENE_001")
+    assert opened == []
+    window.show_workspace_state(window.current_workspace)
+    window._open_result_video_from_ui(old, "SCENE_001")
+    assert opened == []
+    window.close()
+
+
+def test_play_local_mp4_os_failure_is_redacted(ready_results, qtbot, monkeypatch) -> None:
+    window, _service, _database = ready_results
+    window.show_results_state()
+    play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    table = next(t for t in window.findChildren(QTableWidget) if t.columnCount() == 6)
+    table.selectRow(0)
+    assert play is not None and play.isEnabled()
+    warning: list[tuple[str, str]] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: False)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _window, title, msg: warning.append((title, msg))
+    )
+    qtbot.mouseClick(play, Qt.MouseButton.LeftButton)
+    assert warning == [
+        ("Pemutar Video Tidak Tersedia", "Windows tidak dapat membuka MP4 dengan aplikasi pemutar default.")
+    ]
+    window.close()
+
+
+def test_selected_video_disallows_file_symlink(ready_results, tmp_path) -> None:
+    window, service, _database = ready_results
+    results = service.snapshot(window.current_workspace.episode_id)
+    real_file = Path(results.scenes[0].output_path)
+    link = tmp_path / "alias.mp4"
+    link.symlink_to(real_file)
+    altered = replace(
+        results, scenes=(replace(results.scenes[0], output_path=str(link)),)
+    )
+    assert verified_selected_mp4(altered, "SCENE_001") is None
+    assert verified_selected_mp4(results, "nonexistent") is None
     window.close()
