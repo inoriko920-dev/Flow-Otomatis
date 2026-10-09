@@ -127,3 +127,27 @@ def test_canonical_zip_reader_verifies_original_image_bytes_and_blocks_missing_s
     assert "BYTE GAMBAR TIDAK TERBACA" in missing["held"][0]["issues"]
     assert str(tmp_path) not in json.dumps(missing)
     assert missing["live_dispatch_allowed"] is False
+
+
+def test_real_project_hub_exposes_new_uix22_without_import(qtbot, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QPushButton
+
+    class LocalLibrary:
+        def scan_recent(self):
+            return SimpleNamespace(workspaces=(), issues=())
+
+    window = MainWindow(project_library_service=LocalLibrary())
+    qtbot.addWidget(window)
+    opened: list[str] = []
+    monkeypatch.setattr(window, "open_credit_uix_preview", lambda: opened.append("UIX22"))
+    window.show_project_hub()
+
+    preview = window.findChild(QPushButton, "ProjectHubUix22Preview")
+    assert preview is not None
+    assert preview.isEnabled()
+    assert window.fixture_code == "REAL_PROJECT_HUB"
+    preview.click()
+    assert opened == ["UIX22"]
+    window.close()
