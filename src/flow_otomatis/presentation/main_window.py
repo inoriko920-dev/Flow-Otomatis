@@ -917,7 +917,10 @@ class MainWindow(QMainWindow):
         """Render real credential-free Gemini key metadata."""
 
         if self._gemini_key_service is None:
-            self.show_fixture("UI-IMG-006A")
+            if self._production_shell:
+                self.show_account_service_unavailable("Gemini Keys")
+            else:
+                self.show_fixture("UI-IMG-006A")
             return
         self._invalidate_agent_context()
         profiles = self._gemini_key_service.list_profiles()
@@ -992,7 +995,10 @@ class MainWindow(QMainWindow):
         """Render real credential-free Google profile/session state."""
 
         if self._google_session_service is None:
-            self.show_fixture("UI-IMG-004A")
+            if self._production_shell:
+                self.show_account_service_unavailable("Profil Google")
+            else:
+                self.show_fixture("UI-IMG-004A")
             return
         self._invalidate_agent_context()
         profiles = self._google_session_service.list_profiles()
