@@ -85,3 +85,19 @@ def test_explicit_frozen_auth_fixture_routes_remain_unchanged(qtbot) -> None:
     assert page is not None
     assert page.objectName() != "RealGeminiKeysUnavailable"
     window.close()
+
+
+def test_direct_profile_and_key_refresh_cannot_open_mock_accounts_in_production(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.configure_production_shell()
+
+    window.show_google_profiles()
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert "LAYANAN TIDAK TERSEDIA" in _visible_text(window)
+
+    window.show_gemini_keys()
+    assert window.fixture_code == "REAL_GEMINI_KEYS_UNAVAILABLE"
+    assert "LAYANAN TIDAK TERSEDIA" in _visible_text(window)
+    assert window._active_google_profile_id is None
+    window.close()
