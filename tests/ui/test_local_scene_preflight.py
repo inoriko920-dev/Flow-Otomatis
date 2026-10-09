@@ -416,3 +416,32 @@ def test_image_byte_verification_is_unavailable_until_verifier_is_injected(qtbot
     assert dialog.report["image_integrity_check"] == "NOT_RUN"
     assert dialog.report["image_bytes_verified"] is False
     dialog.close()
+
+
+def test_partial_missing_scene_is_not_claimed_as_all_image_bytes_verified() -> None:
+    workspace = _workspace(
+        _scene("SCENE_001"),
+        _scene(
+            "SCENE_002", image=False, readiness=SceneReadiness.MISSING_IMAGE
+        ),
+    )
+    reader = _LocalImageReader()
+    report = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert report["verified_image_count"] == 1
+    assert report["unreadable_image_count"] == 0
+    assert report["image_bytes_verified"] is False
+    assert report["image_baselines_verified"] is False
+    assert report["ready_count"] == 1
+    assert report["held_count"] == 1
+    assert report["held"][0]["image_evidence"] == "GAMBAR HILANG"
+    assert [call[1] for call in reader.calls] == ["SCENE_001"]
+
+    only_missing = prepare_local_scene_preflight(
+        _workspace(
+            _scene("SCENE_003", image=False, readiness=SceneReadiness.MISSING_IMAGE)
+        ),
+        image_verifier=reader,
+    )
+    assert only_missing["verified_image_count"] == 0
+    assert only_missing["image_bytes_verified"] is False
+    assert only_missing["held_count"] == 1
