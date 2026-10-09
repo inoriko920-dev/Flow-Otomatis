@@ -898,10 +898,33 @@ class MainWindow(QMainWindow):
             results,
             on_export_manifest=lambda: self._export_result_manifest_from_ui(results.episode_id),
             on_open_diagnostics=lambda: self._open_diagnostics_from_results(results.episode_id),
+            on_refresh=lambda: self._refresh_results_from_ui(results.episode_id),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
+
+    def _refresh_results_from_ui(self, episode_id: str) -> None:
+        """Reload local results without provider calls or stale-page mutations."""
+
+        if (
+            self._fixture_code != "REAL_RESULTS"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return
+        try:
+            self.show_results_state()
+        except FlowOtomatisError, OSError:
+            QMessageBox.warning(
+                self,
+                "Hasil Tidak Dapat Diperbarui",
+                "Data hasil lokal belum dapat dibaca ulang. Tampilan sebelumnya "
+                "dipertahankan dan tidak ada operasi Google Flow dijalankan.",
+            )
+        else:
+            # The old exported manifest is no longer a current snapshot.
+            self._last_result_manifest_path = None
 
     def _open_diagnostics_from_results(self, episode_id: str) -> None:
         """Ignore stale result-page callbacks after project/navigation changes."""
