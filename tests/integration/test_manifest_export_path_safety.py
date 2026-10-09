@@ -107,9 +107,10 @@ def test_late_export_dir_swap_blocks_final_publish_and_cleans_temp(
     external = tmp_path / "redirect"
     external.mkdir()
     checks = 0
+    attacker_file: Path | None = None
 
     def swap_before_commit(episode_id: str) -> Path:
-        nonlocal checks
+        nonlocal attacker_file, checks
         checks += 1
         if checks == 2:
             existing = base / episode_id / "exports"
@@ -120,13 +121,20 @@ def test_late_export_dir_swap_blocks_final_publish_and_cleans_temp(
             except BaseException:
                 renamed.rename(existing)
                 raise
+            # An attacker may deliberately place a same-named file on the
+            # redirected parent. Cleanup must not erase that unrelated file.
+            temporary_files = list(renamed.glob("*.tmp"))
+            assert len(temporary_files) == 1
+            attacker_file = external / temporary_files[0].name
+            attacker_file.write_text("unrelated-external-file", encoding="utf-8")
         return original(episode_id)
 
     monkeypatch.setattr(writer, "_verified_export_directory", swap_before_commit)
     with pytest.raises(InternalInvariantError, match="redirects"):
         writer.write(_results("after"))
     assert checks == 2
-    assert not list(external.iterdir())
+    assert attacker_file is not None
+    assert attacker_file.read_text(encoding="utf-8") == "unrelated-external-file"
     safe = base / "EP_EXPORT_RACE" / "exports.safe"
     assert json.loads((safe / "FLOW_OTOMATIS_RESULT.json").read_text()) == previous
     # The validated directory was renamed AFTER the tempfile was created.
