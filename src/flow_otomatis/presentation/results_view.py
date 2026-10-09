@@ -112,10 +112,21 @@ def build_results_view(
     *,
     on_export_manifest: Callable[[], object],
     on_open_diagnostics: Callable[[], object] | None = None,
+    on_refresh: Callable[[], object] | None = None,
 ) -> QWidget:
     """Render real Generate/Download facts inside the frozen Hasil screen."""
 
     root = build_screen(get_fixture(_fixture_code(results)))
+    if on_refresh is not None:
+        # A real local reload, independent from the unavailable cloud retry.
+        refresh = secondary_button("Muat Ulang Hasil")
+        refresh.setObjectName("RealResultsRefresh")
+        refresh.setToolTip("Baca ulang status Generate dan Download dari penyimpanan lokal.")
+        refresh.clicked.connect(on_refresh)
+        layout = root.layout()
+        if not isinstance(layout, QVBoxLayout):
+            raise RuntimeError("Approved Hasil layout lacks vertical content")
+        layout.insertWidget(1, refresh, alignment=Qt.AlignmentFlag.AlignRight)
     table = _results_table(root)
     table.setRowCount(len(results.scenes))
 
