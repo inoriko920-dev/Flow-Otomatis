@@ -957,7 +957,9 @@ class CreditUixDialog(QDialog):
             footer = "Status UNKNOWN tidak sama dengan izin ataupun larangan pasti."
 
         frame, body = card(8)
-        frame.setObjectName("UixApprovedPolicyDetail" if code == "UIX-08-B" else "UixApprovedTariffDetail")
+        frame.setObjectName(
+            "UixApprovedPolicyDetail" if code == "UIX-08-B" else "UixApprovedTariffDetail"
+        )
         body.addWidget(section_header(heading))
         body.addWidget(muted_label(explanation))
         for index, entry in enumerate(entries):
