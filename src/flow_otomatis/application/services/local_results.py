@@ -105,9 +105,22 @@ class LocalResultsService:
             raise InternalInvariantError(
                 "Download cannot be marked successful before Generate is GENERATED"
             )
-        local_output = Path(output_path).expanduser().resolve()
-        if not is_available_output(str(local_output)):
-            raise InternalInvariantError("Download output must be a readable nonempty regular file")
+        # Inspect the original path BEFORE resolving it. Resolving first
+        # would silently follow a symlink and falsely attest to an MP4 that
+        # was never downloaded at the chosen output location.
+        original = Path(output_path).expanduser()
+        if (
+            not original.is_absolute()
+            or original.suffix.lower() != ".mp4"
+            or not is_available_output(str(original))
+        ):
+            raise InternalInvariantError(
+                "Download output must be an absolute, readable, nonempty regular MP4 file"
+            )
+        try:
+            local_output = original.resolve(strict=True)
+        except OSError, RuntimeError, ValueError as exc:
+            raise InternalInvariantError("Download output path cannot be verified") from exc
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
