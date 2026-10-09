@@ -73,8 +73,7 @@ class ResultManifestWriter:
             and (
                 scene.generate_state is not GenerationJobState.GENERATED
                 or not (scene.remote_result_id or "").strip()
-                or scene.download_generation_result_id
-                != (scene.remote_result_id or "").strip()
+                or scene.download_generation_result_id != (scene.remote_result_id or "").strip()
                 or not is_available_output(scene.output_path)
             )
             else scene
