@@ -653,9 +653,7 @@ def test_play_selected_local_mp4_opens_exact_verified_scene(
     window.show_results_state()
     play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
     assert play is not None and not play.isEnabled()
-    table = next(
-        t for t in window.findChildren(QTableWidget) if t.columnCount() == 6
-    )
+    table = next(t for t in window.findChildren(QTableWidget) if t.columnCount() == 6)
     table.selectRow(0)
     assert play.isEnabled()
     assert "default Windows" in play.toolTip()
@@ -734,9 +732,7 @@ def test_play_local_mp4_disappearance_is_rejected_after_selection(
     window.close()
 
 
-def test_play_local_mp4_ignores_stale_result_page_after_refresh(
-    ready_results, monkeypatch
-) -> None:
+def test_play_local_mp4_ignores_stale_result_page_after_refresh(ready_results, monkeypatch) -> None:
     window, _service, _database = ready_results
     window.show_results_state()
     old = window._last_results_snapshot
@@ -766,7 +762,10 @@ def test_play_local_mp4_os_failure_is_redacted(ready_results, qtbot, monkeypatch
     )
     qtbot.mouseClick(play, Qt.MouseButton.LeftButton)
     assert warning == [
-        ("Pemutar Video Tidak Tersedia", "Windows tidak dapat membuka MP4 dengan aplikasi pemutar default.")
+        (
+            "Pemutar Video Tidak Tersedia",
+            "Windows tidak dapat membuka MP4 dengan aplikasi pemutar default.",
+        )
     ]
     window.close()
 
