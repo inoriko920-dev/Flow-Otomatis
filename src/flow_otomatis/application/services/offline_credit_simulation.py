@@ -9,7 +9,7 @@ import re
 from typing import Any
 
 _SUPPORTED_DURATIONS = (4, 6, 8, 10)
-_OPAQUE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\Z".replace("\\\\Z","\\Z"))
+_OPAQUE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 _MAX_CREDITS = 1_000_000_000
 
 class InvalidSimulationInput(ValueError):
