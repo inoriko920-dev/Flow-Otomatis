@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -328,6 +329,11 @@ class SqliteWorkspaceRepository:
         )
 
     def _db_path(self, episode_id: str) -> Path:
+        # Repositories can also be used by direct callers, not just the
+        # validated manifest importer. Reject traversal, drive names and
+        # malformed IDs before any directory is created or opened.
+        if re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{2,127}", episode_id) is None:
+            raise StorageError("Invalid episode ID for local project storage")
         return self._projects_root / episode_id / "project.sqlite3"
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
