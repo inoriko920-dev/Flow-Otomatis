@@ -159,6 +159,8 @@ class GoogleSessionWorker(GoogleSessionPort):
         self._driver = driver or SystemChromeGoogleSessionDriver()
         self._timeout_ms = timeout_ms
         self._instance_id = instance_id or uuid4().hex
+        # Persisted READY belongs to history; only this instance's successful probe grants readiness.
+        self._current_instance_ready: set[str] = set()
 
     def list_profiles(self) -> tuple[GoogleSessionProfile, ...]:
         if not self._root.exists():
@@ -203,6 +205,7 @@ class GoogleSessionWorker(GoogleSessionPort):
         return profile
 
     def open_login(self, profile_id: str) -> GoogleSessionProfile:
+        self._current_instance_ready.discard(profile_id)
         profile = self._read_profile(profile_id)
         probe = self._driver.open_login(
             profile_id,
@@ -220,6 +223,8 @@ class GoogleSessionWorker(GoogleSessionPort):
         return updated
 
     def check_profile(self, profile_id: str) -> GoogleSessionProfile:
+        # Revoke a previous success before any new or potentially failing probe.
+        self._current_instance_ready.discard(profile_id)
         profile = self._read_profile(profile_id)
         probe = self._driver.check(
             profile_id,
@@ -237,6 +242,8 @@ class GoogleSessionWorker(GoogleSessionPort):
             detail=probe.detail,
         )
         self._write_profile(updated)
+        if probe.state is GoogleSessionState.READY:
+            self._current_instance_ready.add(profile_id)
         return updated
 
     def get_restart_gate(self, profile_id: str) -> GoogleSessionRestartGate:
@@ -250,10 +257,12 @@ class GoogleSessionWorker(GoogleSessionPort):
         )
 
     def cancel_profile(self, profile_id: str) -> None:
+        self._current_instance_ready.discard(profile_id)
         self._validated_profile_root(profile_id)
         self._driver.close(profile_id)
 
     def delete_profile(self, profile_id: str) -> None:
+        self._current_instance_ready.discard(profile_id)
         profile_root = self._validated_profile_root(profile_id)
         if not profile_root.exists():
             raise FlowOtomatisError("Profil Google lokal tidak ditemukan.")
@@ -261,6 +270,7 @@ class GoogleSessionWorker(GoogleSessionPort):
         shutil.rmtree(profile_root)
 
     def shutdown(self) -> None:
+        self._current_instance_ready.clear()
         self._driver.shutdown()
 
     def _browser_data_dir(self, profile_id: str) -> Path:
@@ -285,6 +295,10 @@ class GoogleSessionWorker(GoogleSessionPort):
             detail = str(payload["detail"])
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise FlowOtomatisError("Metadata profil Google lokal tidak valid.") from exc
+        if state is GoogleSessionState.READY and profile_id not in self._current_instance_ready:
+            # Do not overwrite legacy profile.json: keep historical evidence readable.
+            state = GoogleSessionState.UNKNOWN
+            detail = "Perlu verifikasi ulang sesi Google setelah aplikasi dibuka."
         return GoogleSessionProfile(
             profile_id=profile_id,
             label=label,
