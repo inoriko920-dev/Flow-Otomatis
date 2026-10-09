@@ -916,12 +916,7 @@ class CreditUixDialog(QDialog):
             "UIX-08-B": "Dampak pada Proyek",
         }
         rows: dict[str, tuple[tuple[str, str], ...]] = {
-            "UIX-02-A": (
-                ("Profil A • contoh", "4 scene"),
-                ("Profil B • contoh", "4 scene"),
-                ("Profil C • contoh", "2 scene"),
-                ("Belum dialokasikan", "2 scene"),
-            ),
+            "UIX-02-A": (),
             "UIX-08-A": (
                 ("Rencana sebelumnya", "v3 • TIDAK BERLAKU"),
                 ("Tarif lama", "vDEMO-1 • kadaluarsa"),
@@ -966,6 +961,7 @@ class CreditUixDialog(QDialog):
                 fill.setAccessibleName(f"{alias} estimasi simulasi {estimated} dari {cap}")
                 group_layout.addWidget(fill)
                 body.addWidget(group)
+            body.addWidget(muted_label("2 Scene perlu perhatian • belum dialokasikan"))
         for label, value in rows[code]:
             line = QWidget()
             line_layout = QHBoxLayout(line)
