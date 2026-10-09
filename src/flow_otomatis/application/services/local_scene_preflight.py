@@ -149,7 +149,6 @@ def prepare_local_scene_preflight(
             "impor); izin provider, saldo, dan sesi tetap tidak diketahui. "
             if image_verifier is not None
             else "Hanya metadata tersimpan; byte gambar belum dibaca. "
-        ) + (
-            "Bukan antrean yang dapat dijalankan; semua Generate live tetap diblokir."
-        ),
+        )
+        + ("Bukan antrean yang dapat dijalankan; semua Generate live tetap diblokir."),
     }
