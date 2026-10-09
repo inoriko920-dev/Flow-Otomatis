@@ -105,6 +105,7 @@ def build_results_view(
     results: ProjectResults,
     *,
     on_export_manifest: Callable[[], object],
+    on_open_diagnostics: Callable[[], object] | None = None,
 ) -> QWidget:
     """Render real Generate/Download facts inside the frozen Hasil screen."""
 
@@ -169,13 +170,17 @@ def build_results_view(
                 button.clicked.connect(on_export_manifest)
             else:
                 button.setToolTip("Semua file hasil harus tersedia sebelum ekspor manifest.")
-        elif button.text() in {
-            "Buka Folder Output",
-            "Retry Download Terpilih",
-            "Buka Diagnostik",
-        }:
-            # The frozen screen included illustration-only buttons.
-            # Production may not show inert actions as if they worked.
+        elif button.text() == "Buka Diagnostik":
+            # This is a real local-only route, not a Google Flow retry.
+            button.setObjectName("RealResultsOpenDiagnostics")
+            button.setEnabled(on_open_diagnostics is not None)
+            if on_open_diagnostics is not None:
+                button.clicked.connect(on_open_diagnostics)
+                button.setToolTip("Periksa keadaan aplikasi dan proyek lokal.")
+            else:
+                button.setToolTip("Navigasi Diagnostik belum tersedia.")
+        elif button.text() in {"Buka Folder Output", "Retry Download Terpilih"}:
+            # No safe verified folder-open or retry action has been integrated.
             button.setEnabled(False)
             button.setToolTip("Aksi ini belum tersedia dari halaman hasil lokal.")
     return root
