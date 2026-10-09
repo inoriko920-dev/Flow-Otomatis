@@ -626,7 +626,7 @@ class CreditUixDialog(QDialog):
             # dialogs; keep the seven frozen app routes unchanged behind them.
             modal = QFrame(root)
             modal.setObjectName("UixScenarioModal")
-            modal.setMaximumWidth(950)
+            modal.setMaximumWidth(1120)
             modal.setStyleSheet(
                 f"QFrame#UixScenarioModal {{ background: white; "
                 f"border: 1px solid {theme.BORDER}; border-radius: 10px; }}"
@@ -725,7 +725,16 @@ class CreditUixDialog(QDialog):
         if rows:
             table.setCurrentCell(0, 0)
         content_layout.addWidget(table)
-        layout.addWidget(content)
+        if not local and code in {"UIX-02-A", "UIX-08-A", "UIX-08-B"}:
+            # Original approved screenshots have two columns in the modal.
+            content.setMinimumWidth(420)
+            two_columns = QHBoxLayout()
+            two_columns.setSpacing(12)
+            two_columns.addWidget(content, 3)
+            two_columns.addWidget(self._scenario_detail_panel(code), 2)
+            layout.addLayout(two_columns)
+        else:
+            layout.addWidget(content)
 
         if code == "UIX-04-A" and not local:
             approval_card, approval_layout = card()
@@ -880,6 +889,62 @@ class CreditUixDialog(QDialog):
             return
         self._requested_scene_id = target
         self.accept()
+
+    def _scenario_detail_panel(self, code: str) -> QWidget:
+        """Render approved UIX-02/08 right-hand content in Qt; synthetic only."""
+
+        titles = {
+            "UIX-02-A": "Distribusi per Profil",
+            "UIX-08-A": "Dampak pada Rencana",
+            "UIX-08-B": "Dampak pada Proyek",
+        }
+        rows: dict[str, tuple[tuple[str, str], ...]] = {
+            "UIX-02-A": (
+                ("Profil A • contoh", "4 scene"),
+                ("Profil B • contoh", "4 scene"),
+                ("Profil C • contoh", "2 scene"),
+                ("Belum dialokasikan", "2 scene"),
+            ),
+            "UIX-08-A": (
+                ("Rencana sebelumnya", "v3 • TIDAK BERLAKU"),
+                ("Tarif lama", "vDEMO-1 • kadaluarsa"),
+                ("Tarif baru", "vDEMO-2 • belum dicek"),
+                ("Estimasi baru", "BELUM TERSEDIA"),
+                ("Hitung ulang / Generate", "DINONAKTIFKAN"),
+            ),
+            "UIX-08-B": (
+                ("Scene siap • contoh", "10 scene"),
+                ("Perlu perhatian • contoh", "2 scene"),
+                ("Bukti izin multiakun", "BELUM ADA"),
+                ("Saldo live terverifikasi", "—"),
+                ("Tarif resmi", "TIDAK DIKETAHUI"),
+                ("Mulai Batch / Generate", "DINONAKTIFKAN"),
+            ),
+        }
+        panel, body = card(9)
+        panel.setObjectName("UixScenarioSidePanel")
+        body.addWidget(section_header(titles[code]))
+        body.addWidget(muted_label("Data simulasi; bukan bukti dari Google Flow."))
+        for label, value in rows[code]:
+            line = QWidget()
+            line_layout = QHBoxLayout(line)
+            line_layout.setContentsMargins(1, 5, 1, 5)
+            line_layout.setSpacing(8)
+            line_layout.addWidget(muted_label(label), 2)
+            result = QLabel(value)
+            result.setObjectName("UixScenarioDetailValue")
+            result.setWordWrap(True)
+            line_layout.addWidget(result, 2)
+            body.addWidget(line)
+        body.addWidget(
+            info_banner(
+                "AKSI LIVE TIDAK TERSEDIA",
+                "Periksa tarif, kredit, identitas dan kebijakan sebelum Generate.",
+                "warning",
+            )
+        )
+        body.addStretch(1)
+        return panel
 
     def _section_title(self, code: str) -> QLabel:
         headings = {
