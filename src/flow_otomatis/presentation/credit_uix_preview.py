@@ -890,7 +890,12 @@ class CreditUixDialog(QDialog):
             ]
         if code == "UIX-08-B":
             return ["Persyaratan", "Bukti", "Status", "Tindakan Aman"], [
-                ["Izin otomatisasi provider", "Tidak tersedia", "BELUM TERVERIFIKASI", "JANGAN GENERATE"],
+                [
+                    "Izin otomatisasi provider",
+                    "Tidak tersedia",
+                    "BELUM TERVERIFIKASI",
+                    "JANGAN GENERATE",
+                ],
                 ["Izin multiakun", "Tidak tersedia", "BELUM TERVERIFIKASI", "JANGAN ROTASI"],
                 ["Tarif dan saldo akun", "Tidak tersedia", "TIDAK DIKETAHUI", "TUNDA KREDIT"],
                 ["READY pasca-restart", "Tidak tersedia", "BELUM LULUS", "CEK MANUAL"],
