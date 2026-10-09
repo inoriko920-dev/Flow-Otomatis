@@ -720,6 +720,90 @@ class CreditUixDialog(QDialog):
         ]
 
     def _data_for(self, code: str) -> tuple[list[str], list[list[str]]]:
+        # UIX variants are different state machines, not 22 captions pasted on
+        # one successful allocation table. Keep every value explicitly synthetic.
+        if code in {"UIX-02-B", "UIX-02-C"}:
+            columns = ["Scene", "Profil simulasi", "Durasi", "Estimasi fiktif", "Status"]
+            if code == "UIX-02-C":
+                return columns, [
+                    [f"SCENE_{index:03}", "—", "—", "—", "TIDAK ADA AKUN LAYAK"]
+                    for index in range(1, 13)
+                ]
+            subset = [
+                [
+                    row["scene_id"],
+                    row["profile_id"],
+                    f"{row['duration_s']}s",
+                    str(row["simulated_cost"]),
+                    "SIMULASI",
+                ]
+                for row in self._preview["assigned"][:8]
+            ]
+            subset.extend(
+                [f"SCENE_{index:03}", "—", "—", "—", "BELUM DIALOKASIKAN"]
+                for index in range(9, 13)
+            )
+            return columns, subset
+        if code == "UIX-04-B":
+            return ["Perubahan contoh", "Sebelum", "Sesudah", "Dampak"], [
+                ["SCENE_006 • gambar", "Revisi v3", "Gambar berubah", "WAJIB REPLAN"],
+                ["Tarif simulasi", "vDEMO-1", "vDEMO-2", "HITUNG ULANG"],
+                ["Bukti kredit nyata", "—", "Belum diverifikasi", "LIVE BLOKIR"],
+            ]
+        if code == "UIX-05-B":
+            rows = []
+            for index in range(1, 13):
+                if index <= 5:
+                    stage = "GENERATED (contoh)"
+                elif index <= 7:
+                    stage = "AWAIT DOWNLOAD (contoh)"
+                elif index <= 10:
+                    stage = "ANTRE (contoh)"
+                else:
+                    stage = "PERLU PERHATIAN"
+                rows.append(
+                    [f"SCENE_{index:03}", "Profil A/B (contoh)", stage, "Belum",
+                     "Tidak ada bukti provider"]
+                )
+            return ["Scene", "Profil", "Status", "Download", "Bukti"], rows
+        if code == "UIX-05-C":
+            return ["Scene", "Profil simulasi", "Kondisi", "Kredit", "Tindakan"], [
+                ["SCENE_008", "Profil B", "SUBMIT_UNCERTAIN", "HELD (contoh)", "Baca saja"],
+                ["SCENE_003", "Profil A", "MANDIRI (contoh)", "—", "Tetap terpisah"],
+            ]
+        if code == "UIX-06-C":
+            return ["Kasus", "Bukti ilustrasi", "Generate", "Download"], [
+                ["SCENE_008", "ID DEMO tertaut Profil B", "Ditemukan (contoh)", "BELUM"],
+                ["Riwayat", "Rekonsiliasi baca saja", "Tidak ada submit baru", "BELUM"],
+            ]
+        if code == "UIX-07-B":
+            rows = []
+            for index in range(1, 13):
+                scene_id = f"SCENE_{index:03}"
+                if index == 3:
+                    status = "TERKUNCI • SUBMIT_UNCERTAIN"
+                    profile = "Profil B (contoh)"
+                elif index <= 4:
+                    status = "TERKUNCI (contoh)"
+                    profile = "Tidak dapat dipindah"
+                else:
+                    status = "AMAN UNTUK REPLAN (contoh)"
+                    profile = "Belum dibekukan"
+                rows.append([scene_id, profile, status, "Tanpa live dispatch"])
+            return ["Scene", "Profil", "Kondisi", "Tindakan aman"], rows
+        if code in {"UIX-09-A", "UIX-09-B"}:
+            rows = []
+            for index in range(1, 13):
+                if code == "UIX-09-B":
+                    generated = downloaded = "12/12 CONTOH"
+                else:
+                    generated = "CONTOH" if index <= 6 else "—"
+                    downloaded = "CONTOH" if index <= 4 else "—"
+                rows.append(
+                    [f"SCENE_{index:03}", generated, downloaded,
+                     "TIDAK ADA MP4 NYATA", "—"]
+                )
+            return ["Scene", "Generate", "Download", "File lokal", "SHA-256"], rows
         group = code[4:6]
         if group == "01":
             if self._workspace is not None:
