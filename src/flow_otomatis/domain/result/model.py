@@ -76,4 +76,11 @@ class ProjectResults:
 
     @property
     def handoff_ready(self) -> bool:
-        return bool(self.scenes) and self.downloaded_count == len(self.scenes)
+        # A persisted DOWNLOAD alone is insufficient evidence of a completed
+        # Generate. Corrupt/out-of-order historical rows must never authorize
+        # handoff to an editor without both confirmed stages for every Scene.
+        return (
+            bool(self.scenes)
+            and self.generated_count == len(self.scenes)
+            and self.downloaded_count == len(self.scenes)
+        )
