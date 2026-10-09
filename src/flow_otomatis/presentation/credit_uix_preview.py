@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QTableWidget,
@@ -941,6 +942,30 @@ class CreditUixDialog(QDialog):
         panel.setObjectName("UixScenarioSidePanel")
         body.addWidget(section_header(titles[code]))
         body.addWidget(muted_label("Data simulasi; bukan bukti dari Google Flow."))
+        if code == "UIX-02-A":
+            # Owner-approved UIX-02-A has a 3-profile distribution with
+            # illustrative allocation bars, not actual balance readings.
+            for alias, scenes, estimated, cap in (
+                ("Profil A", 4, 42, 65),
+                ("Profil B", 4, 42, 55),
+                ("Profil C", 2, 21, 45),
+            ):
+                group = QFrame()
+                group.setObjectName("UixExampleProfileCard")
+                group_layout = QVBoxLayout(group)
+                group_layout.setContentsMargins(10, 8, 10, 8)
+                heading = QHBoxLayout()
+                heading.addWidget(QLabel(f"{alias} • {scenes} Scene (contoh)"), 1)
+                heading.addWidget(QLabel(f"{estimated}/{cap} kredit*"))
+                group_layout.addLayout(heading)
+                fill = QProgressBar()
+                fill.setObjectName("UixExampleCreditBar")
+                fill.setTextVisible(False)
+                fill.setRange(0, cap)
+                fill.setValue(estimated)
+                fill.setAccessibleName(f"{alias} estimasi simulasi {estimated} dari {cap}")
+                group_layout.addWidget(fill)
+                body.addWidget(group)
         for label, value in rows[code]:
             line = QWidget()
             line_layout = QHBoxLayout(line)
@@ -1023,24 +1048,24 @@ class CreditUixDialog(QDialog):
             ]
         if code == "UIX-08-A":
             return [
-                ("Tarif Lama", "vDEMO-1", "versi fiktif", "warning"),
-                ("Tarif Baru", "vDEMO-2", "perlu verifikasi", "warning"),
-                ("Rencana Lama", "KADALUARSA", "tidak boleh digunakan", "error"),
-                ("Persetujuan", "ULANG", "harus dihitung kembali", "error"),
+                ("Total Proyek", "60 scene", "contoh proyek", "info"),
+                ("Sudah Diperiksa", "12 dari 60", "simulasi lokal", "info"),
+                ("Input Siap", "10 scene", "belum boleh Generate", "success"),
+                ("Butuh Perbaikan", "2 scene", "contoh perlu perhatian", "warning"),
             ]
         if code == "UIX-08-B":
             return [
-                ("Izin Provider", "BELUM ADA", "tidak terverifikasi", "error"),
-                ("Multiakun Live", "DIBLOKIR", "tanpa pengecualian", "error"),
-                ("Saldo Terbukti", "—", "tidak diketahui", "warning"),
-                ("Generate", "NONAKTIF", "tidak melakukan submit", "error"),
+                ("Kebijakan", "BELUM DIVERIFIKASI", "izin belum dipastikan", "warning"),
+                ("Profil Contoh", "3 PROFIL", "bukan akun asli", "info"),
+                ("Generate Live", "DINONAKTIFKAN", "tidak ada submit", "error"),
+                ("Scene Diperiksa", "12 DARI 60", "contoh lokal", "info"),
             ]
         if code == "UIX-02-A":
             return [
-                ("Scene Contoh", "12", "data fiktif", "info"),
-                ("Terbagi", str(demo_assigned), "simulasi lokal", "success"),
-                ("Ditahan", str(demo_blocked), "simulasi lokal", "warning"),
-                ("Persetujuan", "BELUM", "hanya plan, bukan izin", "warning"),
+                ("Scene Diperiksa", "12 dari 60", "ilustrasi saja", "info"),
+                ("Siap Dialokasikan", "10 scene", "skenario contoh", "success"),
+                ("Perlu Perhatian", "2 scene", "simulasi lokal", "warning"),
+                ("Total Estimasi", "105 kredit*", "bukan tarif aktual", "info"),
             ]
         if code == "UIX-02-B":
             return [
