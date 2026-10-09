@@ -130,3 +130,27 @@ def test_late_export_dir_swap_blocks_final_publish_and_cleans_temp(
     safe = base / "EP_EXPORT_RACE" / "exports.safe"
     assert json.loads((safe / "FLOW_OTOMATIS_RESULT.json").read_text()) == previous
     assert not list(safe.glob("*.tmp"))
+
+
+def test_rejects_simulated_ntfs_junction_redirect_even_without_symlink_privilege(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows resolve follows junctions that Path.is_symlink may not report."""
+
+    base = tmp_path / "projects"
+    root = base / "EP_EXPORT_RACE" / "exports"
+    root.mkdir(parents=True)
+    outside = tmp_path / "other-disk"
+    outside.mkdir()
+    original_resolve = Path.resolve
+
+    def junction_resolve(self: Path, *, strict: bool = False) -> Path:
+        if self == root:
+            return outside
+        return original_resolve(self, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", junction_resolve)
+    with pytest.raises(InternalInvariantError, match="redirects"):
+        ResultManifestWriter(base).write(_results("no Windows junction"))
+    assert not (root / "FLOW_OTOMATIS_RESULT.json").exists()
+    assert not list(outside.iterdir())
