@@ -76,7 +76,9 @@ class LocalResultsService:
                             and (
                                 not verified_generate
                                 or download.generation_remote_result_id
-                                != ((job.remote_result_id if job is not None else None) or "").strip()
+                                != (
+                                    (job.remote_result_id if job is not None else None) or ""
+                                ).strip()
                                 or not is_available_output(download.output_path)
                             )
                             else download.state
