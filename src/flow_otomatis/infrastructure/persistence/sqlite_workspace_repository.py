@@ -284,7 +284,7 @@ class SqliteWorkspaceRepository:
             aspect_ratio=str(row["aspect_ratio"]),
             image_sha256_imported=(
                 str(row["image_sha256_imported"])
-                if "image_sha256_imported" in row.keys()
+                if "image_sha256_imported" in set(row.keys())
                 and row["image_sha256_imported"] is not None
                 else None
             ),
