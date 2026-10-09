@@ -53,6 +53,7 @@ from flow_otomatis.presentation.diagnostics_view import (
     LocalDiagnosticSnapshot,
     build_local_diagnostics_view,
 )
+from flow_otomatis.presentation.empty_project_view import build_empty_project_view
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -462,6 +463,13 @@ class MainWindow(QMainWindow):
             self.show_workspace_state(self._current_workspace)
             return
         if (
+            self._production_shell
+            and item in {"Workspace", "Hasil"}
+            and self._current_workspace is None
+        ):
+            self.show_empty_project_route(item)
+            return
+        if (
             item == "Hasil"
             and self._current_workspace is not None
             and self._local_results_service is not None
@@ -605,6 +613,30 @@ class MainWindow(QMainWindow):
             on_open=self._open_local_project_from_ui,
             on_import=self._choose_episode_package,
             on_preview_ui=self.open_credit_uix_preview,
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def show_empty_project_route(self, route: str) -> None:
+        """No fake Scene, Download history or MP4 when no project is open."""
+
+        if route not in {"Workspace", "Hasil"}:
+            raise ValueError("Only project-dependent routes may use an empty state")
+        self._invalidate_agent_context()
+        self._fixture_code = f"REAL_EMPTY_{route.upper()}"
+        self._set_navigation(route)
+        self._project_label.setText("Tidak ada project dipilih")
+        self._project_state_label.setText(f"{route} • Belum ada project")
+        self._status_project.setText("0 project aktif")
+        view = build_empty_project_view(
+            route,
+            on_home=self.show_project_hub,
+            on_import=(
+                self._choose_episode_package
+                if self._episode_import_service is not None
+                else None
+            ),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
