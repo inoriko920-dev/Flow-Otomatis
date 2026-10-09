@@ -116,6 +116,7 @@ def test_image_rescan_recomputes_readiness_deterministically(tmp_path: Path) -> 
     assert rescanned_again.scenes[0].selected_flow_duration_s == 8
     assert rescanned_again.scenes[0].readiness is SceneReadiness.MISSING_IMAGE
 
+
 def test_fill_missing_recommended_durations_for_large_real_workspace_is_atomic(
     tmp_path: Path,
 ) -> None:
@@ -132,8 +133,7 @@ def test_fill_missing_recommended_durations_for_large_real_workspace_is_atomic(
             trim_target_s=(3.8, 5.42, 7.32, 9.1)[index % 4],
             selected_flow_duration_s=10 if index == 0 else None,
             readiness=(
-                SceneReadiness.NEEDS_DURATION_SELECTION
-                if index != 0 else SceneReadiness.READY
+                SceneReadiness.NEEDS_DURATION_SELECTION if index != 0 else SceneReadiness.READY
             ),
             image_sha256_imported=f"{index:064x}",
         )
@@ -153,9 +153,7 @@ def test_fill_missing_recommended_durations_for_large_real_workspace_is_atomic(
     assert len(after.scenes) == 100
     assert after.ready_count == 100
     assert after.scenes[0].selected_flow_duration_s == 10
-    assert [after.scenes[i].selected_flow_duration_s for i in range(1, 5)] == [
-        6, 8, 10, 4
-    ]
+    assert [after.scenes[i].selected_flow_duration_s for i in range(1, 5)] == [6, 8, 10, 4]
     assert after.scenes[67].image_sha256_imported == scenes[67].image_sha256_imported
     assert after.scenes[67].target_duration_s == scenes[67].target_duration_s
     assert after.scenes[67].trim_target_s == scenes[67].trim_target_s
