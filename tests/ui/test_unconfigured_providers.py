@@ -114,6 +114,9 @@ def test_unreadable_google_profile_metadata_fails_closed_without_leaking_paths(q
         def list_profiles(self):
             raise OSError("C:/private/google/profile/cookie.sqlite")
 
+        def shutdown(self, timeout_s: float = 1.5) -> None:
+            del timeout_s
+
     window = MainWindow(google_session_service=CorruptSessions())
     qtbot.addWidget(window)
     window.configure_production_shell()
@@ -151,6 +154,9 @@ def test_stale_flow_probe_after_profile_storage_failure_is_revoked(qtbot) -> Non
     class UnreadableSessions:
         def list_profiles(self):
             raise OSError("C:/private/browser-profile/cookies.sqlite")
+
+        def shutdown(self, timeout_s: float = 1.5) -> None:
+            del timeout_s
 
     window = MainWindow(google_session_service=UnreadableSessions())
     qtbot.addWidget(window)
