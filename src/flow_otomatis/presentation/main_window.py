@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from flow_otomatis.application.ports import GoogleSessionProfile
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.services import (
     EpisodeImportService,
     GeminiAgentReply,
@@ -203,6 +204,7 @@ class MainWindow(QMainWindow):
         *,
         episode_import_service: EpisodeImportService | None = None,
         scene_planning_service: ScenePlanningService | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
@@ -220,6 +222,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
+        self._image_verifier = image_verifier
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
@@ -929,7 +932,9 @@ class MainWindow(QMainWindow):
         workspace = self._current_workspace
         if workspace is None or self._fixture_code != "REAL_WORKSPACE":
             return
-        dialog = LocalScenePreflightDialog(workspace, parent=self)
+        dialog = LocalScenePreflightDialog(
+            workspace, parent=self, image_verifier=self._image_verifier
+        )
         dialog.exec()
         self._return_to_local_scene(workspace, dialog.requested_scene_id)
 
@@ -949,7 +954,9 @@ class MainWindow(QMainWindow):
     def open_credit_uix_preview(self) -> None:
         """Open the approved UIX addendum as an offline-only temporary route."""
 
-        preview = CreditUixDialog(self, workspace=self._current_workspace)
+        preview = CreditUixDialog(
+            self, workspace=self._current_workspace, image_verifier=self._image_verifier
+        )
         workspace = self._current_workspace
         preview.exec()
         if workspace is not None:
