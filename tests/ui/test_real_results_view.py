@@ -326,9 +326,7 @@ def test_pending_result_rows_do_not_advertise_success_or_download(tmp_path, qtbo
     qtbot.addWidget(body)
     table = next(t for t in body.findChildren(QTableWidget) if t.columnCount() == 6)
     assert table.rowCount() == 1
-    assert [table.item(0, col).text() for col in (3, 4, 5)] == [
-        "Belum", "Belum", "—"
-    ]
+    assert [table.item(0, col).text() for col in (3, 4, 5)] == ["Belum", "Belum", "—"]
     text = " ".join(label.text() for label in body.findChildren(QLabel))
     assert "Status dari catatan proyek lokal" in text
     assert "Belum selesai" in text
