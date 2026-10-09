@@ -1063,7 +1063,13 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Scene planning service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        workspace = self._scene_planning_service.rescan_images(self._current_workspace.episode_id)
+        try:
+            workspace = self._scene_planning_service.rescan_images(
+                self._current_workspace.episode_id
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Scan Gambar Ditolak", str(exc))
+            return self._current_workspace
         self.show_workspace_state(workspace)
         return workspace
 
