@@ -20,6 +20,7 @@ from flow_otomatis.domain.errors import (
     InternalInvariantError,
     PackageSecurityError,
     PackageValidationError,
+    StorageError,
     WorkspaceAlreadyExistsError,
 )
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
@@ -514,3 +515,34 @@ def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
     assert repository.load(old.episode_id) == current
     assert db.read_bytes() == before
     assert all(scene.image_sha256_imported is None for scene in current.scenes)
+
+def test_storage_rejects_resolved_db_symlink_escape_before_read_or_write(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Emulate Windows junction / symlink resolution without OS privilege needs."""
+    root = tmp_path / "projects"
+    outside = tmp_path / "outside" / "project.sqlite3"
+    package = _write_package(tmp_path / "safe_package.zip", _manifest())
+    workspace = EpisodeImportService(
+        EpisodePackageReader(), SqliteWorkspaceRepository(root)
+    ).validate(package)
+    db_path = root / workspace.episode_id / "project.sqlite3"
+    original_resolve = Path.resolve
+
+    def redirected_path(path: Path, *args, **kwargs) -> Path:
+        if path == db_path:
+            return outside
+        return original_resolve(path, *args, **kwargs)
+
+    repository = SqliteWorkspaceRepository(root)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "resolve", redirected_path)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.load(workspace.episode_id)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.create(workspace)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.update(workspace)
+    assert not outside.exists()
+    assert not db_path.exists()
+    assert not root.exists()
