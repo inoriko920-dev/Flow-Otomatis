@@ -771,6 +771,17 @@ class MainWindow(QMainWindow):
         if route not in {"Profil Google", "Gemini Keys"}:
             raise ValueError("Unexpected provider service route")
         self._invalidate_agent_context()
+        if route == "Profil Google":
+            # A failed/missing profile store revokes the UI selection and all
+            # pending read-only Flow probes, including late callback rights.
+            self._active_google_profile_id = None
+            known = (
+                set(self._google_flow_epochs)
+                | set(self._google_flow_probes)
+                | self._google_flow_busy
+            )
+            for profile_id in tuple(known):
+                self._invalidate_google_flow(profile_id)
         self._fixture_code = (
             "REAL_GOOGLE_PROFILES_UNAVAILABLE"
             if route == "Profil Google"
@@ -1183,9 +1194,18 @@ class MainWindow(QMainWindow):
             return
         if self._google_session_service is None:
             return
-        if probe.profile_id not in {
-            p.profile_id for p in self._google_session_service.list_profiles()
-        }:
+        try:
+            known_profiles = {
+                p.profile_id for p in self._google_session_service.list_profiles()
+            }
+        except FlowOtomatisError, OSError, ValueError:
+            # Async probes cannot authorize a profile whose local metadata is
+            # currently unreadable; never let a Qt callback crash the app.
+            self._invalidate_google_flow(requested_profile_id)
+            if self._fixture_code in {"REAL_GOOGLE_LOGIN", "REAL_GOOGLE_PROFILES"}:
+                self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
+        if probe.profile_id not in known_profiles:
             return
         self._google_flow_busy.discard(probe.profile_id)
         self._google_flow_probes[probe.profile_id] = probe
