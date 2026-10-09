@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 
 from flow_otomatis.application.services.offline_credit_simulation import simulate
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.domain.scene import SceneReadiness
 from flow_otomatis.presentation import theme
 from flow_otomatis.presentation.approved_uix_assets import (
     ApprovedReferenceError,
@@ -416,14 +417,26 @@ class CreditUixDialog(QDialog):
         dock_layout.addWidget(status_badge("LIVE DIBLOKIR", "error"))
         outer.addWidget(dock)
 
-        main.addWidget(
-            info_banner(
-                "MODE SIMULASI • TIDAK TERHUBUNG GOOGLE FLOW",
-                "Seluruh saldo, profil, status remote, dan biaya di panel ini adalah DATA CONTOH. "
-                "Tidak ada login, Generate, Download, atau pengeluaran kredit.",
-                "warning",
-            )
+        self._source_banner = info_banner(
+            "MODE SIMULASI • TIDAK TERHUBUNG GOOGLE FLOW",
+            "Seluruh saldo, profil, status remote, dan biaya di panel ini adalah DATA CONTOH. "
+            "Tidak ada login, Generate, Download, atau pengeluaran kredit.",
+            "warning",
         )
+        main.addWidget(self._source_banner)
+
+        self.source_selector = QComboBox()
+        self.source_selector.setObjectName("UixDataSourceSelector")
+        self.source_selector.addItem("Skenario contoh • 12 Scene sintetis", "demo")
+        if workspace is not None:
+            self.source_selector.addItem("Scene Workspace lokal • baca saja", "local")
+            self.source_selector.setCurrentIndex(1)
+            sources = QHBoxLayout()
+            sources.addWidget(QLabel("Sumber data"))
+            sources.addWidget(self.source_selector, 1)
+            sources.addWidget(muted_label("Kredit tetap belum diverifikasi"))
+            main.addLayout(sources)
+        self.source_selector.currentIndexChanged.connect(self._source_changed)
 
         navigation = QHBoxLayout()
         navigation.addWidget(QLabel("Kelompok UI"))
@@ -512,8 +525,34 @@ class CreditUixDialog(QDialog):
             self.state_selector.setCurrentIndex(select)
         self._render(code)
 
+    def _using_local_inputs(self) -> bool:
+        """True only for a persisted Workspace chosen explicitly in the data switch."""
+        return self._workspace is not None and self.source_selector.currentData() == "local"
+
+    def _source_changed(self, _index: int) -> None:
+        """Switch table source without mutating persisted scenes or synthetic plan."""
+        self._render(self._current_state)
+
     def _render(self, code: str) -> None:
         scenario = SCENARIO_BY_ID[code]
+        local = self._using_local_inputs()
+        mode_labels = self._source_banner.findChildren(QLabel)
+        if len(mode_labels) >= 2:
+            if local:
+                mode_labels[0].setText("INPUT SCENE LOKAL NYATA • KREDIT TIDAK TERVERIFIKASI")
+                mode_labels[1].setText(
+                    "Hanya ID Scene, Target, durasi pilihan, dan kesiapan file yang berasal "
+                    "dari Workspace. Tidak ada data saldo, akun, hasil Generate, atau MP4 nyata."
+                )
+            else:
+                mode_labels[0].setText("MODE SIMULASI • TIDAK TERHUBUNG GOOGLE FLOW")
+                mode_labels[1].setText(
+                    "Seluruh saldo, profil, status remote, dan biaya di panel ini adalah "
+                    "DATA CONTOH. Tidak ada login, Generate, Download, atau pengeluaran kredit."
+                )
+        self.export_button.setText(
+            "Simpan Scan Lokal JSON" if local else "Simpan Simulasi JSON"
+        )
         self._current_state = code
         self._dock_state.setText(f"{code} • {scenario.title}")
         self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
@@ -524,7 +563,18 @@ class CreditUixDialog(QDialog):
         layout.setContentsMargins(10, 4, 10, 12)
         layout.setSpacing(12)
         layout.addWidget(page_header(f"{scenario.code} · {scenario.title}", scenario.description))
-        layout.addWidget(info_banner(scenario.banner, scenario.detail, scenario.severity))
+        if local:
+            layout.addWidget(
+                info_banner(
+                    "PEMERIKSAAN INPUT WORKSPACE • BUKAN STATUS GOOGLE FLOW",
+                    "Hasil alokasi, saldo, recovery, dan tarif pada contoh UIX ini bukan "
+                    "hasil proyek Anda. Alihkan sumber data ke Skenario Contoh untuk "
+                    "mempelajari masing-masing keadaan UI.",
+                    "info",
+                )
+            )
+        else:
+            layout.addWidget(info_banner(scenario.banner, scenario.detail, scenario.severity))
 
         metrics = QGridLayout()
         metrics.setSpacing(10)
@@ -543,7 +593,7 @@ class CreditUixDialog(QDialog):
         search.setPlaceholderText("Cari Scene, profil, status, atau bukti...")
         search.setAccessibleName("Cari data dalam tabel pratinjau")
         finder.addWidget(search, 1)
-        matches = muted_label(f"{len(rows)} baris (contoh)")
+        matches = muted_label(f"{len(rows)} baris ({'lokal' if local else 'contoh'})")
         matches.setObjectName("UixFilterCount")
         finder.addWidget(matches)
         content_layout.addLayout(finder)
@@ -563,7 +613,9 @@ class CreditUixDialog(QDialog):
         table.resizeRowsToContents()
         table.itemSelectionChanged.connect(lambda view=table: self._selected_row_details(view))
         search.textChanged.connect(
-            lambda query, view=table, label=matches: self._filter_rows(view, label, query)
+            lambda query, view=table, label=matches, is_local=local: self._filter_rows(
+                view, label, query, is_local
+            )
         )
         if rows:
             table.setCurrentCell(0, 0)
@@ -636,7 +688,9 @@ class CreditUixDialog(QDialog):
             values.append(f"{title}: {value}")
         self._dock_row.setText("\n".join(values))
 
-    def _filter_rows(self, table: QTableWidget, count_label: QLabel, query: str) -> None:
+    def _filter_rows(
+        self, table: QTableWidget, count_label: QLabel, query: str, is_local: bool = False
+    ) -> None:
         """Filter only visible synthetic/local table data without changing totals."""
         needle = query.strip().casefold()
         visible = 0
@@ -649,7 +703,9 @@ class CreditUixDialog(QDialog):
             found = any(needle in text.casefold() for text in values)
             table.setRowHidden(row_index, not found)
             visible += int(found)
-        count_label.setText(f"{visible}/{table.rowCount()} baris (contoh)")
+        count_label.setText(
+            f"{visible}/{table.rowCount()} baris ({'lokal' if is_local else 'contoh'})"
+        )
         current = table.currentRow()
         if current < 0 or table.isRowHidden(current):
             replacement = next(
@@ -682,6 +738,20 @@ class CreditUixDialog(QDialog):
 
     def _metrics_for(self, code: str) -> list[tuple[str, str, str, str]]:
         group = code[4:6]
+        if self._using_local_inputs():
+            workspace = self._workspace
+            assert workspace is not None
+            return [
+                ("Scene Lokal", str(len(workspace.scenes)), "input tersimpan", "info"),
+                ("Siap Lokal", str(workspace.ready_count), "belum siap live", "success"),
+                (
+                    "Pilih Durasi",
+                    str(workspace.duration_selection_count),
+                    "butuh pilihan user",
+                    "warning",
+                ),
+                ("Input Bermasalah", str(workspace.blocking_count), "cek gambar/prompt", "error"),
+            ]
         count = len(self._workspace.scenes) if self._workspace is not None else 12
         demo_assigned = len(self._preview["assigned"])
         demo_blocked = len(self._preview["blocked"])
@@ -830,6 +900,34 @@ class CreditUixDialog(QDialog):
         ]
 
     def _data_for(self, code: str) -> tuple[list[str], list[list[str]]]:
+        if self._using_local_inputs():
+            workspace = self._workspace
+            assert workspace is not None
+            ready_labels = {
+                SceneReadiness.READY: "SIAP LOKAL",
+                SceneReadiness.NEEDS_DURATION_SELECTION: "PILIH DURASI",
+                SceneReadiness.MISSING_IMAGE: "GAMBAR HILANG",
+                SceneReadiness.MISSING_PROMPT: "PROMPT HILANG",
+                SceneReadiness.INVALID_DURATION: "DURASI INVALID",
+            }
+            return (
+                ["Scene", "Target", "Durasi Flow", "Gambar", "Prompt", "Kesiapan Lokal"],
+                [
+                    [
+                        scene.scene_id,
+                        f"{scene.target_duration_s:.2f}s",
+                        (
+                            f"{scene.selected_flow_duration_s}s"
+                            if scene.selected_flow_duration_s is not None
+                            else f"Belum dipilih • saran {scene.recommended_flow_duration_s}s"
+                        ),
+                        "ADA" if scene.image_exists else "HILANG",
+                        "ADA" if scene.motion_prompt.strip() else "HILANG",
+                        ready_labels[scene.readiness],
+                    ]
+                    for scene in workspace.scenes
+                ],
+            )
         # UIX variants are different state machines, not 22 captions pasted on
         # one successful allocation table. Keep every value explicitly synthetic.
         if code in {"UIX-02-B", "UIX-02-C"}:
@@ -1041,6 +1139,8 @@ class CreditUixDialog(QDialog):
 
     def _actions_for(self, code: str) -> tuple[tuple[str, str], ...]:
         """Show state-specific review routes, never a simulated live submission."""
+        if self._using_local_inputs():
+            return (("Tinjau Scene Lokal", "UIX-01-A"), ("Masalah Input Lokal", "UIX-01-B"))
         destinations: dict[str, tuple[tuple[str, str], ...]] = {
             "UIX-01-A": (("Tinjau Perencanaan", "UIX-02-A"), ("Lihat Masalah", "UIX-01-B")),
             "UIX-01-B": (("Periksa Scan", "UIX-01-A"), ("Periksa Kredit", "UIX-01-C")),
