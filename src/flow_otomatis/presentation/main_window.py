@@ -840,7 +840,11 @@ class MainWindow(QMainWindow):
             return
         if self._google_flow_epochs.get(probe.profile_id) != epoch:
             return
-        if probe.profile_id not in {p.profile_id for p in self._google_session_service.list_profiles()}:
+        if self._google_session_service is None:
+            return
+        if probe.profile_id not in {
+            p.profile_id for p in self._google_session_service.list_profiles()
+        }:
             return
         self._google_flow_busy.discard(probe.profile_id)
         self._google_flow_probes[probe.profile_id] = probe
@@ -851,7 +855,10 @@ class MainWindow(QMainWindow):
             return
         self._google_flow_busy.discard(profile_id)
         self._refresh_active_google_login(profile_id)
-        if self._fixture_code == "REAL_GOOGLE_LOGIN" and self._active_google_profile_id == profile_id:
+        if (
+            self._fixture_code == "REAL_GOOGLE_LOGIN"
+            and self._active_google_profile_id == profile_id
+        ):
             QMessageBox.warning(self, "Cek Akses Flow", detail)
 
     def _refresh_active_google_login(self, profile_id: str) -> None:
