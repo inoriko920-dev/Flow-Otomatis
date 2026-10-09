@@ -9,8 +9,8 @@ from functools import partial
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QFont, QKeyEvent
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QUrl, Signal, Slot
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -49,6 +49,7 @@ from flow_otomatis.domain.errors import (
 )
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.domain.result import ProjectResults
 from flow_otomatis.presentation.account_service_unavailable_view import (
     UnavailableServiceRoute,
     build_account_service_unavailable_view,
@@ -77,6 +78,7 @@ from flow_otomatis.presentation.project_hub_view import (
 from flow_otomatis.presentation.results_view import (
     build_results_service_unavailable_view,
     build_results_view,
+    verified_single_output_folder,
 )
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
 from flow_otomatis.presentation.settings_view import (
@@ -276,6 +278,7 @@ class MainWindow(QMainWindow):
         self._agent_closed = False
         self._active_google_profile_id: str | None = None
         self._last_result_manifest_path: Path | None = None
+        self._last_results_snapshot: ProjectResults | None = None
         self._pending_workspace: WorkspaceState | None = None
         self._current_workspace: WorkspaceState | None = None
         self._selected_scene_id: str | None = None
@@ -891,6 +894,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("No active workspace")
         results = self._local_results_service.snapshot(self._current_workspace.episode_id)
         self._invalidate_agent_context()
+        self._last_results_snapshot = results
         self._fixture_code = "REAL_RESULTS"
         self._set_navigation("Hasil")
         self._set_project_chrome(self._current_workspace, "Hasil")
@@ -899,6 +903,7 @@ class MainWindow(QMainWindow):
             on_export_manifest=lambda: self._export_result_manifest_from_ui(results.episode_id),
             on_open_diagnostics=lambda: self._open_diagnostics_from_results(results.episode_id),
             on_refresh=lambda: self._refresh_results_from_ui(results.episode_id),
+            on_open_folder=lambda: self._open_result_folder_from_ui(results),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
@@ -925,6 +930,42 @@ class MainWindow(QMainWindow):
         else:
             # The old exported manifest is no longer a current snapshot.
             self._last_result_manifest_path = None
+
+    def _open_result_folder_from_ui(self, displayed: ProjectResults) -> None:
+        """Open one local MP4 folder only while exact displayed results are active."""
+
+        if (
+            self._fixture_code != "REAL_RESULTS"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != displayed.episode_id
+            or self._last_results_snapshot is not displayed
+            or self._local_results_service is None
+        ):
+            return
+
+        try:
+            # Re-read storage immediately before opening: files/records may
+            # change after the GUI was painted; never trust a stale button.
+            current = self._local_results_service.snapshot(displayed.episode_id)
+            folder = verified_single_output_folder(current)
+            original_folder = verified_single_output_folder(displayed)
+        except FlowOtomatisError, OSError, ValueError:
+            folder = None
+            original_folder = None
+        if folder is None or folder != original_folder:
+            QMessageBox.warning(
+                self,
+                "Folder Output Tidak Tersedia",
+                "Folder MP4 lokal sudah berubah atau tidak dapat diverifikasi. "
+                "Muat ulang Hasil untuk mendapatkan kondisi terbaru.",
+            )
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+            QMessageBox.warning(
+                self,
+                "Folder Output Tidak Dapat Dibuka",
+                "Windows belum dapat membuka folder MP4 yang tersedia.",
+            )
 
     def _open_diagnostics_from_results(self, episode_id: str) -> None:
         """Ignore stale result-page callbacks after project/navigation changes."""
