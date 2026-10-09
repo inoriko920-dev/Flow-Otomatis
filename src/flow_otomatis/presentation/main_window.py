@@ -896,15 +896,37 @@ class MainWindow(QMainWindow):
         self._set_project_chrome(self._current_workspace, "Hasil")
         view = build_results_view(
             results,
-            on_export_manifest=self._export_result_manifest_from_ui,
+            on_export_manifest=lambda: self._export_result_manifest_from_ui(
+                results.episode_id
+            ),
+            on_open_diagnostics=lambda: self._open_diagnostics_from_results(
+                results.episode_id
+            ),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
 
-    def _export_result_manifest_from_ui(self) -> None:
-        """Keep expected storage/export failures inside the Qt command boundary."""
+    def _open_diagnostics_from_results(self, episode_id: str) -> None:
+        """Ignore stale result-page callbacks after project/navigation changes."""
 
+        if (
+            self._fixture_code != "REAL_RESULTS"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return
+        self.show_local_diagnostics()
+
+    def _export_result_manifest_from_ui(self, episode_id: str | None = None) -> None:
+        """Never export a different project's results using a stale Qt button."""
+
+        if episode_id is not None and (
+            self._fixture_code != "REAL_RESULTS"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return
         try:
             self.export_current_result_manifest()
         except FlowOtomatisError, OSError:
