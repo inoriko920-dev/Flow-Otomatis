@@ -12,6 +12,7 @@ from pathlib import Path
 
 from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.domain.errors import InternalInvariantError
+from flow_otomatis.domain.job import GenerationJobState
 from flow_otomatis.domain.result import DownloadState, ProjectResults
 
 
@@ -69,7 +70,11 @@ class ResultManifestWriter:
         verified_scenes = tuple(
             replace(scene, download_state=DownloadState.UNAVAILABLE)
             if scene.download_state == DownloadState.DOWNLOADED
-            and not is_available_output(scene.output_path)
+            and (
+                scene.generate_state is not GenerationJobState.GENERATED
+                or not (scene.remote_result_id or "").strip()
+                or not is_available_output(scene.output_path)
+            )
             else scene
             for scene in results.scenes
         )
