@@ -202,3 +202,30 @@ def test_keyboard_row_navigation_updates_real_scene_inspector(tmp_path: Path, qt
     window.select_workspace_scene("SCENE_UNKNOWN")
     assert window._selected_scene_id == "SCENE_016"
     window.close()
+
+
+def test_changed_source_rescan_shows_warning_without_marking_scene_ready(
+    tmp_path: Path, qtbot, monkeypatch
+) -> None:
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repository, image_verifier=reader)
+    planner = ScenePlanningService(reader, repository, image_verifier=reader)
+    folder = _package(tmp_path / "episode")
+    workspace = importer.import_package(folder)
+    window = MainWindow(episode_import_service=importer, scene_planning_service=planner)
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    image = folder / "08_APPROVED_IMAGES" / "EP012__IMAGE__SCENE_016__v1.0.png"
+    image.write_bytes(b"tampered-after-import")
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _parent, _title, message: warnings.append(message)
+    )
+    persisted = window.rescan_workspace_images()
+    assert persisted == workspace
+    assert repository.load(workspace.episode_id) == workspace
+    assert len(warnings) == 1
+    assert "berubah sejak impor" in warnings[0]
+    assert window.current_workspace is workspace
+    window.close()
