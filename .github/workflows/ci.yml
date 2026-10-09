@@ -244,6 +244,11 @@ jobs:
           git worktree add --detach .ci-approved-ui FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw "Cannot checkout read-only reference worktree" }
 
+      - name: Verify 22 immutable owner-approved image checksums
+        run: >
+          uv run python scripts/verify_approved_uix_assets.py
+          .ci-approved-ui/docs/ui/final/assets
+
       - name: Make 22 side-by-side visual QA sheets
         run: >
           uv run python scripts/audit_credit_uix_visual.py
@@ -259,6 +264,7 @@ jobs:
           --distpath dist/uix22
           --workpath build/uix22
           --specpath build/uix22-spec
+          --add-data ".ci-approved-ui/docs/ui/final/assets;approved_ui"
           scripts/credit_uix_preview.py
 
       - name: Check UI preview EXE
