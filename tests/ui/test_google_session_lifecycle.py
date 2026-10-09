@@ -410,9 +410,7 @@ def test_late_google_recheck_ignored_after_return_to_account_list(qtbot) -> None
     window.close()
 
 
-def test_late_google_session_error_does_not_warn_unrelated_route(
-    qtbot, monkeypatch
-) -> None:
+def test_late_google_session_error_does_not_warn_unrelated_route(qtbot, monkeypatch) -> None:
     port = FixtureSessionPort()
     window = MainWindow(google_session_service=GoogleSessionService(port))
     qtbot.addWidget(window)
