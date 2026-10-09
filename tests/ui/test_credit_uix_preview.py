@@ -358,6 +358,7 @@ def test_empty_workspace_is_safe_and_zero_count_not_fake_success(qtbot) -> None:
     assert not dialog.live_dispatch_enabled
     dialog.close()
 
+
 def test_local_readiness_filters_and_open_scene_work_without_live(qtbot) -> None:
     dialog = CreditUixDialog(
         workspace=_workspace_with_mixed_real_scenes(), initial_state="UIX-01-A"
