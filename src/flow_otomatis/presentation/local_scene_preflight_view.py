@@ -233,7 +233,6 @@ class LocalScenePreflightDialog(QDialog):
             f"cocok acuan impor: {report['baseline_match_count']}; "
             f"berubah/invalid: {report['baseline_mismatch_count']}; "
             f"tanpa acuan: {report['baseline_missing_count']}."
-
         )
         self._scan_signals = None
 
