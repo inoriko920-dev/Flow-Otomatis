@@ -151,3 +151,24 @@ def test_real_project_hub_exposes_new_uix22_without_import(qtbot, monkeypatch) -
     preview.click()
     assert opened == ["UIX22"]
     window.close()
+
+
+def test_real_shell_does_not_mislabel_unverified_flow_as_online(qtbot) -> None:
+    from types import SimpleNamespace
+
+    class LocalLibrary:
+        def scan_recent(self):
+            return SimpleNamespace(workspaces=(), issues=())
+
+    window = MainWindow(project_library_service=LocalLibrary())
+    qtbot.addWidget(window)
+    window.show_project_hub()
+    assert "Mode Lokal" in window._connection_badge.text()
+    assert "Data Lokal" in window._saved_badge.text()
+    assert "Generate Flow belum aktif" in window._runtime_status.text()
+
+    window.show_fixture("UI-IMG-001A")
+    assert "Online" in window._connection_badge.text()
+    assert "Tersimpan" in window._saved_badge.text()
+    assert window._runtime_status.text() == "Siap digunakan"
+    window.close()
