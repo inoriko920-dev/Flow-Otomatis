@@ -530,9 +530,7 @@ def test_stale_hasil_refresh_callback_cannot_reload_after_navigation(
     window.show_results_state()
     window.show_workspace_state(workspace)
     called: list[str] = []
-    monkeypatch.setattr(
-        service, "snapshot", lambda episode_id: called.append(episode_id)
-    )
+    monkeypatch.setattr(service, "snapshot", lambda episode_id: called.append(episode_id))
     window._refresh_results_from_ui(workspace.episode_id)
     assert window.fixture_code == "REAL_WORKSPACE"
     assert called == []
