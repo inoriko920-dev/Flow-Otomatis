@@ -618,9 +618,26 @@ class CreditUixDialog(QDialog):
         self._open_scene_button = None
         root = QWidget()
         root.setObjectName(f"UixPage{code.replace('-', '')}")
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(10, 4, 10, 12)
-        layout.setSpacing(12)
+        page_layout = QVBoxLayout(root)
+        page_layout.setContentsMargins(10, 4, 10, 12)
+        page_layout.setSpacing(12)
+        if not local and code[4:6] in {"02", "04", "07", "08"}:
+            # Approved groups use temporary centered planning/approval/policy
+            # dialogs; keep the seven frozen app routes unchanged behind them.
+            modal = QFrame(root)
+            modal.setObjectName("UixScenarioModal")
+            modal.setMaximumWidth(950)
+            modal.setStyleSheet(
+                f"QFrame#UixScenarioModal {{ background: white; "
+                f"border: 1px solid {theme.BORDER}; border-radius: 10px; }}"
+            )
+            layout = QVBoxLayout(modal)
+            layout.setContentsMargins(22, 18, 22, 20)
+            layout.setSpacing(12)
+            page_layout.addWidget(modal, alignment=Qt.AlignmentFlag.AlignHCenter)
+            page_layout.addStretch(1)
+        else:
+            layout = page_layout
         layout.addWidget(page_header(f"{scenario.code} · {scenario.title}", scenario.description))
         if local:
             layout.addWidget(
