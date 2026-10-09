@@ -765,7 +765,7 @@ class MainWindow(QMainWindow):
                 self, "Ekspor gagal", "Tidak dapat menyimpan laporan diagnostik lokal."
             )
 
-    def show_account_service_unavailable(self, route: str) -> None:
+    def show_account_service_unavailable(self, route: str, *, read_error: bool = False) -> None:
         """Unconfigured account services must never display fake profile data."""
 
         if route not in {"Profil Google", "Gemini Keys"}:
@@ -777,13 +777,16 @@ class MainWindow(QMainWindow):
             else "REAL_GEMINI_KEYS_UNAVAILABLE"
         )
         self._set_navigation(route)
-        self._project_label.setText("Layanan belum dikonfigurasi")
+        self._project_label.setText(
+            "Data lokal belum dapat dibaca" if read_error else "Layanan belum dikonfigurasi"
+        )
         self._project_state_label.setText(f"{route} • Tidak tersedia")
         self._status_project.setText("Tidak ada bukti akses provider")
         view = build_account_service_unavailable_view(
             cast(UnavailableServiceRoute, route),
             on_home=self.show_project_hub,
             on_diagnostics=self.show_local_diagnostics,
+            read_error=read_error,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
@@ -923,7 +926,12 @@ class MainWindow(QMainWindow):
                 self.show_fixture("UI-IMG-006A")
             return
         self._invalidate_agent_context()
-        profiles = self._gemini_key_service.list_profiles()
+        try:
+            profiles = self._gemini_key_service.list_profiles()
+        except FlowOtomatisError, OSError, ValueError:
+            # A corrupt key metadata store must not be shown as an empty list.
+            self.show_account_service_unavailable("Gemini Keys", read_error=True)
+            return
         self._fixture_code = "REAL_GEMINI_KEYS"
         self._set_navigation("Gemini Keys")
         self._project_label.setText("Gemini API")
@@ -1001,7 +1009,13 @@ class MainWindow(QMainWindow):
                 self.show_fixture("UI-IMG-004A")
             return
         self._invalidate_agent_context()
-        profiles = self._google_session_service.list_profiles()
+        try:
+            profiles = self._google_session_service.list_profiles()
+        except FlowOtomatisError, OSError, ValueError:
+            # Failure to read local session metadata is UNKNOWN, never 0 accounts.
+            # Do not expose secrets, filesystem paths or persisted stale READY.
+            self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
         self._fixture_code = "REAL_GOOGLE_PROFILES"
         self._active_google_profile_id = None
         self._set_navigation("Profil Google")
