@@ -861,3 +861,37 @@ def test_handoff_ready_banner_requires_actual_generate_and_download(ready_result
     assert "Handoff belum siap" not in text
     view.close()
     window.close()
+
+
+
+def test_results_ui_rejects_stale_download_status_and_video_action(
+    ready_results, qtbot
+) -> None:
+    window, service, database = ready_results
+    original = service.snapshot(window.current_workspace.episode_id)
+    assert original.handoff_ready
+    video = Path(original.scenes[0].output_path or "")
+    assert video.read_bytes() == b"synthetic-video"
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET state = ?, remote_result_id = ?",
+            (GenerationJobState.QUEUED.value, None),
+        )
+        connection.commit()
+
+    window.show_results_state()
+    assert window.fixture_code == "REAL_RESULTS"
+    assert not service.snapshot(window.current_workspace.episode_id).handoff_ready
+    visible = _visible_text(window)
+    assert "Tidak Tersedia" in visible
+    assert "Handoff belum siap" in visible
+    assert "0/1" in visible
+    assert video.read_bytes() == b"synthetic-video"
+
+    play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    if play is not None:
+        table = next(table for table in window.findChildren(QTableWidget) if table.columnCount() == 6)
+        table.selectRow(0)
+        assert not play.isEnabled()
+    assert window.last_result_manifest_path is None
