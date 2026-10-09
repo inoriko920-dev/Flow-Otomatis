@@ -251,6 +251,15 @@ jobs:
       - name: Render all 22 real Qt states
         run: uv run python scripts/capture_credit_uix.py artifacts/e12_uix22
 
+      - name: Capture 22 screenshots INSIDE the integrated application shell
+        run: uv run python scripts/capture_embedded_uix.py artifacts/e12_uix22_main_shell
+
+      - name: Verify 22 integrated main-shell screenshot files
+        shell: pwsh
+        run: |
+          $screens = @(Get-ChildItem -Path artifacts/e12_uix22_main_shell -Filter 'UIX-*.png')
+          if ($screens.Count -ne 22) { throw "Expected 22 embedded UI screenshots" }
+
       - name: Verify 22 screenshot files
         shell: pwsh
         run: |
@@ -304,6 +313,7 @@ jobs:
           path: |
             dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe
             artifacts/e12_uix22
+            artifacts/e12_uix22_main_shell
             artifacts/uix_review
           if-no-files-found: error
           retention-days: 14
