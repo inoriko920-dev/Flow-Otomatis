@@ -100,8 +100,11 @@ class GeneratedMediaDownloadService:
             self._download_repository.save_failure_if_unconfirmed(record)
             raise
 
-        output = Path(result.output_path).expanduser().resolve()
-        if output != destination.resolve():
+        # Validate the exact published file path, not a canonicalized
+        # symlink target. The Browser Worker is not a trusted filesystem
+        # authority, and no redirected target may be persisted as DOWNLOADED.
+        output = Path(result.output_path).expanduser().absolute()
+        if output != destination:
             raise InternalInvariantError("Download provider returned an unexpected output path.")
         if not is_available_output(str(output)):
             raise InternalInvariantError(
