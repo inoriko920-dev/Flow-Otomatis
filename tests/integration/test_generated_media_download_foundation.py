@@ -408,7 +408,9 @@ def test_download_worker_never_publishes_a_linked_partial_even_if_driver_claims_
     _root, _jobs, downloads, service = _setup(tmp_path, LinkedPartialDriver())
     with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
-    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    failure = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert failure is not None and failure.state == DownloadState.FAILED
+    assert failure.output_path is None
     assert not list((tmp_path / "projects").rglob("SCENE_001__take_01.mp4"))
 
 
@@ -456,4 +458,6 @@ def test_download_worker_rejects_invalid_partial_even_when_symlink_creation_unav
     monkeypatch.setattr(Path, "is_symlink", simulated_link)
     with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
-    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    failure = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert failure is not None and failure.state == DownloadState.FAILED
+    assert failure.output_path is None
