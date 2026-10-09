@@ -126,6 +126,23 @@ class GeneratedMediaDownloadService:
             raise InternalInvariantError(
                 "Download provider did not produce a readable nonempty regular file."
             )
+        # The Generate job may be invalidated while the browser worker is
+        # downloading. A completed MP4 is not authorization to persist an old
+        # remote result after its job has been requeued or changed.
+        current_jobs = {
+            item.scene_id: item for item in self._job_repository.list_for_episode(episode_id)
+        }
+        current_job = current_jobs.get(scene_id)
+        if (
+            current_job is None
+            or current_job.state is not GenerationJobState.GENERATED
+            or (current_job.remote_result_id or "").strip() != remote_result_id
+        ):
+            # Never delete an MP4 that was already published: recovery is an
+            # explicit operator reconciliation, not an automatic retry.
+            raise InternalInvariantError(
+                "Generate result changed during Download; local video needs reconciliation."
+            )
 
         record = DownloadRecord(
             episode_id=episode_id,
