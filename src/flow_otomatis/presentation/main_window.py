@@ -435,6 +435,15 @@ class MainWindow(QMainWindow):
                 self.show_project_hub()
                 event.accept()
                 return
+            if (
+                self._fixture_code == "REAL_UIX22_PREVIEW"
+                and self._active_uix_preview is not None
+            ):
+                # Keyboard-only exit must follow the same safe workspace
+                # return path as the visible Back button.
+                self._active_uix_preview.reject()
+                event.accept()
+                return
         super().keyPressEvent(event)
 
     def _open_navigation_item(self, item: str, checked: bool = False) -> None:
