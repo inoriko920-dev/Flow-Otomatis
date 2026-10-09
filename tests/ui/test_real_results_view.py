@@ -468,3 +468,72 @@ def test_pending_results_mounts_actionable_local_diagnostics_without_generate(qt
         if button.text() == "Tandai Siap untuk Editing"
     )
     view.close()
+
+
+def test_hasil_refresh_rereads_local_snapshot_and_clears_stale_manifest(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    window.show_results_state()
+    workspace = window.current_workspace
+    assert workspace is not None
+    previous_export = window.export_current_result_manifest()
+    assert previous_export.is_file()
+    scanned: list[str] = []
+    original_snapshot = service.snapshot
+
+    def tracked_snapshot(episode_id: str):
+        scanned.append(episode_id)
+        return original_snapshot(episode_id)
+
+    monkeypatch.setattr(service, "snapshot", tracked_snapshot)
+    refresh = window.findChild(QPushButton, "RealResultsRefresh")
+    assert refresh is not None and refresh.isEnabled()
+    assert "lokal" in refresh.toolTip()
+    qtbot.mouseClick(refresh, Qt.MouseButton.LeftButton)
+    assert scanned == [workspace.episode_id]
+    assert window.fixture_code == "REAL_RESULTS"
+    assert window.last_result_manifest_path is None
+    assert "SCENE_001.mp4" in _visible_text(window)
+    window.close()
+
+
+def test_hasil_refresh_failure_keeps_existing_page_and_redacts_storage_errors(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, _service, database = ready_results
+    window.show_results_state()
+    refresh = window.findChild(QPushButton, "RealResultsRefresh")
+    assert refresh is not None
+    before = _visible_text(window)
+    database.write_bytes(b"invalid-sqlite-diagnostic-secret")
+    warnings: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda _window, title, detail: warnings.append((title, detail)),
+    )
+    qtbot.mouseClick(refresh, Qt.MouseButton.LeftButton)
+    assert window.fixture_code == "REAL_RESULTS"
+    assert warnings and warnings[0][0] == "Hasil Tidak Dapat Diperbarui"
+    assert "invalid-sqlite" not in str(warnings)
+    assert _visible_text(window) == before
+    window.close()
+
+
+def test_stale_hasil_refresh_callback_cannot_reload_after_navigation(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    workspace = window.current_workspace
+    assert workspace is not None
+    window.show_results_state()
+    window.show_workspace_state(workspace)
+    called: list[str] = []
+    monkeypatch.setattr(
+        service, "snapshot", lambda episode_id: called.append(episode_id)
+    )
+    window._refresh_results_from_ui(workspace.episode_id)
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert called == []
+    window.close()
