@@ -530,9 +530,7 @@ class CreditUixDialog(QDialog):
         )
         self.compare_button.clicked.connect(self.compare_with_approved_ui)
         secondary_actions.addWidget(self.compare_button)
-        close = QPushButton(
-            "Kembali ke Workspace / Beranda" if app_shell else "Tutup"
-        )
+        close = QPushButton("Kembali ke Workspace / Beranda" if app_shell else "Tutup")
         close.setObjectName("UixClosePreview")
         close.clicked.connect(self.accept)
         secondary_actions.addWidget(close)
