@@ -622,7 +622,22 @@ class CreditUixDialog(QDialog):
         page_layout = QVBoxLayout(root)
         page_layout.setContentsMargins(10, 4, 10, 12)
         page_layout.setSpacing(12)
-        if not local and code[4:6] in {"02", "04", "07", "08"}:
+        if not local and code[4:6] == "03":
+            # UIX-03-A/B are approved account-credit drawers, not Workspace
+            # pages. Keep any account and balance values strictly simulated.
+            drawer = QFrame(root)
+            drawer.setObjectName("UixCreditDrawer")
+            drawer.setMaximumWidth(650)
+            drawer.setStyleSheet(
+                f"QFrame#UixCreditDrawer {{ background: white; "
+                f"border: 1px solid {theme.BORDER}; border-radius: 10px; }}"
+            )
+            layout = QVBoxLayout(drawer)
+            layout.setContentsMargins(18, 16, 18, 18)
+            layout.setSpacing(10)
+            page_layout.addWidget(drawer, alignment=Qt.AlignmentFlag.AlignRight)
+            page_layout.addStretch(1)
+        elif not local and code[4:6] in {"02", "04", "07", "08"}:
             # Approved groups use temporary centered planning/approval/policy
             # dialogs; keep the seven frozen app routes unchanged behind them.
             modal = QFrame(root)
