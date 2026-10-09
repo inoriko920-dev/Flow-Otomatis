@@ -60,7 +60,7 @@ class EpisodePackageReader:
         digest = hashlib.sha256()
         bytes_read = 0
         try:
-            if source.suffix.lower() == ".zip":
+            if source.is_file() and source.suffix.lower() == ".zip":
                 with zipfile.ZipFile(source) as archive:
                     names = [name for name in archive.namelist() if not name.endswith("/")]
                     self._validate_archive_names(names)
@@ -79,7 +79,13 @@ class EpisodePackageReader:
                             bytes_read += len(chunk)
             else:
                 manifest_path = snapshot.source_path
-                package_root = self._infer_directory_root(manifest_path)
+                # Folder imports may place the manifest in any subdirectory.
+                # Keep the user-selected folder as the containment boundary;
+                # inferring the root from the manifest name can reject images
+                # accepted by load(), or silently change the evidence scope.
+                package_root = (
+                    source if source.is_dir() else self._infer_directory_root(manifest_path)
+                )
                 image_path = self._resolve_disk_ref(package_root, manifest_path.parent, image_file)
                 if not image_path.is_file():
                     raise PackageValidationError(
