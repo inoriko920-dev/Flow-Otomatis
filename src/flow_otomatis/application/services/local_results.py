@@ -145,7 +145,13 @@ class LocalResultsService:
             output_path=str(local_output),
             take=max(take, 1),
         )
-        self._download_repository.save(record)
+        if not self._download_repository.save_if_current_generate(
+            record, (job.remote_result_id or "").strip()
+        ):
+            raise InternalInvariantError(
+                "Generate result changed during atomic Download save; "
+                "local video needs reconciliation."
+            )
         return record
 
     def record_download_failed(
