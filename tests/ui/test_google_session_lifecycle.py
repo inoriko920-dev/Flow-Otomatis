@@ -470,9 +470,7 @@ def test_flow_preflight_fails_closed_on_unreadable_restart_gate(qtbot, monkeypat
     window.close()
 
 
-def test_flow_preflight_fails_closed_if_profile_disappears_after_gate(
-    qtbot, monkeypatch
-) -> None:
+def test_flow_preflight_fails_closed_if_profile_disappears_after_gate(qtbot, monkeypatch) -> None:
     port = FixtureSessionPort()
     port.check_profile(port.profile.profile_id)
     window = MainWindow(google_session_service=GoogleSessionService(port))
