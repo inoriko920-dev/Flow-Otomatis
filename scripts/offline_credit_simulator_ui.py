@@ -11,7 +11,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from offline_credit_simulator import InvalidSimulationInput, simulate
+from offline_credit_simulator import simulate
 
 DEMO: dict = {
     "mode": "OFFLINE_SIMULATION",
@@ -65,12 +65,8 @@ class OfflineSimulatorApp:
         ttk.Button(actions, text="Contoh Simulasi", command=self._load_demo).pack(
             side="left", padx=(0, 8)
         )
-        ttk.Button(actions, text="Hitung Offline", command=self._run).pack(
-            side="left", padx=(0, 8)
-        )
-        ttk.Button(actions, text="Simpan Hasil JSON", command=self._save_json).pack(
-            side="left"
-        )
+        ttk.Button(actions, text="Hitung Offline", command=self._run).pack(side="left", padx=(0, 8))
+        ttk.Button(actions, text="Simpan Hasil JSON", command=self._save_json).pack(side="left")
         self.status = tk.StringVar(value="Belum dihitung")
         ttk.Label(actions, textvariable=self.status).pack(side="right")
 
@@ -87,9 +83,7 @@ class OfflineSimulatorApp:
         )
         self.input_box = tk.Text(left, wrap="none", font=("Consolas", 10), undo=True)
         self.input_box.pack(fill="both", expand=True)
-        self.output_box = tk.Text(
-            right, wrap="none", font=("Consolas", 10), state="disabled"
-        )
+        self.output_box = tk.Text(right, wrap="none", font=("Consolas", 10), state="disabled")
         self.output_box.pack(fill="both", expand=True)
         self._load_demo()
 
@@ -120,7 +114,7 @@ class OfflineSimulatorApp:
         try:
             payload = json.loads(self.input_box.get("1.0", "end"))
             result = simulate(payload)
-        except (InvalidSimulationInput, ValueError) as exc:
+        except ValueError as exc:
             self._report = None
             self.status.set("DIBLOKIR — input tidak valid")
             messagebox.showerror("Simulasi ditolak", str(exc))
