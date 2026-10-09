@@ -34,11 +34,7 @@ def build_empty_project_view(
     if route not in {"Workspace", "Hasil"}:
         raise ValueError("Unsupported project-free route")
 
-    title = (
-        "Belum ada Workspace aktif"
-        if route == "Workspace"
-        else "Belum ada hasil proyek"
-    )
+    title = "Belum ada Workspace aktif" if route == "Workspace" else "Belum ada hasil proyek"
     explanation = (
         "Impor paket episode atau buka proyek lokal dari Beranda untuk "
         "menyusun dan memeriksa Scene."
