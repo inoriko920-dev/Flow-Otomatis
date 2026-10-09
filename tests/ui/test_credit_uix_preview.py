@@ -730,9 +730,7 @@ def test_modal_groups_show_real_qt_scrim_over_readonly_workspace_and_agent(qtbot
 
 def test_policy_overlay_backdrop_uses_local_workspace_without_remote_entitlement(qtbot) -> None:
     workspace = _workspace_with_mixed_real_scenes()
-    dialog = CreditUixDialog(
-        workspace=workspace, initial_state="UIX-08-B", default_to_demo=True
-    )
+    dialog = CreditUixDialog(workspace=workspace, initial_state="UIX-08-B", default_to_demo=True)
     qtbot.addWidget(dialog)
     root = dialog.scroller.widget()
     assert root is not None
