@@ -94,7 +94,10 @@ def test_diagnostics_json_export_is_whitelist_only_and_no_overwrite(
         "includes_profile_identifiers": False,
         "includes_project_identifiers": False,
     }
-    assert "secret" not in outfile.read_text(encoding="utf-8").lower()
+    assert "secret-home" not in outfile.read_text(encoding="utf-8").lower()
+    assert "api_key" not in report
+    assert "profile_id" not in report
+    assert "cookie" not in report
     warnings: list[str] = []
     monkeypatch.setattr(
         QMessageBox,
