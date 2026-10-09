@@ -56,9 +56,8 @@ class EpisodeImportService:
                 image_sha256_imported = self._image_verifier.image_digest(
                     source_path, source_scene.scene_id, source_scene.image_file
                 )
-                if (
-                    len(image_sha256_imported) != 64
-                    or any(char not in "0123456789abcdef" for char in image_sha256_imported)
+                if len(image_sha256_imported) != 64 or any(
+                    char not in "0123456789abcdef" for char in image_sha256_imported
                 ):
                     raise InternalInvariantError(
                         "Source image verifier returned an invalid SHA-256 digest"
