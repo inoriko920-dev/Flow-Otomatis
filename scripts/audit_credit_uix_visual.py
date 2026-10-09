@@ -121,6 +121,9 @@ def main() -> int:
         encoding="utf-8",
     )
     print("Prepared 22 side-by-side comparisons; pixel parity remains UNVERIFIED")
+    print("Highest sampled RGB differences (priorities for manual layout review):")
+    for item in manifest["items_by_highest_difference"][:8]:
+        print(f"  {item['state']}: {item['mean_rgb_difference_sample']} / 255")
     return 0
 
 
