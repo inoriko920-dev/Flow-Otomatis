@@ -112,7 +112,7 @@ class ScenePlanningService:
             else scene
             for scene in workspace.scenes
         )
-        return self._save_and_reload(replace(workspace, scenes=updated))
+        return self._save_and_reload(replace(workspace, scenes=updated), expected=workspace)
 
     @staticmethod
     def _missing_duration_plan(workspace: WorkspaceState) -> tuple[tuple[str, int], ...]:
@@ -179,7 +179,9 @@ class ScenePlanningService:
                     ),
                 )
             )
-        return self._save_and_reload(replace(workspace, scenes=tuple(scenes)))
+        return self._save_and_reload(
+            replace(workspace, scenes=tuple(scenes)), expected=workspace
+        )
 
     def _find_scene(self, workspace: WorkspaceState, scene_id: str) -> WorkspaceScene:
         for scene in workspace.scenes:
@@ -196,10 +198,12 @@ class ScenePlanningService:
             updated_scene if scene.scene_id == updated_scene.scene_id else scene
             for scene in workspace.scenes
         )
-        return self._save_and_reload(replace(workspace, scenes=scenes))
+        return self._save_and_reload(replace(workspace, scenes=scenes), expected=workspace)
 
-    def _save_and_reload(self, workspace: WorkspaceState) -> WorkspaceState:
-        self._workspace_repository.update(workspace)
+    def _save_and_reload(
+        self, workspace: WorkspaceState, *, expected: WorkspaceState
+    ) -> WorkspaceState:
+        self._workspace_repository.update(workspace, expected_workspace=expected)
         persisted = self._workspace_repository.load(workspace.episode_id)
         if persisted is None:
             raise InternalInvariantError("Workspace update saved but reload returned no project")
