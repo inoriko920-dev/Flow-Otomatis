@@ -149,8 +149,7 @@ class ResultManifestWriter:
                     if (
                         current_identity == initial_dir_identity
                         and not output_dir.is_symlink()
-                        and os.path.normcase(str(canonical))
-                        == os.path.normcase(str(expected))
+                        and os.path.normcase(str(canonical)) == os.path.normcase(str(expected))
                     ):
                         temporary.unlink(missing_ok=True)
         return target
