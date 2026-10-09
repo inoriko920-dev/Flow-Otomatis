@@ -35,20 +35,14 @@ def build_account_service_unavailable_view(
 
     root = QWidget()
     root.setObjectName(
-        "RealGoogleProfilesUnavailable"
-        if route == "Profil Google"
-        else "RealGeminiKeysUnavailable"
+        "RealGoogleProfilesUnavailable" if route == "Profil Google" else "RealGeminiKeysUnavailable"
     )
     layout = QVBoxLayout(root)
     layout.setContentsMargins(20, 18, 20, 18)
     layout.setSpacing(16)
     layout.addWidget(page_header(route, "Mode lokal • Layanan belum dikonfigurasi"))
 
-    service_name = (
-        "Pengelola sesi Google"
-        if route == "Profil Google"
-        else "Pengelola kunci Gemini"
-    )
+    service_name = "Pengelola sesi Google" if route == "Profil Google" else "Pengelola kunci Gemini"
     layout.addWidget(
         info_banner(
             "LAYANAN TIDAK TERSEDIA",
