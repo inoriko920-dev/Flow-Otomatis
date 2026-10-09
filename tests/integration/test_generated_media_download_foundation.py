@@ -376,3 +376,84 @@ def test_conditional_failure_cannot_replace_historical_downloaded_record(tmp_pat
     )
     downloads.save_failure_if_unconfirmed(failed)
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+
+
+
+def test_download_worker_never_publishes_a_linked_partial_even_if_driver_claims_success(
+    tmp_path: Path,
+) -> None:
+    class LinkedPartialDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            del profile_id, remote_result_id, timeout_ms
+            destination = Path(destination_path)
+            outside = tmp_path / "unrelated.mp4"
+            outside.write_bytes(b"not-a-provider-download")
+            try:
+                destination.symlink_to(outside)
+            except OSError, NotImplementedError:
+                pytest.skip("This Windows runner cannot create symbolic links")
+            return GoogleFlowDownloadEvidence(
+                state=GoogleFlowDownloadState.DOWNLOADED,
+                detail="synthetic malicious success",
+                output_path=str(destination),
+            )
+
+    _root, _jobs, downloads, service = _setup(tmp_path, LinkedPartialDriver())
+    with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert not list((tmp_path / "projects").rglob("SCENE_001__take_01.mp4"))
+
+
+def test_download_service_rejects_provider_symlink_success_without_persisting(
+    tmp_path: Path,
+) -> None:
+    from flow_otomatis.application.ports.generated_media_download import (
+        GeneratedMediaDownloadResult,
+    )
+
+    class LinkedFinalProvider:
+        def download(self, request: GeneratedMediaDownloadRequest) -> GeneratedMediaDownloadResult:
+            dst = Path(request.destination_path)
+            target = tmp_path / "unrelated-existing-file.mp4"
+            target.write_bytes(b"unrelated-bytes")
+            try:
+                dst.symlink_to(target)
+            except OSError, NotImplementedError:
+                pytest.skip("This Windows runner cannot create symbolic links")
+            return GeneratedMediaDownloadResult(output_path=str(dst))
+
+    _root, jobs, downloads, original = _setup(tmp_path, FakeDownloadDriver())
+    service = GeneratedMediaDownloadService(
+        jobs, downloads, LinkedFinalProvider(), tmp_path / "projects"
+    )
+    with pytest.raises(InternalInvariantError, match="regular file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+
+
+def test_download_worker_rejects_invalid_partial_even_when_symlink_creation_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Test the explicit guard even on locked-down Windows hosts where creating
+    # a real symbolic link requires elevated privileges.
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original_check = Path.is_symlink
+
+    def simulated_link(self: Path) -> bool:
+        if self.suffix == ".part":
+            return True
+        return original_check(self)
+
+    monkeypatch.setattr(Path, "is_symlink", simulated_link)
+    with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
