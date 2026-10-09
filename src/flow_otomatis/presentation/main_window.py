@@ -41,6 +41,7 @@ from flow_otomatis.domain.errors import (
 )
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -915,9 +916,16 @@ class MainWindow(QMainWindow):
             workspace,
             on_rescan_images=self.rescan_workspace_images,
             on_scene_selected=self.select_workspace_scene,
+            on_preview_credit_ui=self.open_credit_uix_preview,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
+
+    def open_credit_uix_preview(self) -> None:
+        """Open the approved UIX addendum as an offline-only temporary route."""
+
+        preview = CreditUixDialog(self, workspace=self._current_workspace)
+        preview.exec()
 
     def select_workspace_scene(self, scene_id: str) -> None:
         """Select a real Scene row and refresh only the Scene Inspector."""
