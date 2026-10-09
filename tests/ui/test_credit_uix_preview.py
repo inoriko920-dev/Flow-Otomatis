@@ -625,3 +625,32 @@ def test_standalone_uix_preview_retains_seven_readonly_routes(qtbot) -> None:
     assert dock is not None and not dock.isHidden()
     assert dialog._app_shell is False
     dialog.close()
+
+
+def test_tariff_and_policy_final_panels_use_owner_approved_readonly_rows(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-08-B")
+    qtbot.addWidget(dialog)
+
+    panel = dialog.findChild(QFrame, "UixApprovedPolicyDetail")
+    assert panel is not None
+    values = " ".join(label.text() for label in panel.findChildren(QLabel))
+    assert "Pemeriksaan Kebijakan" in values
+    assert "Multi-akun bersamaan" in values
+    assert "Bukti & tanggal peninjauan" in values
+    assert "BELUM DIVERIFIKASI" in values
+    assert "Status UNKNOWN" in values
+    assert dialog.findChild(QTableWidget, "UixDetailTable").isHidden()
+    assert not dialog.live_dispatch_enabled
+
+    dialog.set_state("UIX-08-A")
+    tariff = dialog.findChild(QFrame, "UixApprovedTariffDetail")
+    assert tariff is not None
+    text = " ".join(label.text() for label in tariff.findChildren(QLabel))
+    assert "Versi tarif & sumber data" in text
+    assert "vDEMO-1" in text and "vDEMO-2" in text
+    assert "Kedaluwarsa" in text
+    assert "Model tetap" in text
+    assert dialog.findChild(QTableWidget, "UixDetailTable").isHidden()
+    assert dialog.findChild(QFrame, "UixScenarioSidePanel") is not None
+    assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
+    dialog.close()
