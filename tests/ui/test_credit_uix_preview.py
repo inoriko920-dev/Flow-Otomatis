@@ -13,6 +13,7 @@ from flow_otomatis.presentation.credit_uix_preview import (
     UIX_SCENARIOS,
     CreditUixDialog,
 )
+from flow_otomatis.presentation.main_window import MainWindow
 
 
 def test_all_22_owner_approved_states_render_and_never_offer_live(qtbot) -> None:
@@ -356,3 +357,91 @@ def test_empty_workspace_is_safe_and_zero_count_not_fake_success(qtbot) -> None:
     assert "0 baris (lokal)" in dialog.findChild(QLabel, "UixFilterCount").text()
     assert not dialog.live_dispatch_enabled
     dialog.close()
+
+def test_local_readiness_filters_and_open_scene_work_without_live(qtbot) -> None:
+    dialog = CreditUixDialog(
+        workspace=_workspace_with_mixed_real_scenes(), initial_state="UIX-01-A"
+    )
+    qtbot.addWidget(dialog)
+    status = dialog.findChild(QComboBox, "UixReadinessFilter")
+    search = dialog.findChild(QLineEdit, "UixTableSearch")
+    table = dialog.findChild(QTableWidget, "UixDetailTable")
+    count = dialog.findChild(QLabel, "UixFilterCount")
+    open_scene = dialog.findChild(QPushButton, "UixOpenSceneInWorkspace")
+    assert status is not None and open_scene is not None
+    assert status.count() == 7
+    assert table.rowCount() == 3
+
+    status.setCurrentIndex(status.findData("PROBLEM"))
+    assert count.text() == "1/3 baris (lokal)"
+    assert table.isRowHidden(0) and not table.isRowHidden(1)
+    assert table.isRowHidden(2)
+    assert open_scene.isEnabled()
+    assert not dialog.live_dispatch_enabled
+
+    search.setText("SCENE_001")
+    assert count.text() == "0/3 baris (lokal)"
+    assert not open_scene.isEnabled()
+    assert dialog.requested_scene_id is None
+
+    search.clear()
+    table.setCurrentCell(1, 0)
+    assert open_scene.isEnabled()
+    open_scene.click()
+    assert dialog.requested_scene_id == "SCENE_002"
+    assert dialog.result() == dialog.DialogCode.Accepted
+
+
+def test_demo_cannot_request_scene_and_local_filter_does_not_leak(qtbot) -> None:
+    dialog = CreditUixDialog(workspace=_workspace_with_mixed_real_scenes())
+    qtbot.addWidget(dialog)
+    source = dialog.findChild(QComboBox, "UixDataSourceSelector")
+    status = dialog.findChild(QComboBox, "UixReadinessFilter")
+    status.setCurrentIndex(status.findData("PILIH DURASI"))
+    assert dialog.findChild(QTableWidget, "UixDetailTable").isRowHidden(0)
+
+    source.setCurrentIndex(source.findData("demo"))
+    assert dialog.findChild(QComboBox, "UixReadinessFilter") is None
+    assert dialog.findChild(QPushButton, "UixOpenSceneInWorkspace") is None
+    assert dialog.findChild(QTableWidget, "UixDetailTable").rowCount() == 12
+    assert dialog.requested_scene_id is None
+    assert not dialog.live_dispatch_enabled
+
+    source.setCurrentIndex(source.findData("local"))
+    new_filter = dialog.findChild(QComboBox, "UixReadinessFilter")
+    assert new_filter.currentData() is None
+    assert dialog.findChild(QTableWidget, "UixDetailTable").rowCount() == 3
+    dialog.close()
+
+
+def test_main_window_returns_to_exact_selected_scene_without_persistence(
+    qtbot, monkeypatch
+) -> None:
+    workspace = _workspace_with_mixed_real_scenes()
+    original = repr(workspace)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+
+    def choose_scene(preview: CreditUixDialog) -> int:
+        assert preview._using_local_inputs()
+        table = preview.findChild(QTableWidget, "UixDetailTable")
+        table.setCurrentCell(2, 0)
+        open_scene = preview.findChild(QPushButton, "UixOpenSceneInWorkspace")
+        assert open_scene.isEnabled()
+        open_scene.click()
+        return int(preview.result())
+
+    monkeypatch.setattr(CreditUixDialog, "exec", choose_scene)
+    window.open_credit_uix_preview()
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert window._selected_scene_id == "SCENE_003"
+    table = next(
+        table
+        for table in window.findChildren(QTableWidget)
+        if table.columnCount() == 9 and table.rowCount() == 3
+    )
+    assert table.item(table.currentRow(), 0).text() == "S003"
+    assert window.current_workspace == workspace
+    assert repr(workspace) == original
+    window.close()
