@@ -357,7 +357,11 @@ class MainWindow(QMainWindow):
             layout.addWidget(button)
 
         layout.addStretch(1)
-        layout.addWidget(status_badge("●  Online", "success"), alignment=Qt.AlignmentFlag.AlignLeft)
+        self._sidebar_connection_badge = status_badge("●  Online", "success")
+        self._sidebar_connection_original_style = self._sidebar_connection_badge.styleSheet()
+        layout.addWidget(
+            self._sidebar_connection_badge, alignment=Qt.AlignmentFlag.AlignLeft
+        )
         layout.addWidget(muted_label("Flow-Otomatis v0.1.0"))
         return sidebar
 
@@ -482,6 +486,8 @@ class MainWindow(QMainWindow):
             # A running desktop app does NOT prove Google Flow workspace access.
             self._connection_badge.setText("●  Mode Lokal")
             self._connection_badge.setStyleSheet(self._local_badge_style)
+            self._sidebar_connection_badge.setText("●  Mode Lokal • Flow belum terverifikasi")
+            self._sidebar_connection_badge.setStyleSheet(self._local_badge_style)
             self._saved_badge.setText("●  Data Lokal")
             self._saved_badge.setStyleSheet(self._local_badge_style)
             self._runtime_status.setText("Mode lokal • Generate Flow belum aktif")
@@ -489,6 +495,8 @@ class MainWindow(QMainWindow):
             # Exact approved frozen STEP 09 reference appearance.
             self._connection_badge.setText("●  Online")
             self._connection_badge.setStyleSheet(self._connection_badge_original_style)
+            self._sidebar_connection_badge.setText("●  ●  Online")
+            self._sidebar_connection_badge.setStyleSheet(self._sidebar_connection_original_style)
             self._saved_badge.setText("●  Tersimpan")
             self._saved_badge.setStyleSheet(self._saved_badge_original_style)
             self._runtime_status.setText("Siap digunakan")
