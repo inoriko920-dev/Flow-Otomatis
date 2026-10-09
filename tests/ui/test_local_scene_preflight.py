@@ -6,13 +6,14 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from PySide6.QtWidgets import QPushButton, QTableWidget
+from PySide6.QtWidgets import QComboBox, QFileDialog, QPushButton, QTableWidget
 
 from flow_otomatis.application.services.local_scene_preflight import (
     prepare_local_scene_preflight,
 )
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
+from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
 
 
@@ -150,3 +151,61 @@ def test_preflight_keeps_all_scene_ids_safe_if_input_id_is_malformed() -> None:
     assert report["ready_count"] == 0
     assert report["held"][0]["scene_id"] == "INVALID_SCENE_ID_AT_1"
     assert "C:/private/key" not in json.dumps(report)
+
+
+def test_ui_preflight_is_local_only_and_recomputes_readonly(qtbot, monkeypatch) -> None:
+    workspace = _workspace(_scene("SCENE_001"))
+    dialog = CreditUixDialog(workspace=workspace, initial_state="UIX-01-A")
+    qtbot.addWidget(dialog)
+    button = dialog.findChild(QPushButton, "UixLocalPreflight")
+    source = dialog.findChild(QComboBox, "UixDataSourceSelector")
+    assert button is not None
+    assert button.isEnabled() and not button.isHidden()
+
+    inspections: list[dict[str, object]] = []
+
+    def inspect(preview: LocalScenePreflightDialog) -> int:
+        inspections.append(preview.report.copy())
+        return 0
+
+    monkeypatch.setattr(LocalScenePreflightDialog, "exec", inspect)
+    button.click()
+    assert len(inspections) == 1
+    assert inspections[0]["ready_count"] == 1
+    assert inspections[0]["durable_jobs_created"] is False
+
+    source.setCurrentIndex(source.findData("demo"))
+    assert button.isHidden() and not button.isEnabled()
+    dialog.show_local_preflight()
+    assert len(inspections) == 1
+    source.setCurrentIndex(source.findData("local"))
+    assert button.isEnabled()
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_preflight_export_is_create_only_and_never_overwrites(qtbot, monkeypatch, tmp_path) -> None:
+    dialog = LocalScenePreflightDialog(_workspace(_scene("SCENE_001")))
+    qtbot.addWidget(dialog)
+    path = tmp_path / "preflight.json"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *_args, **_kwargs: (str(path), "JSON (*.json)"),
+    )
+    dialog.export_json()
+    original = path.read_bytes()
+    assert json.loads(original)["live_dispatch_allowed"] is False
+
+    from PySide6.QtWidgets import QMessageBox
+
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda _parent, _title, message: warnings.append(message),
+    )
+    dialog.export_json()
+    assert warnings
+    assert path.read_bytes() == original
+    dialog.close()
