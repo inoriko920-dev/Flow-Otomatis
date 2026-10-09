@@ -346,14 +346,14 @@ def test_t21_file_publish_success_db_failure_requires_manual_reconciliation(
 ) -> None:
     driver = FakeDownloadDriver()
     root, jobs, downloads, service = _setup(tmp_path, driver)
-    real_save = downloads.save
+    real_save = downloads.save_if_current_generate
 
-    def interrupted_persistence(record):
+    def interrupted_persistence(record, remote_result_id):
         if record.state == DownloadState.DOWNLOADED:
             raise StorageError("synthetic commit failure")
-        return real_save(record)
+        return real_save(record, remote_result_id)
 
-    monkeypatch.setattr(downloads, "save", interrupted_persistence)
+    monkeypatch.setattr(downloads, "save_if_current_generate", interrupted_persistence)
     with pytest.raises(StorageError, match="synthetic"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
 
@@ -734,3 +734,53 @@ def test_download_worker_result_is_not_saved_if_generate_changed_midflight(
     job = jobs.list_for_episode("EP500_DOWNLOAD")[0]
     assert job.state is late_state
     assert job.remote_result_id == late_remote_id
+
+
+@pytest.mark.parametrize(
+    ("new_state", "new_remote_id"),
+    [
+        (GenerationJobState.QUEUED, None),
+        (GenerationJobState.FAILED, None),
+        (GenerationJobState.ATTENTION_REQUIRED, None),
+        (GenerationJobState.GENERATED, "remote:changed"),
+    ],
+)
+def test_atomic_download_commit_rejects_state_change_after_last_service_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    new_state: GenerationJobState,
+    new_remote_id: str | None,
+) -> None:
+    """Reject a Generate change made immediately before the atomic write."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    save_guarded = downloads.save_if_current_generate
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+
+    def stale_before_commit(record, remote_result_id):
+        with __import__("sqlite3").connect(database) as connection:
+            connection.execute(
+                "UPDATE generation_jobs SET state = ?, remote_result_id = ? WHERE scene_id = ?",
+                (new_state.value, new_remote_id, record.scene_id),
+            )
+            connection.commit()
+        return save_guarded(record, remote_result_id)
+
+    monkeypatch.setattr(downloads, "save_if_current_generate", stale_before_commit)
+
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    output = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert output.read_bytes() == b"fake-video"
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert len(driver.calls) == 1
+
+
+def test_atomic_download_commit_allows_matching_generated_result(tmp_path: Path) -> None:
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    record = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == record
+    assert record.state == DownloadState.DOWNLOADED
