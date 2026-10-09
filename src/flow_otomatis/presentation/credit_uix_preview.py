@@ -550,9 +550,7 @@ class CreditUixDialog(QDialog):
                     "Seluruh saldo, profil, status remote, dan biaya di panel ini adalah "
                     "DATA CONTOH. Tidak ada login, Generate, Download, atau pengeluaran kredit."
                 )
-        self.export_button.setText(
-            "Simpan Scan Lokal JSON" if local else "Simpan Simulasi JSON"
-        )
+        self.export_button.setText("Simpan Scan Lokal JSON" if local else "Simpan Simulasi JSON")
         self._current_state = code
         self._dock_state.setText(f"{code} • {scenario.title}")
         self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
@@ -736,7 +734,8 @@ class CreditUixDialog(QDialog):
             "09": "Generate / Download / berkas video",
         }
         label = QLabel(
-            "Kesiapan input Scene Workspace nyata • hanya baca" if self._using_local_inputs()
+            "Kesiapan input Scene Workspace nyata • hanya baca"
+            if self._using_local_inputs()
             else headings[code[4:6]]
         )
         label.setObjectName("SectionTitle")
