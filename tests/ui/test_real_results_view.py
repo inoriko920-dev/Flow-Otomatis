@@ -425,3 +425,46 @@ def test_stale_hasil_callbacks_cannot_open_diagnostics_or_export_different_episo
     assert window.fixture_code == "REAL_RESULTS"
     assert exports == []
     window.close()
+
+
+def test_pending_results_mounts_actionable_local_diagnostics_without_generate(qtbot) -> None:
+    now = datetime.now(UTC)
+    pending = ProjectResults(
+        episode_id="EP_PENDING_DIAGNOSTICS",
+        project_name="Pending local results",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=(
+            SceneResult(
+                scene_id="SCENE_001",
+                target_duration_s=4.0,
+                selected_flow_duration_s=4,
+                trim_target_s=4.0,
+                generate_state=None,
+                remote_result_id=None,
+                download_state=DownloadState.NOT_DOWNLOADED,
+                output_path=None,
+                take=1,
+                updated_at=now,
+            ),
+        ),
+    )
+    opened: list[str] = []
+    view = build_results_view(
+        pending,
+        on_export_manifest=lambda: opened.append("export"),
+        on_open_diagnostics=lambda: opened.append("diagnostics"),
+    )
+    qtbot.addWidget(view)
+    action = view.findChild(QPushButton, "RealResultsOpenDiagnostics")
+    assert action is not None and action.isEnabled()
+    qtbot.mouseClick(action, Qt.MouseButton.LeftButton)
+    assert opened == ["diagnostics"]
+    assert "Selesai" not in action.text()
+    assert not any(
+        button.isEnabled()
+        for button in view.findChildren(QPushButton)
+        if button.text() == "Tandai Siap untuk Editing"
+    )
+    view.close()
