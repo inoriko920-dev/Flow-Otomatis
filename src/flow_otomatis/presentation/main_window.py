@@ -1299,18 +1299,33 @@ class MainWindow(QMainWindow):
             return
         if profile_id in self._google_flow_busy:
             return
-        if sessions.get_restart_gate(profile_id).current_state is not GoogleSessionState.READY:
+        try:
+            gate = sessions.get_restart_gate(profile_id)
+        except FlowOtomatisError, OSError, ValueError:
+            # A corrupt/unreadable local profile store never enables preflight.
+            self._invalidate_google_flow(profile_id)
+            self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
+        if gate.current_state is not GoogleSessionState.READY:
             QMessageBox.warning(self, "Cek Akses Flow", "Cek Ulang Sesi Google terlebih dahulu.")
             return
 
         epoch = self._invalidate_google_flow(profile_id)
         self._google_flow_busy.add(profile_id)
-        current_profile = next(
-            (p for p in sessions.list_profiles() if p.profile_id == profile_id),
-            None,
-        )
-        if current_profile is not None:
-            self.show_google_login(current_profile)
+        try:
+            current_profile = next(
+                (p for p in sessions.list_profiles() if p.profile_id == profile_id),
+                None,
+            )
+        except FlowOtomatisError, OSError, ValueError:
+            self._invalidate_google_flow(profile_id)
+            self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
+        if current_profile is None:
+            self._invalidate_google_flow(profile_id)
+            self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
+        self.show_google_login(current_profile)
         future = preflight.check_async(profile_id)
 
         def completed(done: Future[GoogleFlowAccessProbe]) -> None:
@@ -1379,10 +1394,19 @@ class MainWindow(QMainWindow):
             or self._active_google_profile_id != profile_id
         ):
             return
-        profile = next(
-            (p for p in self._google_session_service.list_profiles() if p.profile_id == profile_id),
-            None,
-        )
+        try:
+            profile = next(
+                (
+                    p
+                    for p in self._google_session_service.list_profiles()
+                    if p.profile_id == profile_id
+                ),
+                None,
+            )
+        except FlowOtomatisError, OSError, ValueError:
+            self._invalidate_google_flow(profile_id)
+            self.show_account_service_unavailable("Profil Google", read_error=True)
+            return
         if profile is not None:
             self.show_google_login(profile)
 
