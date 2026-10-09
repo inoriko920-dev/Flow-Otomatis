@@ -202,3 +202,31 @@ def test_state_switch_resets_search_and_inspector_to_current_table(qtbot) -> Non
     assert "SCENE_001" in inspector.text()
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
+
+
+def test_tariff_change_rejects_stale_plan_and_requires_reapproval(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-08-A")
+    qtbot.addWidget(dialog)
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 5
+    decisions = [rows.item(i, 3).text() for i in range(rows.rowCount())]
+    assert "HITUNG ULANG" in decisions
+    assert "MINTA ULANG" in decisions
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_unverified_provider_policy_disables_live_and_exposes_all_gates(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-08-B")
+    qtbot.addWidget(dialog)
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 5
+    statuses = [rows.item(i, 2).text() for i in range(rows.rowCount())]
+    assert statuses.count("BELUM TERVERIFIKASI") == 2
+    assert "BELUM LULUS" in statuses
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
+    assert any("G1 • KEBIJAKAN" in label for label in labels)
+    assert any("G5 • KREDIT" in label for label in labels)
+    assert any("G6 • SESI" in label for label in labels)
+    assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
+    dialog.close()
