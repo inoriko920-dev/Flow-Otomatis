@@ -19,6 +19,8 @@ def main() -> int:
     if app is None:
         app = QApplication([])
     dialog = CreditUixDialog()
+    # The approved UI references are 1920x1080 screenshots; keep render canvas exact.
+    dialog.resize(1920, 1080)
     dialog.show()
     for scenario in UIX_SCENARIOS:
         dialog.set_state(scenario.code)
