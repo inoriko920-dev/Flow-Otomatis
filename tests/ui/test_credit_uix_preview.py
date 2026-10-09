@@ -235,6 +235,7 @@ def test_unverified_provider_policy_disables_live_and_exposes_all_gates(qtbot) -
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
 
+
 def _workspace_with_mixed_real_scenes() -> WorkspaceState:
     examples = (
         ("SCENE_001", True, "Pan over an ancient map", 8, SceneReadiness.READY),
