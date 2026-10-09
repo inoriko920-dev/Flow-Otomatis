@@ -646,9 +646,7 @@ class CreditUixDialog(QDialog):
             scrim = QFrame(root)
             scrim.setObjectName("UixModalScrim")
             scrim.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            scrim.setStyleSheet(
-                "QFrame#UixModalScrim { background-color: rgba(15, 23, 42, 145); }"
-            )
+            scrim.setStyleSheet("QFrame#UixModalScrim { background-color: rgba(15, 23, 42, 145); }")
             page_layout = QVBoxLayout(scrim)
             page_layout.setContentsMargins(12, 12, 12, 12)
             page_layout.setSpacing(12)
@@ -1022,9 +1020,7 @@ class CreditUixDialog(QDialog):
         )
         panel = QFrame()
         panel.setObjectName("UixBackdropWorkspace")
-        panel.setStyleSheet(
-            f"QFrame#UixBackdropWorkspace {{ background: {theme.SURFACE_ALT}; }}"
-        )
+        panel.setStyleSheet(f"QFrame#UixBackdropWorkspace {{ background: {theme.SURFACE_ALT}; }}")
         left = QVBoxLayout(panel)
         left.setContentsMargins(16, 16, 16, 16)
         left.setSpacing(14)
@@ -1052,9 +1048,7 @@ class CreditUixDialog(QDialog):
         )
         table.setRowCount(len(scene_names))
         for row, name in enumerate(scene_names):
-            for column, value in enumerate(
-                (name, "Flow 720p", "Periksa file", "BELUM GENERATE")
-            ):
+            for column, value in enumerate((name, "Flow 720p", "Periksa file", "BELUM GENERATE")):
                 table.setItem(row, column, QTableWidgetItem(value))
         table.horizontalHeader().setStretchLastSection(True)
         left.addWidget(table, 1)
