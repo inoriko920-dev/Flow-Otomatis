@@ -98,6 +98,13 @@ def test_preflight_refuses_unknown_or_missing_local_profile(tmp_path: Path) -> N
         ("https://flow.google.com/project/example", 200, GoogleFlowAccessState.REACHABLE_ONLY),
         ("https://flow.google.com/onboarding", 200, GoogleFlowAccessState.UNAVAILABLE),
         ("https://flow.google.com/project/example", 403, GoogleFlowAccessState.UNAVAILABLE),
+        ("http://flow.google.com/project/example", 200, GoogleFlowAccessState.UNKNOWN),
+        ("ftp://labs.google/fx/tools/flow", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:8443/project/example", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:invalid/project", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://user@flow.google.com/project", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://accounts.google.com:8443/", 401, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:443/project", 200, GoogleFlowAccessState.REACHABLE_ONLY),
         (
             "https://flow.google.com.evil.example/project/example",
             200,
