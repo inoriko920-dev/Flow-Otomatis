@@ -147,7 +147,10 @@ def build_workspace_view(
     scan_button.clicked.connect(on_rescan_images)
     if on_preview_credit_ui is not None:
         # Add only to the real Workspace controls; frozen reference views remain unchanged.
-        action_row = scan_button.parentWidget().layout()
+        toolbar_parent = scan_button.parentWidget()
+        if toolbar_parent is None:
+            raise RuntimeError("Workspace controls parent is missing")
+        action_row = toolbar_parent.layout()
         if action_row is None:
             raise RuntimeError("Workspace controls layout is missing")
         preview_button = QPushButton("Pratinjau 22 UI Multiakun (Simulasi)")
