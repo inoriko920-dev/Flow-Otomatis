@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtWidgets import QLabel, QPushButton, QTableWidget, QTableWidgetItem, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QWidget
 
 from flow_otomatis.application.ports.workspace_repository import WorkspaceReadIssue
 from flow_otomatis.domain.project import WorkspaceState
@@ -45,8 +45,8 @@ def build_project_hub_view(
         import_button.clicked.connect(on_import)
         if on_preview_ui is not None:
             actions = import_button.parentWidget()
-            row = actions.layout() if actions is not None else None
-            if row is not None:
+            actions_layout = actions.layout() if actions is not None else None
+            if isinstance(actions_layout, QHBoxLayout):
                 preview_button = QPushButton("Lihat 22 Desain UI Baru")
                 preview_button.setObjectName("ProjectHubUix22Preview")
                 preview_button.setToolTip(
@@ -54,7 +54,7 @@ def build_project_hub_view(
                     "tanpa login atau Generate; tidak memerlukan project."
                 )
                 preview_button.clicked.connect(on_preview_ui)
-                row.insertWidget(1, preview_button)
+                actions_layout.insertWidget(1, preview_button)
 
     if not total_entries:
         return root
