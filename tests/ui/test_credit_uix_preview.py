@@ -512,6 +512,7 @@ def test_approved_dialog_scenarios_keep_centered_native_modal_surface(qtbot) -> 
         modal = root.findChild(QFrame, "UixScenarioModal")
         assert modal is not None
         assert modal.maximumWidth() == 1120
+        assert 680 <= modal.minimumWidth() <= 1120
         assert root.findChild(QTableWidget, "UixDetailTable") is not None
         if code in {"UIX-08-A", "UIX-08-B"}:
             details = root.findChild(QFrame, "UixScenarioSidePanel")
