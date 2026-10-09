@@ -684,6 +684,43 @@ class CreditUixDialog(QDialog):
                     "info",
                 )
             )
+        elif code == "UIX-02-A":
+            progress = QFrame()
+            progress.setObjectName("UixSmartCreditPlanStepper")
+            stages = QHBoxLayout(progress)
+            stages.setContentsMargins(2, 7, 2, 7)
+            stages.setSpacing(8)
+            for index, title in enumerate((
+                "1. Scan selesai",
+                "2. Bagi scene",
+                "3. Tinjau anggaran",
+            )):
+                stage = QLabel(title)
+                stage.setObjectName("UixSmartCreditPlanStage")
+                stage.setStyleSheet(
+                    f"font-weight: 600; color: "
+                    f"{theme.PRIMARY if index < 2 else theme.MUTED};"
+                )
+                stages.addWidget(stage, 1)
+            layout.addWidget(progress)
+        elif code == "UIX-08-A":
+            layout.addWidget(
+                info_banner(
+                    "Persetujuan rencana v3 sudah kedaluwarsa",
+                    "Versi tarif berubah atau sumbernya tidak lagi valid. "
+                    "Jangan gunakan estimasi lama untuk Generate.",
+                    "warning",
+                )
+            )
+        elif code == "UIX-08-B":
+            layout.addWidget(
+                info_banner(
+                    "G1 — Izin otomatisasi belum dapat dipastikan",
+                    "Login berhasil bukan bukti izin Generate otomatis atau multi-akun. "
+                    "Tindakan live diblokir hingga kebijakan dan kelayakan diverifikasi.",
+                    "warning",
+                )
+            )
         else:
             layout.addWidget(info_banner(scenario.banner, scenario.detail, scenario.severity))
 
