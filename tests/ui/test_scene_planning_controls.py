@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMessageBox, QPushButton
+from PySide6.QtWidgets import QMessageBox, QPushButton, QTableWidget
 
 from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
@@ -134,4 +135,72 @@ def test_bulk_duration_control_does_not_appear_on_frozen_fixture(qtbot) -> None:
     qtbot.addWidget(window)
     assert window.findChild(QPushButton, "WorkspaceBulkDurationAction") is None
     assert window.auto_fill_scene_durations() is None
+    window.close()
+
+
+def test_workspace_confirmation_refuses_changes_made_during_modal(
+    tmp_path: Path, qtbot, monkeypatch
+) -> None:
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repository, image_verifier=reader)
+    planner = ScenePlanningService(reader, repository)
+    workspace = importer.import_package(_package(tmp_path / "episode"))
+    window = MainWindow(episode_import_service=importer, scene_planning_service=planner)
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    warnings: list[str] = []
+
+    def other_editor_updates_duration(
+        _parent, _title: str, _message: str, *_args
+    ) -> QMessageBox.StandardButton:
+        planner.select_flow_duration(workspace.episode_id, "SCENE_016", 10)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", other_editor_updates_duration)
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda _parent, _title, message: warnings.append(message),
+    )
+    button = window.findChild(QPushButton, "WorkspaceBulkDurationAction")
+    assert button is not None
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert any("berubah setelah pratinjau" in message for message in warnings)
+    assert planner.load_workspace(workspace.episode_id).scenes[0].selected_flow_duration_s == 10
+    assert window.current_workspace is not None
+    assert window.current_workspace.scenes[0].selected_flow_duration_s == 10
+    window.close()
+
+
+def test_keyboard_row_navigation_updates_real_scene_inspector(
+    tmp_path: Path, qtbot
+) -> None:
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repository)
+    workspace = importer.import_package(_package(tmp_path / "episode"))
+    second_scene = replace(
+        workspace.scenes[0],
+        scene_id="SCENE_017",
+        motion_prompt="Unique second Scene prompt",
+    )
+    workspace = replace(workspace, scenes=(*workspace.scenes, second_scene))
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    table = next(
+        child
+        for child in window.findChildren(QTableWidget)
+        if child.columnCount() == 9 and child.rowCount() == 2
+    )
+
+    assert window._selected_scene_id == "SCENE_016"
+    table.setCurrentCell(1, 0)
+    assert window._selected_scene_id == "SCENE_017"
+    assert window.current_workspace is workspace
+    table.setCurrentCell(0, 0)
+    assert window._selected_scene_id == "SCENE_016"
+    window.select_workspace_scene("SCENE_UNKNOWN")
+    assert window._selected_scene_id == "SCENE_016"
     window.close()
