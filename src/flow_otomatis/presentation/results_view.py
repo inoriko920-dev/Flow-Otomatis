@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -20,7 +21,12 @@ from flow_otomatis.domain.job import GenerationJobState
 from flow_otomatis.domain.result import DownloadState, ProjectResults
 from flow_otomatis.presentation.fixtures import get_fixture
 from flow_otomatis.presentation.screen_factory import build_screen
-from flow_otomatis.presentation.widgets import info_banner, page_header, primary_button
+from flow_otomatis.presentation.widgets import (
+    info_banner,
+    page_header,
+    primary_button,
+    secondary_button,
+)
 
 
 def _display_scene_id(scene_id: str) -> str:
@@ -163,6 +169,7 @@ def build_results_view(
                 "FLOW_OTOMATIS_RESULT.json siap diekspor."
             )
 
+    diagnostics_button_found = False
     for button in root.findChildren(QPushButton):
         if button.text() == "Tandai Siap untuk Editing":
             button.setEnabled(results.handoff_ready)
@@ -171,6 +178,7 @@ def build_results_view(
             else:
                 button.setToolTip("Semua file hasil harus tersedia sebelum ekspor manifest.")
         elif button.text() == "Buka Diagnostik":
+            diagnostics_button_found = True
             # This is a real local-only route, not a Google Flow retry.
             button.setObjectName("RealResultsOpenDiagnostics")
             button.setEnabled(on_open_diagnostics is not None)
@@ -183,4 +191,30 @@ def build_results_view(
             # No safe verified folder-open or retry action has been integrated.
             button.setEnabled(False)
             button.setToolTip("Aksi ini belum tersedia dari halaman hasil lokal.")
+
+    if on_open_diagnostics is not None and not diagnostics_button_found:
+        # Ready Hasil (003C) has Export + Folder but no Diagnostik button;
+        # pending Hasil (003A) has no footer actions at all. Add navigation
+        # to the real view only, without altering frozen screenshot fixtures.
+        open_diagnostics = secondary_button("Buka Diagnostik")
+        open_diagnostics.setObjectName("RealResultsOpenDiagnostics")
+        open_diagnostics.setToolTip("Periksa keadaan aplikasi dan proyek lokal.")
+        open_diagnostics.clicked.connect(on_open_diagnostics)
+        output_folder_button = next(
+            (
+                button
+                for button in root.findChildren(QPushButton)
+                if button.text() == "Buka Folder Output"
+            ),
+            None,
+        )
+        footer = output_folder_button.parentWidget() if output_folder_button is not None else None
+        footer_layout = footer.layout() if footer is not None else None
+        if isinstance(footer_layout, QHBoxLayout):
+            footer_layout.addWidget(open_diagnostics)
+        else:
+            layout = root.layout()
+            if not isinstance(layout, QVBoxLayout):
+                raise RuntimeError("Approved Hasil layout has no footer container")
+            layout.addWidget(open_diagnostics, alignment=Qt.AlignmentFlag.AlignRight)
     return root
