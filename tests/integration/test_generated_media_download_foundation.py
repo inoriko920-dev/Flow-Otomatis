@@ -460,3 +460,106 @@ def test_download_worker_rejects_invalid_partial_even_when_symlink_creation_unav
     failure = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert failure is not None and failure.state == DownloadState.FAILED
     assert failure.output_path is None
+
+
+def test_service_refuses_redirected_project_download_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A downloaded MP4 must not escape the configured project root."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    original_is_junction = Path.is_junction
+
+    def simulated_junction(self: Path) -> bool:
+        return self == directory or original_is_junction(self)
+
+    # Deterministic on Windows runners without symlink creation privileges.
+    monkeypatch.setattr(Path, "is_junction", simulated_junction)
+    with pytest.raises(InternalInvariantError, match="redirected"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    assert not directory.exists()
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert driver.calls == []
+
+
+def test_service_refuses_real_symlinked_download_folder(
+    tmp_path: Path,
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    outside = tmp_path / "unrelated-output"
+    outside.mkdir()
+    redirected = root / "EP500_DOWNLOAD" / "downloads"
+    try:
+        redirected.symlink_to(outside, target_is_directory=True)
+    except OSError, NotImplementedError:
+        pytest.skip("Runner cannot create a directory symbolic link")
+
+    with pytest.raises(InternalInvariantError, match="redirected"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert list(outside.iterdir()) == []
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert driver.calls == []
+
+
+def test_download_worker_direct_call_blocks_redirected_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A direct worker caller cannot bypass the main service's path gate."""
+
+    driver = FakeDownloadDriver()
+    worker = GoogleFlowDownloadProvider("profile-safe", driver)
+    target = tmp_path / "downloads" / "SCENE_001__take_01.mp4"
+    original_is_symlink = Path.is_symlink
+
+    def redirected(self: Path) -> bool:
+        return self == target.parent or original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", redirected)
+    request = GeneratedMediaDownloadRequest(
+        episode_id="EP500_DOWNLOAD",
+        scene_id="SCENE_001",
+        remote_result_id="remote:SCENE_001",
+        destination_path=str(target),
+    )
+    with pytest.raises(MediaDownloadProviderError, match="folder is redirected"):
+        worker.download(request)
+    assert driver.calls == []
+    assert not target.exists()
+
+
+def test_download_worker_rejects_parent_redirected_during_async_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Late junction swap leaves the private .part, never publishes MP4."""
+
+    driver = FakeDownloadDriver()
+    worker = GoogleFlowDownloadProvider("profile-safe", driver)
+    target = tmp_path / "downloads" / "SCENE_001__take_01.mp4"
+    checks = 0
+    original_is_junction = Path.is_junction
+
+    def redirected_after_driver(self: Path) -> bool:
+        nonlocal checks
+        if self == target.parent:
+            checks += 1
+            return checks >= 2
+        return original_is_junction(self)
+
+    monkeypatch.setattr(Path, "is_junction", redirected_after_driver)
+    request = GeneratedMediaDownloadRequest(
+        episode_id="EP500_DOWNLOAD",
+        scene_id="SCENE_001",
+        remote_result_id="remote:SCENE_001",
+        destination_path=str(target),
+    )
+    with pytest.raises(MediaDownloadAmbiguousError, match="changed during the attempt"):
+        worker.download(request)
+    assert len(driver.calls) == 1
+    assert not target.exists()
+    partials = list(target.parent.glob("*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"fake-video"
