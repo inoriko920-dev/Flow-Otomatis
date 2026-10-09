@@ -46,7 +46,17 @@ def _link_directory(link: Path, destination: Path) -> None:
 
 def test_rejects_traversal_and_backslash_in_episode_before_any_write(tmp_path: Path) -> None:
     writer = ResultManifestWriter(tmp_path / "projects")
-    for unsafe_id in ("../outside", "..", "EP\\..\\outside", "/outside", "EP/other"):
+    for unsafe_id in (
+        "../outside",
+        "..",
+        "EP\\..\\outside",
+        "/outside",
+        "EP/other",
+        "C:outside",
+        "EP:alternate-stream",
+        "EP_TRAILING.",
+        "EP_TRAILING ",
+    ):
         with pytest.raises(InternalInvariantError, match="Unsafe episode identity"):
             writer.write(replace(_results("unsafe"), episode_id=unsafe_id))
     assert not (tmp_path / "outside").exists()
