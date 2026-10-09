@@ -153,7 +153,13 @@ def build_workspace_view(
         if 0 <= row < len(workspace.scenes):
             on_scene_selected(workspace.scenes[row].scene_id)
 
-    table.cellClicked.connect(notify_selected)
+    # currentCellChanged handles mouse, keyboard arrows and programmatic
+    # row selection; cellClicked alone left the Scene Inspector stale.
+    # Connect after the initial selection to avoid rebuilding the Inspector
+    # while the Workspace table is still being constructed.
+    table.currentCellChanged.connect(
+        lambda row, column, _old_row, _old_column: notify_selected(row, column)
+    )
     scan_button = _button(root, "Scan Ulang Gambar")
     scan_button.clicked.connect(on_rescan_images)
     if (
