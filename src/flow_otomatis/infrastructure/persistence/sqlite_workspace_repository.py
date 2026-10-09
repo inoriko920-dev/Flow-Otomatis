@@ -202,6 +202,12 @@ class SqliteWorkspaceRepository:
         try:
             with self._connect_readonly(db_path) as connection:
                 connection.row_factory = sqlite3.Row
+                # Both SELECTs must see one stable SQLite snapshot. Without an
+                # explicit read transaction a concurrent writer can commit
+                # between the project and scenes queries, creating a hybrid
+                # Workspace with metadata and Scenes from different revisions.
+                # BEGIN is read-only on this mode=ro connection.
+                connection.execute("BEGIN")
                 project = connection.execute("SELECT * FROM project WHERE singleton = 1").fetchone()
                 if project is None:
                     return None
