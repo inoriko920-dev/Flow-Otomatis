@@ -521,6 +521,7 @@ class MainWindow(QMainWindow):
             issues=scan.issues,
             on_open=self._open_local_project_from_ui,
             on_import=self._choose_episode_package,
+            on_preview_ui=self.open_credit_uix_preview,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
@@ -1157,7 +1158,10 @@ class MainWindow(QMainWindow):
         """Open the approved UIX addendum as an offline-only temporary route."""
 
         preview = CreditUixDialog(
-            self, workspace=self._current_workspace, image_verifier=self._image_verifier
+            self,
+            workspace=self._current_workspace,
+            image_verifier=self._image_verifier,
+            default_to_demo=True,
         )
         workspace = self._current_workspace
         preview.exec()
