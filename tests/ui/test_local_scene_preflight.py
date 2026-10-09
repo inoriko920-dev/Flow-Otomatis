@@ -15,6 +15,7 @@ from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
+from flow_otomatis.presentation.main_window import MainWindow
 
 
 def _scene(
@@ -209,3 +210,116 @@ def test_preflight_export_is_create_only_and_never_overwrites(qtbot, monkeypatch
     assert warnings
     assert path.read_bytes() == original
     dialog.close()
+
+
+def test_preflight_opens_held_scene_from_main_workspace_without_mutation(
+    qtbot, monkeypatch
+) -> None:
+    workspace = _workspace(
+        _scene("SCENE_001"),
+        _scene(
+            "SCENE_002",
+            image=False,
+            readiness=SceneReadiness.MISSING_IMAGE,
+        ),
+    )
+    original = repr(workspace)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    button = window.findChild(QPushButton, "LocalPreflightWorkspaceAction")
+    assert button is not None
+    assert button.isEnabled()
+
+    def choose_scene(dialog: LocalScenePreflightDialog) -> int:
+        assert dialog.report["ready_count"] == 1
+        assert dialog.report["held_count"] == 1
+        table = dialog.findChild(QTableWidget, "LocalPreflightTable")
+        table.setCurrentCell(1, 0)
+        open_button = dialog.findChild(QPushButton, "LocalPreflightOpenScene")
+        assert open_button.isEnabled()
+        open_button.click()
+        return int(dialog.result())
+
+    monkeypatch.setattr(LocalScenePreflightDialog, "exec", choose_scene)
+    button.click()
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert window._selected_scene_id == "SCENE_002"
+    table = next(
+        view
+        for view in window.findChildren(QTableWidget)
+        if view.columnCount() == 9 and view.rowCount() == 2
+    )
+    assert table.item(table.currentRow(), 0).text() == "S002"
+    assert window.current_workspace is workspace
+    assert repr(workspace) == original
+    window.close()
+
+
+def test_preflight_navigation_rejects_duplicate_ids_and_stale_context(qtbot, monkeypatch) -> None:
+    duplicate = _workspace(_scene("SCENE_001"), _scene("SCENE_001"))
+    dialog = LocalScenePreflightDialog(duplicate)
+    qtbot.addWidget(dialog)
+    table = dialog.findChild(QTableWidget, "LocalPreflightTable")
+    open_button = dialog.findChild(QPushButton, "LocalPreflightOpenScene")
+    for row in range(2):
+        table.setCurrentCell(row, 0)
+        assert not open_button.isEnabled()
+    dialog._request_open_scene()
+    assert dialog.requested_scene_id is None
+    dialog.close()
+
+    workspace = _workspace(_scene("SCENE_001"), _scene("SCENE_002"))
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    original = window._selected_scene_id
+
+    def change_workspace_during_preflight(view: LocalScenePreflightDialog) -> int:
+        view.table.setCurrentCell(1, 0)
+        view._request_open_scene()
+        window.show_workspace_state(duplicate)
+        return int(view.result())
+
+    monkeypatch.setattr(LocalScenePreflightDialog, "exec", change_workspace_during_preflight)
+    window.open_local_scene_preflight()
+    assert window.current_workspace is duplicate
+    assert window._selected_scene_id != "SCENE_002"
+    assert original == "SCENE_001"
+    window.close()
+
+
+def test_preflight_cancel_and_empty_workspace_have_no_navigation(qtbot, monkeypatch) -> None:
+    dialog = LocalScenePreflightDialog(_workspace())
+    qtbot.addWidget(dialog)
+    assert dialog.table.rowCount() == 0
+    assert not dialog.open_scene_button.isEnabled()
+    assert dialog.requested_scene_id is None
+    dialog.close()
+
+    workspace = _workspace(_scene("SCENE_001"), _scene("SCENE_002"))
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    monkeypatch.setattr(LocalScenePreflightDialog, "exec", lambda _dialog: 0)
+    window.open_local_scene_preflight()
+    assert window._selected_scene_id == "SCENE_001"
+    assert window.current_workspace is workspace
+    window.close()
+
+
+def test_preflight_nested_ui_dialog_can_return_selected_scene(qtbot, monkeypatch) -> None:
+    workspace = _workspace(_scene("SCENE_001"), _scene("SCENE_002"))
+    preview = CreditUixDialog(workspace=workspace)
+    qtbot.addWidget(preview)
+
+    def select_second(dialog: LocalScenePreflightDialog) -> int:
+        dialog.table.setCurrentCell(1, 0)
+        dialog.open_scene_button.click()
+        return int(dialog.result())
+
+    monkeypatch.setattr(LocalScenePreflightDialog, "exec", select_second)
+    preview.show_local_preflight()
+    assert preview.requested_scene_id == "SCENE_002"
+    assert preview.result() == preview.DialogCode.Accepted
+    assert not preview.live_dispatch_enabled
