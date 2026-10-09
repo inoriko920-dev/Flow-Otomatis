@@ -421,9 +421,7 @@ def test_image_byte_verification_is_unavailable_until_verifier_is_injected(qtbot
 def test_partial_missing_scene_is_not_claimed_as_all_image_bytes_verified() -> None:
     workspace = _workspace(
         _scene("SCENE_001"),
-        _scene(
-            "SCENE_002", image=False, readiness=SceneReadiness.MISSING_IMAGE
-        ),
+        _scene("SCENE_002", image=False, readiness=SceneReadiness.MISSING_IMAGE),
     )
     reader = _LocalImageReader()
     report = prepare_local_scene_preflight(workspace, image_verifier=reader)
@@ -437,9 +435,7 @@ def test_partial_missing_scene_is_not_claimed_as_all_image_bytes_verified() -> N
     assert [call[1] for call in reader.calls] == ["SCENE_001"]
 
     only_missing = prepare_local_scene_preflight(
-        _workspace(
-            _scene("SCENE_003", image=False, readiness=SceneReadiness.MISSING_IMAGE)
-        ),
+        _workspace(_scene("SCENE_003", image=False, readiness=SceneReadiness.MISSING_IMAGE)),
         image_verifier=reader,
     )
     assert only_missing["verified_image_count"] == 0
