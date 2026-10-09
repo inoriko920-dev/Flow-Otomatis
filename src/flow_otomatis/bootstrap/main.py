@@ -84,6 +84,7 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         fixture_code=fixture_code,
         episode_import_service=import_service,
         scene_planning_service=planning_service,
+        image_verifier=package_reader,
         project_library_service=library_service,
         local_results_service=results_service,
         google_session_service=google_session_service,
