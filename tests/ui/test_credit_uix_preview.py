@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QProgressBar,
     QTableWidget,
 )
 
@@ -550,4 +551,38 @@ def test_approved_credit_states_are_right_aligned_readonly_drawers(qtbot) -> Non
         assert not dialog.live_dispatch_enabled
     dialog.set_state("UIX-02-A")
     assert dialog.scroller.widget().findChild(QFrame, "UixCreditDrawer") is None
+    dialog.close()
+
+
+def test_final_approved_mockup_summary_metrics_and_profile_bars(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-A")
+    qtbot.addWidget(dialog)
+    assert [(label, value) for label, value, _note, _kind in dialog._metrics_for("UIX-02-A")] == [
+        ("Scene Diperiksa", "12 dari 60"),
+        ("Siap Dialokasikan", "10 scene"),
+        ("Perlu Perhatian", "2 scene"),
+        ("Total Estimasi", "105 kredit*"),
+    ]
+    bars = dialog.findChildren(QProgressBar, "UixExampleCreditBar")
+    assert sorted((bar.value(), bar.maximum()) for bar in bars) == [
+        (21, 45),
+        (42, 55),
+        (42, 65),
+    ]
+    assert not dialog.live_dispatch_enabled
+
+    assert [(label, value) for label, value, _note, _kind in dialog._metrics_for("UIX-08-A")] == [
+        ("Total Proyek", "60 scene"),
+        ("Sudah Diperiksa", "12 dari 60"),
+        ("Input Siap", "10 scene"),
+        ("Butuh Perbaikan", "2 scene"),
+    ]
+    dialog.set_state("UIX-08-B")
+    assert [(label, value) for label, value, _note, _kind in dialog._metrics_for("UIX-08-B")] == [
+        ("Kebijakan", "BELUM DIVERIFIKASI"),
+        ("Profil Contoh", "3 PROFIL"),
+        ("Generate Live", "DINONAKTIFKAN"),
+        ("Scene Diperiksa", "12 DARI 60"),
+    ]
+    assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
