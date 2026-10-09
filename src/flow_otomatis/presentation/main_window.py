@@ -922,10 +922,58 @@ class MainWindow(QMainWindow):
             on_scene_selected=self.select_workspace_scene,
             on_preview_credit_ui=self.open_credit_uix_preview,
             on_local_preflight=self.open_local_scene_preflight,
+            on_bulk_durations=self.auto_fill_scene_durations,
             selected_scene_id=self._selected_scene_id,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
+
+    def auto_fill_scene_durations(self) -> WorkspaceState | None:
+        """Preview and explicitly confirm one safe bulk local duration update."""
+        if self._fixture_code != "REAL_WORKSPACE" or self._current_workspace is None:
+            return None
+        if self._scene_planning_service is None:
+            raise InternalInvariantError("Scene planning service is not configured")
+        episode_id = self._current_workspace.episode_id
+        try:
+            plan = self._scene_planning_service.preview_missing_recommended_durations(episode_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Rencana Durasi Tidak Tersedia", str(exc))
+            return None
+        if not plan:
+            QMessageBox.information(
+                self,
+                "Tidak Ada Durasi yang Perlu Diisi",
+                "Semua durasi sudah dipilih, atau ada Target yang perlu diperbaiki manual.",
+            )
+            return None
+        distribution = {duration: 0 for duration in (4, 6, 8, 10)}
+        for _scene_id, duration in plan:
+            distribution[duration] += 1
+        breakdown = " • ".join(
+            f"{duration}s: {distribution[duration]}" for duration in (4, 6, 8, 10)
+        )
+        confirm = QMessageBox.question(
+            self,
+            "Konfirmasi Durasi Flow Massal",
+            f"Isi durasi rekomendasi untuk {len(plan)} Scene yang belum dipilih?\n"
+            f"{breakdown}\n\n"
+            "Pilihan manual, target narasi, dan checksum gambar tetap sama. "
+            "Tidak membuat antrean atau menjalankan Google Flow.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return None
+        try:
+            workspace = self._scene_planning_service.fill_missing_recommended_durations(
+                episode_id
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Tidak Dapat Mengisi Durasi", str(exc))
+            return None
+        self.show_workspace_state(workspace)
+        return workspace
 
     def open_local_scene_preflight(self) -> None:
         """Audit real Workspace Scene metadata; do not touch durable generation jobs."""
