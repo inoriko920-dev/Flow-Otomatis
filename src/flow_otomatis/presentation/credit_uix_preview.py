@@ -690,16 +690,17 @@ class CreditUixDialog(QDialog):
             stages = QHBoxLayout(progress)
             stages.setContentsMargins(2, 7, 2, 7)
             stages.setSpacing(8)
-            for index, title in enumerate((
-                "1. Scan selesai",
-                "2. Bagi scene",
-                "3. Tinjau anggaran",
-            )):
+            for index, title in enumerate(
+                (
+                    "1. Scan selesai",
+                    "2. Bagi scene",
+                    "3. Tinjau anggaran",
+                )
+            ):
                 stage = QLabel(title)
                 stage.setObjectName("UixSmartCreditPlanStage")
                 stage.setStyleSheet(
-                    f"font-weight: 600; color: "
-                    f"{theme.PRIMARY if index < 2 else theme.MUTED};"
+                    f"font-weight: 600; color: {theme.PRIMARY if index < 2 else theme.MUTED};"
                 )
                 stages.addWidget(stage, 1)
             layout.addWidget(progress)
