@@ -138,10 +138,7 @@ class GeneratedMediaDownloadService:
         project = root / episode_id
         directory = project / "downloads"
         try:
-            if any(
-                node.is_symlink() or node.is_junction()
-                for node in (root, project, directory)
-            ):
+            if any(node.is_symlink() or node.is_junction() for node in (root, project, directory)):
                 raise InternalInvariantError(
                     "Project download directory is redirected; manual reconciliation required."
                 )
