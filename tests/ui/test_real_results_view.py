@@ -835,13 +835,16 @@ def test_handoff_does_not_claim_ready_when_download_row_lacks_generated_job(
     assert "Handoff belum siap" in text
     assert "FLOW_OTOMATIS_RESULT.json siap diekspor." not in text
 
-    editing = next(
+    # The approved pending-state screen intentionally has no editing
+    # action. If a future UI variant supplies one, it must stay disabled.
+    editing = [
         button
         for button in view.findChildren(QPushButton)
         if button.text() == "Tandai Siap untuk Editing"
-    )
-    assert not editing.isEnabled()
-    qtbot.mouseClick(editing, Qt.MouseButton.LeftButton)
+    ]
+    assert not any(button.isEnabled() for button in editing)
+    for button in editing:
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert exported == []
     view.close()
     window.close()
