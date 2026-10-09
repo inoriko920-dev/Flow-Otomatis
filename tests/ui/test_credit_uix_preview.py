@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QLineEdit, QPushButton, QTableWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QLineEdit, QPushButton, QTableWidget
 
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
@@ -486,4 +486,23 @@ def test_uix_screen_paging_has_safe_edges_and_no_live_action(qtbot) -> None:
     assert dialog.current_state == "UIX-09-A"
     assert dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled() is False
     assert dialog.minimumHeight() <= 700
+    dialog.close()
+
+
+def test_approved_dialog_scenarios_keep_centered_native_modal_surface(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-08-B")
+    qtbot.addWidget(dialog)
+    for code in ("UIX-02-A", "UIX-04-A", "UIX-07-B", "UIX-08-A", "UIX-08-B"):
+        dialog.set_state(code)
+        root = dialog.scroller.widget()
+        assert root is not None
+        modal = root.findChild(QFrame, "UixScenarioModal")
+        assert modal is not None
+        assert modal.maximumWidth() == 950
+        assert root.findChild(QTableWidget, "UixDetailTable") is not None
+        assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
+    dialog.set_state("UIX-05-C")
+    root = dialog.scroller.widget()
+    assert root is not None
+    assert root.findChild(QFrame, "UixScenarioModal") is None
     dialog.close()
