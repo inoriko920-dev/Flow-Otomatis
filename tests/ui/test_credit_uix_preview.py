@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QLineEdit, QPushButton, QTableWidget
 
 from flow_otomatis.presentation.credit_uix_preview import (
@@ -229,4 +233,125 @@ def test_unverified_provider_policy_disables_live_and_exposes_all_gates(qtbot) -
     assert any(name.startswith("G5") for name in gate_names)
     assert any(name.startswith("G6") for name in gate_names)
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
+    dialog.close()
+
+def _workspace_with_mixed_real_scenes() -> WorkspaceState:
+    examples = (
+        ("SCENE_001", True, "Pan over an ancient map", 8, SceneReadiness.READY),
+        ("SCENE_002", False, "Missing artwork", 6, SceneReadiness.MISSING_IMAGE),
+        (
+            "SCENE_003",
+            True,
+            "Slow zoom with clean lighting",
+            None,
+            SceneReadiness.NEEDS_DURATION_SELECTION,
+        ),
+    )
+    scenes = tuple(
+        WorkspaceScene(
+            scene_id=scene_id,
+            image_file=f"C:/private/frames/{scene_id}.png",
+            image_exists=has_image,
+            motion_prompt=prompt,
+            target_duration_s=5.5,
+            recommended_flow_duration_s=6,
+            selected_flow_duration_s=chosen_duration,
+            readiness=readiness,
+            trim_target_s=5.5,
+            model="Omni Flash 1.1",
+            resolution="720p",
+            aspect_ratio="16:9",
+        )
+        for scene_id, has_image, prompt, chosen_duration, readiness in examples
+    )
+    now = datetime(2026, 10, 9, tzinfo=UTC)
+    return WorkspaceState(
+        schema_version="1.0",
+        episode_id="EP-LOCAL-1",
+        project_name="Read-only local movie",
+        source_package_path="C:/private/secret/source.zip",
+        created_at=now,
+        imported_at=now,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+        scenes=scenes,
+    )
+
+
+def test_real_workspace_shows_actual_scene_readiness_across_every_ui_state(qtbot) -> None:
+    source = _workspace_with_mixed_real_scenes()
+    before = repr(source)
+    dialog = CreditUixDialog(workspace=source, initial_state="UIX-01-A")
+    qtbot.addWidget(dialog)
+    selector = dialog.findChild(QComboBox, "UixDataSourceSelector")
+    assert selector is not None
+    assert selector.currentData() == "local"
+    table = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert table.rowCount() == 3
+    assert table.columnCount() == 6
+    assert table.item(0, 0).text() == "SCENE_001"
+    assert table.item(1, 5).text() == "GAMBAR HILANG"
+    assert table.item(2, 5).text() == "PILIH DURASI"
+    assert "3 baris (lokal)" in dialog.findChild(QLabel, "UixFilterCount").text()
+
+    for scenario in UIX_SCENARIOS:
+        dialog.set_state(scenario.code)
+        table = dialog.findChild(QTableWidget, "UixDetailTable")
+        assert table.rowCount() == 3
+        assert table.item(0, 0).text() == "SCENE_001"
+        assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
+    assert repr(source) == before
+    dialog.close()
+
+
+def test_workspace_demo_switch_never_blends_project_with_fake_budget(qtbot) -> None:
+    workspace = _workspace_with_mixed_real_scenes()
+    dialog = CreditUixDialog(workspace=workspace, initial_state="UIX-04-A")
+    qtbot.addWidget(dialog)
+    selector = dialog.findChild(QComboBox, "UixDataSourceSelector")
+    assert dialog._using_local_inputs()
+    assert dialog.findChild(QCheckBox, "UixSimulationApproval") is None
+    scan = dialog._report_payload()
+    assert scan["mode"] == "LOCAL_SCENE_READINESS_REPORT"
+    assert scan["scene_count"] == 3
+    assert scan["ready_count"] == 1
+    assert scan["needs_duration_selection"] == 1
+    assert scan["blocking_count"] == 1
+    assert "profiles" not in scan
+    assert "simulated_balance" not in str(scan)
+    assert "source.zip" not in str(scan)
+    assert "Pan over an ancient map" not in str(scan)
+    assert "C:/private" not in str(scan)
+    assert scan["live_dispatch_allowed"] is False
+
+    selector.setCurrentIndex(selector.findData("demo"))
+    assert not dialog._using_local_inputs()
+    assert dialog.findChild(QTableWidget, "UixDetailTable").rowCount() == 12
+    assert dialog.findChild(QCheckBox, "UixSimulationApproval") is not None
+    report = dialog._report_payload()
+    assert report["mode"] == "OFFLINE_SIMULATION"
+    assert report["provider_evidence"] == "NONE"
+    assert "EP-LOCAL-1" not in str(report)
+    assert "C:/private" not in str(report)
+
+    selector.setCurrentIndex(selector.findData("local"))
+    assert dialog.findChild(QCheckBox, "UixSimulationApproval") is None
+    assert dialog._report_payload()["mode"] == "LOCAL_SCENE_READINESS_REPORT"
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_empty_workspace_is_safe_and_zero_count_not_fake_success(qtbot) -> None:
+    from dataclasses import replace
+
+    empty = replace(_workspace_with_mixed_real_scenes(), scenes=())
+    dialog = CreditUixDialog(workspace=empty, initial_state="UIX-09-B")
+    qtbot.addWidget(dialog)
+    table = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert table.rowCount() == 0
+    assert dialog._report_payload()["scene_count"] == 0
+    assert dialog._report_payload()["ready_count"] == 0
+    assert "0 baris (lokal)" in dialog.findChild(QLabel, "UixFilterCount").text()
+    assert not dialog.live_dispatch_enabled
     dialog.close()
