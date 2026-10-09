@@ -917,6 +917,7 @@ class MainWindow(QMainWindow):
             on_rescan_images=self.rescan_workspace_images,
             on_scene_selected=self.select_workspace_scene,
             on_preview_credit_ui=self.open_credit_uix_preview,
+            selected_scene_id=self._selected_scene_id,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
@@ -925,7 +926,17 @@ class MainWindow(QMainWindow):
         """Open the approved UIX addendum as an offline-only temporary route."""
 
         preview = CreditUixDialog(self, workspace=self._current_workspace)
+        workspace = self._current_workspace
         preview.exec()
+        target = preview.requested_scene_id
+        if (
+            target is not None
+            and workspace is not None
+            and self._current_workspace is workspace
+            and any(scene.scene_id == target for scene in workspace.scenes)
+        ):
+            self._selected_scene_id = target
+            self.show_workspace_state(workspace)
 
     def select_workspace_scene(self, scene_id: str) -> None:
         """Select a real Scene row and refresh only the Scene Inspector."""
