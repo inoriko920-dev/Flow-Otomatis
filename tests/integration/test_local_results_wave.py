@@ -384,3 +384,68 @@ def test_local_failure_from_second_service_cannot_clobber_success(
     stored = SqliteDownloadResultRepository(projects_root).get("EP400_RESULTS", "SCENE_001")
     assert stored == recorded
     assert service.snapshot("EP400_RESULTS").handoff_ready is True
+
+
+
+@pytest.mark.parametrize("unsafe_kind", ["relative", "wrong_extension", "symlink"])
+def test_record_downloaded_never_certifies_invalid_or_linked_mp4(
+    tmp_path: Path, unsafe_kind: str
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "symlink-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:proof", "symlink-owner")
+
+    real = tmp_path / "verified.mp4"
+    real.write_bytes(b"example-mp4-bytes")
+    if unsafe_kind == "relative":
+        path = "relative.mp4"
+    elif unsafe_kind == "wrong_extension":
+        wrong = tmp_path / "not-an-mp4.txt"
+        wrong.write_bytes(b"example-mp4-bytes")
+        path = str(wrong)
+    else:
+        shortcut = tmp_path / "shortcut.mp4"
+        try:
+            shortcut.symlink_to(real)
+        except (OSError, NotImplementedError):
+            pytest.skip("Creating symbolic links is not supported by this Windows runner")
+        path = str(shortcut)
+
+    with pytest.raises(InternalInvariantError):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", path)
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.generated_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    assert repository.get("EP400_RESULTS", "SCENE_001") is None
+
+
+def test_recorded_mp4_replaced_by_symlink_fails_closed_in_results_and_manifest(
+    tmp_path: Path,
+) -> None:
+    service, output = _generated_result_with_file(tmp_path)
+    moved = tmp_path / "old-original.mp4"
+    output.rename(moved)
+    try:
+        output.symlink_to(moved)
+    except (OSError, NotImplementedError):
+        pytest.skip("Creating symbolic links is not supported by this Windows runner")
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.generated_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.attention_count == 1
+    assert snapshot.handoff_ready is False
+    assert snapshot.scenes[0].download_state == DownloadState.UNAVAILABLE
+    # The manifest must not convert the redirected file to a success even
+    # though its target still contains readable bytes.
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+    persisted = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert persisted is not None
+    assert persisted.state == DownloadState.DOWNLOADED
