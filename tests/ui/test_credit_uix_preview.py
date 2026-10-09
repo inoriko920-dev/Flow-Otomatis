@@ -153,6 +153,7 @@ def test_sidebar_preserves_seven_original_routes_as_non_live_labels(qtbot) -> No
     ]
     dialog.close()
 
+
 def test_search_filters_visible_rows_and_updates_readonly_dock(qtbot) -> None:
     dialog = CreditUixDialog(initial_state="UIX-05-C")
     qtbot.addWidget(dialog)
