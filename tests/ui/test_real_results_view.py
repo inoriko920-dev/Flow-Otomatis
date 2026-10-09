@@ -809,3 +809,56 @@ def test_play_selected_mp4_uses_exact_second_scene_not_first(
     assert not play.isEnabled()
     view.close()
     window.close()
+
+
+def test_handoff_does_not_claim_ready_when_download_row_lacks_generated_job(
+    ready_results, qtbot
+) -> None:
+    window, service, _database = ready_results
+    original = service.snapshot(window.current_workspace.episode_id)
+    assert original.handoff_ready is True
+    assert original.generated_count == original.downloaded_count == 1
+
+    # A corrupted or out-of-order persisted download cannot prove Generate.
+    inconsistent = replace(
+        original,
+        scenes=(replace(original.scenes[0], generate_state=None),),
+    )
+    assert inconsistent.downloaded_count == 1
+    assert inconsistent.generated_count == 0
+    assert inconsistent.handoff_ready is False
+
+    exported: list[str] = []
+    view = build_results_view(
+        inconsistent, on_export_manifest=lambda: exported.append("invalid")
+    )
+    qtbot.addWidget(view)
+    text = " ".join(label.text() for label in view.findChildren(QLabel))
+    assert "Handoff belum siap" in text
+    assert "FLOW_OTOMATIS_RESULT.json siap diekspor." not in text
+
+    editing = next(
+        button
+        for button in view.findChildren(QPushButton)
+        if button.text() == "Tandai Siap untuk Editing"
+    )
+    assert not editing.isEnabled()
+    qtbot.mouseClick(editing, Qt.MouseButton.LeftButton)
+    assert exported == []
+    view.close()
+    window.close()
+
+
+def test_handoff_ready_banner_requires_actual_generate_and_download(
+    ready_results, qtbot
+) -> None:
+    window, service, _database = ready_results
+    original = service.snapshot(window.current_workspace.episode_id)
+    assert original.handoff_ready is True
+    view = build_results_view(original, on_export_manifest=lambda: None)
+    qtbot.addWidget(view)
+    text = " ".join(label.text() for label in view.findChildren(QLabel))
+    assert "FLOW_OTOMATIS_RESULT.json siap diekspor." in text
+    assert "Handoff belum siap" not in text
+    view.close()
+    window.close()
