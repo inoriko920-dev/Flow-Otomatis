@@ -947,7 +947,7 @@ class MainWindow(QMainWindow):
                 "Semua durasi sudah dipilih, atau ada Target yang perlu diperbaiki manual.",
             )
             return None
-        distribution = {duration: 0 for duration in (4, 6, 8, 10)}
+        distribution = dict.fromkeys((4, 6, 8, 10), 0)
         for _scene_id, duration in plan:
             distribution[duration] += 1
         breakdown = " • ".join(
