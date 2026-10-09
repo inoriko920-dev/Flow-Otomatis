@@ -378,8 +378,12 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
 
         self._saved_badge = status_badge("Tersimpan", "success")
+        self._saved_badge_original_style = self._saved_badge.styleSheet()
+        self._local_badge_style = status_badge("Mode Lokal", "neutral").styleSheet()
         layout.addWidget(self._saved_badge)
-        layout.addWidget(status_badge("Online", "success"))
+        self._connection_badge = status_badge("Online", "success")
+        self._connection_badge_original_style = self._connection_badge.styleSheet()
+        layout.addWidget(self._connection_badge)
         layout.addWidget(QLabel("?"))
         return topbar
 
@@ -391,7 +395,8 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(14, 0, 14, 0)
         layout.setSpacing(14)
         layout.addWidget(muted_label("Flow-Otomatis v0.1.0"))
-        layout.addWidget(muted_label("Siap digunakan"))
+        self._runtime_status = muted_label("Siap digunakan")
+        layout.addWidget(self._runtime_status)
         layout.addStretch(1)
         self._status_project = muted_label("0 project")
         layout.addWidget(self._status_project)
@@ -468,6 +473,20 @@ class MainWindow(QMainWindow):
     def _set_navigation(self, item: str) -> None:
         for name, button in self._nav_buttons.items():
             button.setChecked(name == item)
+        if self._fixture_code.startswith("REAL_"):
+            # A running desktop app does NOT prove Google Flow workspace access.
+            self._connection_badge.setText("●  Mode Lokal")
+            self._connection_badge.setStyleSheet(self._local_badge_style)
+            self._saved_badge.setText("●  Data Lokal")
+            self._saved_badge.setStyleSheet(self._local_badge_style)
+            self._runtime_status.setText("Mode lokal • Generate Flow belum aktif")
+        else:
+            # Exact approved frozen STEP 09 reference appearance.
+            self._connection_badge.setText("●  Online")
+            self._connection_badge.setStyleSheet(self._connection_badge_original_style)
+            self._saved_badge.setText("●  Tersimpan")
+            self._saved_badge.setStyleSheet(self._saved_badge_original_style)
+            self._runtime_status.setText("Siap digunakan")
 
     def _set_project_chrome(self, workspace: WorkspaceState, surface: str) -> None:
         self._project_label.setText(f"{workspace.episode_id} • {workspace.project_name}")
