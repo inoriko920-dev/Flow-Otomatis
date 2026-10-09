@@ -43,7 +43,8 @@ def test_empty_hub_with_unavailable_import_disables_inert_actions(qtbot) -> None
     assert not create_project.isEnabled()
 
     import_button = next(
-        button for button in page.findChildren(QPushButton)
+        button
+        for button in page.findChildren(QPushButton)
         if button.text() == "Impor Paket Episode"
     )
     assert not import_button.isEnabled()
@@ -73,7 +74,8 @@ def test_empty_hub_create_and_import_both_call_real_package_dialog(qtbot, monkey
     assert page is not None
     create_project = _button(page, "ProjectHubCreateFromPackage")
     import_button = next(
-        button for button in page.findChildren(QPushButton)
+        button
+        for button in page.findChildren(QPushButton)
         if button.text() == "Impor Paket Episode"
     )
     assert create_project.isEnabled() and import_button.isEnabled()
