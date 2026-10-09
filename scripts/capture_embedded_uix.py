@@ -19,7 +19,11 @@ from flow_otomatis.presentation.main_window import MainWindow
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("destination", type=Path)
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
     args = parser.parse_args()
+    if args.width < 1180 or args.height < 700:
+        parser.error("Viewport must support the approved main-shell minimum 1180x700")
     args.destination.mkdir(parents=True, exist_ok=True)
 
     app = QApplication.instance()
@@ -28,7 +32,7 @@ def main() -> int:
     _ensure_readable_capture_font()
 
     window = MainWindow()
-    window.resize(1920, 1080)
+    window.resize(args.width, args.height)
     window.show()
     window.open_credit_uix_preview()
     preview = window._active_uix_preview
@@ -41,6 +45,14 @@ def main() -> int:
     for scenario in UIX_SCENARIOS:
         preview.set_state(scenario.code)
         app.processEvents()
+        page = preview.scroller.widget()
+        if page is None:
+            raise RuntimeError(f"Qt page missing for {scenario.code}")
+        if scenario.code[4:6] in {"02", "04", "07", "08"}:
+            if page.findChild(QFrame, "UixModalScrim") is None:
+                raise RuntimeError(f"Approved modal overlay missing: {scenario.code}")
+            if page.findChild(QFrame, "UixBackdropAgentDock") is None:
+                raise RuntimeError(f"Approved AI-panel underlay missing: {scenario.code}")
         output = args.destination / f"{scenario.code}.png"
         if not window.grab().save(str(output)):
             raise RuntimeError(f"Cannot capture integrated Qt UI for {scenario.code}")
