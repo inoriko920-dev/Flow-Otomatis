@@ -29,7 +29,9 @@ class ResultManifestWriter:
             or episode_id in {".", ".."}
             or "/" in episode_id
             or "\\" in episode_id
+            or ":" in episode_id
             or "\x00" in episode_id
+            or episode_id.endswith((".", " "))
         ):
             raise InternalInvariantError("Unsafe episode identity for result export")
 
