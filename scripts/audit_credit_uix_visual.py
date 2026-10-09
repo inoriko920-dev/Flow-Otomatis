@@ -45,7 +45,9 @@ def main() -> int:
         suffix = state.code.replace("-", "_")
         matches = sorted(args.approved_assets.glob(f"*{suffix}_*.png"))
         if len(matches) != 1:
-            raise RuntimeError(f"{state.code}: expected exactly one frozen reference, got {len(matches)}")
+            raise RuntimeError(
+                f"{state.code}: expected exactly one frozen reference, got {len(matches)}"
+            )
         capture = args.rendered_captures / f"{state.code}.png"
         if not capture.is_file():
             raise RuntimeError(f"{state.code}: real Qt capture absent")
@@ -63,11 +65,19 @@ def main() -> int:
         painter = QPainter(pair)
         painter.setPen(QColor("#111827"))
         painter.drawText(
-            0, 0, 960, 38, int(Qt.AlignmentFlag.AlignCenter),
+            0,
+            0,
+            960,
+            38,
+            int(Qt.AlignmentFlag.AlignCenter),
             f"{state.code} • REFERENSI OWNER-APPROVED",
         )
         painter.drawText(
-            960, 0, 960, 38, int(Qt.AlignmentFlag.AlignCenter),
+            960,
+            0,
+            960,
+            38,
+            int(Qt.AlignmentFlag.AlignCenter),
             f"{state.code} • RENDER Qt (REVIEW)",
         )
         painter.drawImage(0, 42, approved.scaled(960, 540))
