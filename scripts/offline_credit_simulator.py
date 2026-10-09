@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from flow_otomatis.application.services.offline_credit_simulation import (
-    InvalidSimulationInput,
+    InvalidSimulationInput as InvalidSimulationInput,
     simulate,
 )
 
