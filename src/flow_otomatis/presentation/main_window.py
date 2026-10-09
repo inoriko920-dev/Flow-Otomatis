@@ -52,6 +52,7 @@ from flow_otomatis.presentation.google_profiles_view import (
     build_google_login_view,
     build_google_profiles_view,
 )
+from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
@@ -917,10 +918,33 @@ class MainWindow(QMainWindow):
             on_rescan_images=self.rescan_workspace_images,
             on_scene_selected=self.select_workspace_scene,
             on_preview_credit_ui=self.open_credit_uix_preview,
+            on_local_preflight=self.open_local_scene_preflight,
             selected_scene_id=self._selected_scene_id,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
+
+    def open_local_scene_preflight(self) -> None:
+        """Audit real Workspace Scene metadata; do not touch durable generation jobs."""
+        workspace = self._current_workspace
+        if workspace is None or self._fixture_code != "REAL_WORKSPACE":
+            return
+        dialog = LocalScenePreflightDialog(workspace, parent=self)
+        dialog.exec()
+        self._return_to_local_scene(workspace, dialog.requested_scene_id)
+
+    def _return_to_local_scene(
+        self, workspace: WorkspaceState, requested_scene_id: str | None
+    ) -> None:
+        """Return only to a unique Scene in the exact currently opened Workspace."""
+        if requested_scene_id is None:
+            return
+        if self._current_workspace is not workspace or self._fixture_code != "REAL_WORKSPACE":
+            return
+        if sum(scene.scene_id == requested_scene_id for scene in workspace.scenes) != 1:
+            return
+        self._selected_scene_id = requested_scene_id
+        self.show_workspace_state(workspace)
 
     def open_credit_uix_preview(self) -> None:
         """Open the approved UIX addendum as an offline-only temporary route."""
@@ -928,15 +952,8 @@ class MainWindow(QMainWindow):
         preview = CreditUixDialog(self, workspace=self._current_workspace)
         workspace = self._current_workspace
         preview.exec()
-        target = preview.requested_scene_id
-        if (
-            target is not None
-            and workspace is not None
-            and self._current_workspace is workspace
-            and any(scene.scene_id == target for scene in workspace.scenes)
-        ):
-            self._selected_scene_id = target
-            self.show_workspace_state(workspace)
+        if workspace is not None:
+            self._return_to_local_scene(workspace, preview.requested_scene_id)
 
     def select_workspace_scene(self, scene_id: str) -> None:
         """Select a real Scene row and refresh only the Scene Inspector."""
