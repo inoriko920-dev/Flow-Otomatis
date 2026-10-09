@@ -14,6 +14,16 @@ class DownloadResultRepositoryPort(Protocol):
         """Upsert one local download outcome."""
         ...
 
+    def save_if_current_generate(
+        self, record: DownloadRecord, expected_remote_result_id: str
+    ) -> bool:
+        """Atomically save DOWNLOADED only if the matching Generate result is current.
+
+        The Generate check and Download upsert must run inside one serialized
+        database transaction; a prior read cannot satisfy this contract.
+        """
+        ...
+
     def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
         """Keep any confirmed DOWNLOADED evidence even if a rival attempt fails."""
         ...
