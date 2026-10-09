@@ -779,3 +779,33 @@ def test_selected_video_disallows_file_symlink(ready_results, monkeypatch) -> No
     assert verified_selected_mp4(results, "SCENE_001") is None
     assert verified_selected_mp4(results, "nonexistent") is None
     window.close()
+
+
+def test_play_selected_mp4_uses_exact_second_scene_not_first(
+    ready_results, tmp_path, qtbot
+) -> None:
+    window, service, _database = ready_results
+    snapshot = service.snapshot(window.current_workspace.episode_id)
+    first = snapshot.scenes[0]
+    second_output = tmp_path / "second_scene.mp4"
+    second_output.write_bytes(b"second-local-video")
+    second = replace(first, scene_id="SCENE_002", output_path=str(second_output))
+    combined = replace(snapshot, scenes=(first, second))
+    selected: list[str] = []
+    view = build_results_view(
+        combined,
+        on_export_manifest=lambda: None,
+        on_open_video=lambda scene_id: selected.append(scene_id),
+    )
+    qtbot.addWidget(view)
+    table = next(t for t in view.findChildren(QTableWidget) if t.columnCount() == 6)
+    play = view.findChild(QPushButton, "RealResultsOpenSelectedVideo")
+    assert play is not None and not play.isEnabled()
+    table.selectRow(1)
+    assert play.isEnabled()
+    qtbot.mouseClick(play, Qt.MouseButton.LeftButton)
+    assert selected == ["SCENE_002"]
+    table.clearSelection()
+    assert not play.isEnabled()
+    view.close()
+    window.close()
