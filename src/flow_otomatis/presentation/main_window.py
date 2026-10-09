@@ -459,7 +459,9 @@ class MainWindow(QMainWindow):
 
     def _open_navigation_item(self, item: str, checked: bool = False) -> None:
         del checked
-        if item == "Beranda" and self._project_library_service is not None:
+        if item == "Beranda" and (
+            self._production_shell or self._project_library_service is not None
+        ):
             self.show_project_hub()
             return
         if item == "Workspace" and self._current_workspace is not None:
