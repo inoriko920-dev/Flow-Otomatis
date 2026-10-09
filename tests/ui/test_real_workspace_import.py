@@ -164,11 +164,14 @@ def test_real_shell_does_not_mislabel_unverified_flow_as_online(qtbot) -> None:
     qtbot.addWidget(window)
     window.show_project_hub()
     assert "Mode Lokal" in window._connection_badge.text()
+    assert "Mode Lokal" in window._sidebar_connection_badge.text()
+    assert "Flow belum terverifikasi" in window._sidebar_connection_badge.text()
     assert "Data Lokal" in window._saved_badge.text()
     assert "Generate Flow belum aktif" in window._runtime_status.text()
 
     window.show_fixture("UI-IMG-001A")
     assert "Online" in window._connection_badge.text()
+    assert window._sidebar_connection_badge.text() == "●  ●  Online"
     assert "Tersimpan" in window._saved_badge.text()
     assert window._runtime_status.text() == "Siap digunakan"
     window.close()
