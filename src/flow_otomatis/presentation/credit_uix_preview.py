@@ -319,7 +319,7 @@ class CreditUixDialog(QDialog):
         self.setWindowTitle("Flow-Otomatis | 22 Desain UI Final — Mode Simulasi")
         self._app_shell = app_shell
         # Adapt the window to a 1366x768 laptop; allow Qt scroll for wide tables.
-        self.setMinimumSize(1080, 600)
+        self.setMinimumSize(640 if app_shell else 1080, 540 if app_shell else 600)
         screen = QApplication.primaryScreen()
         if screen is not None:
             bounds = screen.availableGeometry()
@@ -530,7 +530,10 @@ class CreditUixDialog(QDialog):
         )
         self.compare_button.clicked.connect(self.compare_with_approved_ui)
         secondary_actions.addWidget(self.compare_button)
-        close = QPushButton("Tutup")
+        close = QPushButton(
+            "Kembali ke Workspace / Beranda" if app_shell else "Tutup"
+        )
+        close.setObjectName("UixClosePreview")
         close.clicked.connect(self.accept)
         secondary_actions.addWidget(close)
         main.addLayout(self.footer)
