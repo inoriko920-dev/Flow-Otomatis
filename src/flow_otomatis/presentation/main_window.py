@@ -78,6 +78,7 @@ from flow_otomatis.presentation.project_hub_view import (
 from flow_otomatis.presentation.results_view import (
     build_results_service_unavailable_view,
     build_results_view,
+    verified_selected_mp4,
     verified_single_output_folder,
 )
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
@@ -904,6 +905,7 @@ class MainWindow(QMainWindow):
             on_open_diagnostics=lambda: self._open_diagnostics_from_results(results.episode_id),
             on_refresh=lambda: self._refresh_results_from_ui(results.episode_id),
             on_open_folder=lambda: self._open_result_folder_from_ui(results),
+            on_open_video=lambda scene_id: self._open_result_video_from_ui(results, scene_id),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
@@ -965,6 +967,53 @@ class MainWindow(QMainWindow):
                 self,
                 "Folder Output Tidak Dapat Dibuka",
                 "Windows belum dapat membuka folder MP4 yang tersedia.",
+            )
+
+    def _open_result_video_from_ui(self, displayed: ProjectResults, scene_id: str) -> None:
+        """Open only the currently selected persisted MP4 through the OS player.
+
+        A stale callback, changed active episode, removed/modified output or
+        unconfirmed download is never opened without rechecking the database.
+        """
+
+        if (
+            self._fixture_code != "REAL_RESULTS"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != displayed.episode_id
+            or self._last_results_snapshot is not displayed
+            or self._local_results_service is None
+        ):
+            return
+
+        previous = verified_selected_mp4(displayed, scene_id)
+        try:
+            latest = self._local_results_service.snapshot(displayed.episode_id)
+            current = verified_selected_mp4(latest, scene_id)
+            before_rows = [s for s in displayed.scenes if s.scene_id == scene_id]
+            after_rows = [s for s in latest.scenes if s.scene_id == scene_id]
+            consistent = (
+                len(before_rows) == len(after_rows) == 1
+                and before_rows[0].take == after_rows[0].take
+                and before_rows[0].output_path == after_rows[0].output_path
+                and before_rows[0].download_state == after_rows[0].download_state
+            )
+        except FlowOtomatisError, OSError, ValueError:
+            current = None
+            consistent = False
+
+        if previous is None or current is None or previous != current or not consistent:
+            QMessageBox.warning(
+                self,
+                "Video Lokal Tidak Tersedia",
+                "File MP4 terpilih sudah berubah, hilang, atau tidak dapat "
+                "diverifikasi. Muat ulang Hasil sebelum mencoba lagi.",
+            )
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(current))):
+            QMessageBox.warning(
+                self,
+                "Pemutar Video Tidak Tersedia",
+                "Windows tidak dapat membuka MP4 dengan aplikasi pemutar default.",
             )
 
     def _open_diagnostics_from_results(self, episode_id: str) -> None:
