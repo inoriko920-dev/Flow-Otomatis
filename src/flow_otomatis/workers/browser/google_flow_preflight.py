@@ -46,7 +46,8 @@ def classify_flow_read_only_navigation(
             GoogleFlowAccessState.UNAVAILABLE,
             f"Flow mengembalikan HTTP {http_status}; akses belum tersedia.",
         )
-    if hostname == "labs.google" or hostname.endswith(".labs.google"):
+    # Flow accounts can now redirect from labs.google to flow.google.com.
+    if hostname in {"labs.google", "flow.google.com"} or hostname.endswith(".labs.google"):
         if "onboard" in parsed.path.lower():
             return (
                 GoogleFlowAccessState.UNAVAILABLE,
