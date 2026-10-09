@@ -106,6 +106,7 @@ def build_workspace_view(
     *,
     on_rescan_images: Callable[[], object],
     on_scene_selected: Callable[[str], object],
+    on_preview_credit_ui: Callable[[], object] | None = None,
 ) -> QWidget:
     """Render persisted real scene rows in the frozen ready-workspace screen."""
 
@@ -143,6 +144,11 @@ def build_workspace_view(
 
     table.cellClicked.connect(notify_selected)
     _button(root, "Scan Ulang Gambar").clicked.connect(on_rescan_images)
+    if on_preview_credit_ui is not None:
+        # Temporary E12-02 extension; no new permanent sidebar route.
+        _button(root, "Pratinjau 22 UI Multiakun (Simulasi)").clicked.connect(
+            on_preview_credit_ui
+        )
 
     for label in root.findChildren(QLabel):
         text = label.text()
