@@ -260,6 +260,23 @@ jobs:
           artifacts/e12_uix22_main_shell_1366x768
           --width 1366 --height 768
 
+      - name: Capture empty Workspace and Hasil in real desktop app
+        run: uv run python scripts/capture_empty_project.py artifacts/empty_project_1920x1080
+
+      - name: Capture empty Workspace and Hasil at laptop resolution
+        run: >
+          uv run python scripts/capture_empty_project.py
+          artifacts/empty_project_1366x768
+          --width 1366 --height 768
+
+      - name: Verify 4 empty-project navigation screenshot files
+        shell: pwsh
+        run: |
+          foreach ($folder in @("artifacts/empty_project_1920x1080", "artifacts/empty_project_1366x768")) {
+            $screens = @(Get-ChildItem -Path $folder -Filter 'EMPTY-*.png')
+            if ($screens.Count -ne 2) { throw "Expected empty Workspace and Hasil screenshots in $folder" }
+          }
+
       - name: Verify 44 integrated desktop and laptop screenshots
         shell: pwsh
         run: |
@@ -323,6 +340,8 @@ jobs:
             artifacts/e12_uix22
             artifacts/e12_uix22_main_shell
             artifacts/e12_uix22_main_shell_1366x768
+            artifacts/empty_project_1920x1080
+            artifacts/empty_project_1366x768
             artifacts/uix_review
           if-no-files-found: error
           retention-days: 14
