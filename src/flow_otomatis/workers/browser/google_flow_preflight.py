@@ -34,7 +34,25 @@ def classify_flow_read_only_navigation(
 ) -> tuple[GoogleFlowAccessState, str]:
     """Fail closed: official-host reachability is never identity verification."""
 
-    parsed = urlparse(final_url)
+    try:
+        parsed = urlparse(final_url)
+        port = parsed.port
+    except ValueError:
+        # Malformed page URLs (including invalid ports/IPv6) are not evidence.
+        return (
+            GoogleFlowAccessState.UNKNOWN,
+            "Alamat Flow tidak valid; akses belum dapat dikonfirmasi.",
+        )
+    if (
+        parsed.scheme != "https"
+        or port not in {None, 443}
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return (
+            GoogleFlowAccessState.UNKNOWN,
+            "Halaman bukan koneksi HTTPS Google Flow yang valid; akses belum terverifikasi.",
+        )
     hostname = (parsed.hostname or "").lower()
     if hostname == "accounts.google.com" or http_status == 401:
         return (
