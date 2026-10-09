@@ -108,6 +108,7 @@ def build_workspace_view(
     on_scene_selected: Callable[[str], object],
     on_preview_credit_ui: Callable[[], object] | None = None,
     on_local_preflight: Callable[[], object] | None = None,
+    on_bulk_durations: Callable[[], object] | None = None,
     selected_scene_id: str | None = None,
 ) -> QWidget:
     """Render persisted real scene rows in the frozen ready-workspace screen."""
@@ -155,7 +156,11 @@ def build_workspace_view(
     table.cellClicked.connect(notify_selected)
     scan_button = _button(root, "Scan Ulang Gambar")
     scan_button.clicked.connect(on_rescan_images)
-    if on_preview_credit_ui is not None or on_local_preflight is not None:
+    if (
+        on_preview_credit_ui is not None
+        or on_local_preflight is not None
+        or on_bulk_durations is not None
+    ):
         # Add only to the real Workspace controls; frozen reference views remain unchanged.
         toolbar_parent = scan_button.parentWidget()
         if toolbar_parent is None:
@@ -163,6 +168,16 @@ def build_workspace_view(
         action_row = toolbar_parent.layout()
         if action_row is None:
             raise RuntimeError("Workspace controls layout is missing")
+        if on_bulk_durations is not None:
+            fill_button = QPushButton("Isi Durasi Otomatis")
+            fill_button.setObjectName("WorkspaceBulkDurationAction")
+            fill_button.setToolTip(
+                "Isi 4/6/8/10 detik hanya untuk Scene tanpa pilihan; "
+                "minta konfirmasi lebih dahulu. Tanpa Google Flow live."
+            )
+            fill_button.setEnabled(workspace.duration_selection_count > 0)
+            action_row.addWidget(fill_button)
+            fill_button.clicked.connect(on_bulk_durations)
         if on_local_preflight is not None:
             preflight_button = QPushButton("Periksa Kesiapan Scene Lokal")
             preflight_button.setObjectName("LocalPreflightWorkspaceAction")
