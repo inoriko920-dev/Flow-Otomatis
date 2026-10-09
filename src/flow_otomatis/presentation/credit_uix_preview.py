@@ -903,6 +903,7 @@ class CreditUixDialog(QDialog):
         self.status.setText(
             f"{code} • {'scan input lokal baca saja' if local else 'simulasi 12 Scene offline'} "
             "• Generate live diblokir"
+            + (" • Gulir bagian tengah untuk seluruh rincian popup ↓" if modal_state else "")
         )
 
     def _selected_row_details(self, table: QTableWidget) -> None:
