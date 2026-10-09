@@ -542,3 +542,35 @@ def test_direct_manifest_writer_reconciles_inconsistent_cached_snapshot(
         state.value if state is not None else "NOT_QUEUED"
     )
     assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_direct_local_result_record_rejects_generate_change_during_atomic_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, job_repo = _service(tmp_path)
+    job = _queue_one(job_repo)
+    claimed = job_repo.claim_next("EP400_RESULTS", "results-owner", lease_seconds=60)
+    assert claimed is not None
+    job_repo.mark_generated(job.job_id, "fake:SCENE_001", "results-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"synthetic-video")
+
+    repository = service._download_repository
+    original = repository.save_if_current_generate
+    db = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+
+    def invalidate_before_commit(record, remote_result_id):
+        with sqlite3.connect(db) as connection:
+            connection.execute(
+                "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+                ("fake:REPLACED", record.scene_id),
+            )
+            connection.commit()
+        return original(record, remote_result_id)
+
+    monkeypatch.setattr(repository, "save_if_current_generate", invalidate_before_commit)
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+
+    assert video.read_bytes() == b"synthetic-video"
+    assert repository.get("EP400_RESULTS", "SCENE_001") is None
