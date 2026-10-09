@@ -43,6 +43,7 @@ from flow_otomatis.presentation.widgets import (
     primary_button,
 )
 
+
 # Each entry corresponds to an exact, previously approved UIX state identifier.
 # Examples are not quoted provider balances, actual remote results or entitlements.
 @dataclass(frozen=True, slots=True)
@@ -357,9 +358,7 @@ class CreditUixDialog(QDialog):
         self.state_selector.clear()
         for scenario in UIX_SCENARIOS:
             if scenario.code.startswith(prefix):
-                self.state_selector.addItem(
-                    f"{scenario.code} · {scenario.title}", scenario.code
-                )
+                self.state_selector.addItem(f"{scenario.code} · {scenario.title}", scenario.code)
         select = self.state_selector.findData(current)
         self.state_selector.setCurrentIndex(select if select >= 0 else 0)
         self.state_selector.blockSignals(False)
@@ -446,12 +445,16 @@ class CreditUixDialog(QDialog):
         for title, target in self._actions_for(code):
             button = QPushButton(title)
             button.setObjectName("UixAction")
-            button.clicked.connect(lambda _checked=False, next_code=target: self.set_state(next_code))
+            button.clicked.connect(
+                lambda _checked=False, next_code=target: self.set_state(next_code)
+            )
             actions.addWidget(button)
         actions.addStretch(1)
         blocked = QPushButton("Generate Live — DIBLOKIR")
         blocked.setObjectName("UixLiveGenerate")
-        blocked.setToolTip("G1 kebijakan, G5 kredit akun, G6 login, dan gate implementasi belum PASS.")
+        blocked.setToolTip(
+            "G1 kebijakan, G5 kredit akun, G6 login, dan gate implementasi belum PASS."
+        )
         blocked.setEnabled(False)
         actions.addWidget(blocked)
         layout.addLayout(actions)
@@ -497,7 +500,12 @@ class CreditUixDialog(QDialog):
                 return [
                     ("Scene Lokal", str(count), "dari Workspace", "info"),
                     ("Siap Lokal", str(count_ready), "bukan siap Generate live", "success"),
-                    ("Perlu Perhatian", str(self._workspace.blocking_count), "input/durasi", "warning"),
+                    (
+                        "Perlu Perhatian",
+                        str(self._workspace.blocking_count),
+                        "input/durasi",
+                        "warning",
+                    ),
                     ("Kredit Provider", "—", "belum terverifikasi", "warning"),
                 ]
             return [
@@ -511,7 +519,12 @@ class CreditUixDialog(QDialog):
                 ("Scene Contoh", "12", "data simulasi", "info"),
                 ("Dialokasikan", str(demo_assigned), "perhitungan lokal", "success"),
                 ("Tertahan", str(demo_blocked), "tanpa kirim ulang", "warning"),
-                ("Estimasi", str(self._preview["total_simulated_credits"]), "kredit fiktif", "warning"),
+                (
+                    "Estimasi",
+                    str(self._preview["total_simulated_credits"]),
+                    "kredit fiktif",
+                    "warning",
+                ),
             ]
         if group == "03":
             return [
@@ -562,10 +575,14 @@ class CreditUixDialog(QDialog):
             for i in range(1, 13):
                 name = f"SCENE_{i:03}"
                 status = (
-                    "GAMBAR HILANG" if code == "UIX-01-B" and i == 4
-                    else "PROMPT HILANG" if code == "UIX-01-B" and i == 7
-                    else "TARGET >10s" if code == "UIX-01-B" and i == 11
-                    else "PERLU REVIEW" if code == "UIX-01-A" and i > 10
+                    "GAMBAR HILANG"
+                    if code == "UIX-01-B" and i == 4
+                    else "PROMPT HILANG"
+                    if code == "UIX-01-B" and i == 7
+                    else "TARGET >10s"
+                    if code == "UIX-01-B" and i == 11
+                    else "PERLU REVIEW"
+                    if code == "UIX-01-A" and i > 10
                     else "SIAP LOKAL"
                 )
                 rows.append([name, "8s" if i % 2 else "6s", "8s", "Data contoh", status])
@@ -575,14 +592,14 @@ class CreditUixDialog(QDialog):
                 [
                     x["scene_id"],
                     x["profile_id"],
-                    f'{x["duration_s"]}s',
-                    f'{x["simulated_cost"]} contoh',
+                    f"{x['duration_s']}s",
+                    f"{x['simulated_cost']} contoh",
                     "SIMULASI",
                 ]
                 for x in self._preview["assigned"]
             ]
             rows.extend(
-                [x["scene_id"], "—", f'{x["duration_s"]}s', "—", "TERTAHAN"]
+                [x["scene_id"], "—", f"{x['duration_s']}s", "—", "TERTAHAN"]
                 for x in self._preview["blocked"]
             )
             if code in {"UIX-07-A", "UIX-07-B"}:
@@ -590,10 +607,14 @@ class CreditUixDialog(QDialog):
                     row[-1] = "TERKUNCI (contoh)"
             return ["Scene", "Profil sintetis", "Durasi", "Kredit fiktif", "Status"], rows
         if group == "03":
-            return [
-                "Profil contoh", "Saldo ilustrasi", "Sumber", "Validitas", "Otomatisasi"
-            ], [
-                ["Profil A", "38 (ilustrasi)", "CONTOH UI", "KADALUWARSA" if code.endswith("B") else "CONTOH", "NONAKTIF"],
+            return ["Profil contoh", "Saldo ilustrasi", "Sumber", "Validitas", "Otomatisasi"], [
+                [
+                    "Profil A",
+                    "38 (ilustrasi)",
+                    "CONTOH UI",
+                    "KADALUWARSA" if code.endswith("B") else "CONTOH",
+                    "NONAKTIF",
+                ],
                 ["Profil B", "—", "INPUT MANUAL", "TIDAK TERVERIFIKASI", "NONAKTIF"],
                 ["Profil C", "—", "TIDAK DIKETAHUI", "TIDAK DIKETAHUI", "NONAKTIF"],
             ]
@@ -606,7 +627,12 @@ class CreditUixDialog(QDialog):
             ]
         if group == "06":
             return ["Kasus", "Profil", "Bukti contoh", "Tindakan aman"], [
-                ["SCENE_008", "Profil B", "ID provider: tidak tersedia", "Periksa hasil (baca saja)"],
+                [
+                    "SCENE_008",
+                    "Profil B",
+                    "ID provider: tidak tersedia",
+                    "Periksa hasil (baca saja)",
+                ],
                 ["Login", "Profil A", "Sesi: belum diverifikasi", "Login manual"],
                 ["Kredit", "Profil B", "Saldo: belum terverifikasi", "Tunda klaim baru"],
                 ["Hasil (contoh)", "Profil B", "ID fiktif disamarkan", "Ke Hasil; tanpa unduh"],
@@ -620,8 +646,13 @@ class CreditUixDialog(QDialog):
                 ["Resolusi/aspek", "720p / 16:9", "720p / 16:9", "LOCKED"],
             ]
         return ["Scene", "Generate", "Download", "MP4 Lokal", "SHA-256"], [
-            [f"SCENE_{i:03}", "CONTOH" if i <= 6 else "—",
-             "CONTOH" if i <= 4 else "—", "TIDAK ADA", "—"]
+            [
+                f"SCENE_{i:03}",
+                "CONTOH" if i <= 6 else "—",
+                "CONTOH" if i <= 4 else "—",
+                "TIDAK ADA",
+                "—",
+            ]
             for i in range(1, 13)
         ]
 
@@ -642,7 +673,9 @@ class CreditUixDialog(QDialog):
 
     def _approve_preview(self) -> None:
         self._last_local_plan_approved = True
-        self.status.setText("Simulasi dikunci secara lokal; tidak melakukan Generate atau reservasi.")
+        self.status.setText(
+            "Simulasi dikunci secara lokal; tidak melakukan Generate atau reservasi."
+        )
 
     def recalculate_offline(self) -> None:
         """Recalculate in memory using synthetic accounts; never call provider."""
