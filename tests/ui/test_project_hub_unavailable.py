@@ -53,7 +53,7 @@ def test_missing_library_disables_retry_and_exposes_safe_diagnostics(qtbot) -> N
     window = MainWindow()
     qtbot.addWidget(window)
     window.configure_production_shell()
-    window.show_project_hub()
+    window._open_navigation_item("Beranda")
 
     assert window.fixture_code == "REAL_PROJECT_HUB_UNAVAILABLE"
     retry = window.findChild(QPushButton, "RealProjectHubRetry")
