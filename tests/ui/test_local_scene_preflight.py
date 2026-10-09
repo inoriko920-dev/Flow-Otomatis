@@ -369,9 +369,7 @@ def test_local_scan_fail_closed_for_invalid_digests_and_ambiguous_scene_ids() ->
             return "bad-digest"
 
     verifier = InvalidReader()
-    report = prepare_local_scene_preflight(
-        _workspace(_scene("SCENE_001")), image_verifier=verifier
-    )
+    report = prepare_local_scene_preflight(_workspace(_scene("SCENE_001")), image_verifier=verifier)
     assert report["ready_count"] == 0
     assert report["unreadable_image_count"] == 1
     assert report["live_dispatch_allowed"] is False
