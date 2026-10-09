@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from concurrent.futures import Future
 from dataclasses import dataclass
-import json
 from functools import partial
 from pathlib import Path
 
@@ -607,7 +607,13 @@ class MainWindow(QMainWindow):
         """Show facts from local persistence without any provider interaction."""
 
         if self._project_library_service is None:
-            snapshot = LocalDiagnosticSnapshot(None, None, None)
+            snapshot = LocalDiagnosticSnapshot(
+                None,
+                None,
+                len(self._current_workspace.scenes)
+                if self._current_workspace is not None
+                else None,
+            )
         else:
             try:
                 scan = self._project_library_service.scan_recent(limit=10)
@@ -662,7 +668,7 @@ class MainWindow(QMainWindow):
         try:
             with Path(filename).open("x", encoding="utf-8") as output:
                 json.dump(snapshot.as_report(), output, indent=2, ensure_ascii=False)
-                output.write("\\n")
+                output.write("\n")
         except FileExistsError:
             QMessageBox.warning(
                 self, "File sudah ada", "File diagnostik lama tidak akan ditimpa."
