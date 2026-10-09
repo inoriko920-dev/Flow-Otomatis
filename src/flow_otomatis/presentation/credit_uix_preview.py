@@ -644,6 +644,13 @@ class CreditUixDialog(QDialog):
             modal = QFrame(root)
             modal.setObjectName("UixScenarioModal")
             modal.setMaximumWidth(1120)
+            # QHBoxLayout.AlignHCenter otherwise uses its narrow sizeHint and
+            # crushes approved two-column dialogs into ~650 px at 1920 width.
+            # Use available workspace width while allowing horizontal scroll
+            # on unusually small laptop screens.
+            modal.setMinimumWidth(
+                min(1120, max(680, self.scroller.viewport().width() - 60))
+            )
             modal.setStyleSheet(
                 f"QFrame#UixScenarioModal {{ background: white; "
                 f"border: 1px solid {theme.BORDER}; border-radius: 10px; }}"
