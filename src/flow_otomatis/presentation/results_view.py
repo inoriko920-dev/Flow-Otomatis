@@ -269,10 +269,15 @@ def build_results_view(
         if label.text() == "Semua generation dan download selesai":
             label.setText("Status dari catatan proyek lokal • tidak mengakses Google Flow")
         if label.text().startswith("60/60 video generated"):
+            handoff_message = (
+                "FLOW_OTOMATIS_RESULT.json siap diekspor."
+                if results.handoff_ready
+                else "Handoff belum siap • lengkapi Generate dan MP4 lokal."
+            )
             label.setText(
                 f"{results.generated_count}/{total} video generated • "
                 f"{results.downloaded_count}/{total} video downloaded • "
-                "FLOW_OTOMATIS_RESULT.json siap diekspor."
+                f"{handoff_message}"
             )
 
     diagnostics_button_found = False
