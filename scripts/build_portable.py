@@ -53,7 +53,11 @@ def _zip_bundle(bundle_root: Path, zip_path: Path) -> None:
                 archive.write(path, path.relative_to(bundle_root.parent))
 
 
-def build(repo_root: Path, browser_source: Path) -> tuple[Path, Path]:
+def build(
+    repo_root: Path,
+    browser_source: Path,
+    approved_ui_source: Path | None = None,
+) -> tuple[Path, Path]:
     dist_root = repo_root / "dist"
     work_root = repo_root / "build" / "pyinstaller"
     spec_root = repo_root / "build" / "spec"
@@ -115,6 +119,27 @@ def build(repo_root: Path, browser_source: Path) -> tuple[Path, Path]:
 
     shutil.copy2(notices_source, bundle_root / notices_source.name)
 
+    if approved_ui_source is not None:
+        # The 22 immutable owner-approved PNGs remain byte-identical.
+        # This makes "Bandingkan UI Final" work directly in the main EXE
+        # instead of asking the operator to locate reference images.
+        from flow_otomatis.presentation.approved_uix_assets import (
+            APPROVED_IMAGES,
+            load_verified_reference,
+        )
+
+        if len(APPROVED_IMAGES) != 22:
+            raise RuntimeError("Expected exactly 22 owner-approved UI reference images")
+        target = bundle_root / "approved_ui"
+        target.mkdir(parents=True, exist_ok=True)
+        for state in sorted(APPROVED_IMAGES):
+            approved = load_verified_reference(
+                state, supplied_directory=approved_ui_source
+            )
+            shutil.copy2(approved, target / approved.name)
+        if len(tuple(target.glob("*.png"))) != 22:
+            raise RuntimeError("Portable UI reference bundle is incomplete")
+
     _write_manifest(bundle_root, repo_root)
 
     zip_path = dist_root / "Flow-Otomatis-portable-win-x64.zip"
@@ -136,9 +161,19 @@ def main() -> int:
         type=Path,
         default=Path(".runtime/browsers"),
     )
+    parser.add_argument(
+        "--approved-ui-source",
+        type=Path,
+        default=None,
+        help="Optional pinned 22-image final UI archive folder.",
+    )
     args = parser.parse_args()
     repo_root = args.repo_root.resolve()
-    zip_path, checksum_path = build(repo_root, args.browser_source.resolve())
+    zip_path, checksum_path = build(
+        repo_root,
+        args.browser_source.resolve(),
+        args.approved_ui_source.resolve() if args.approved_ui_source is not None else None,
+    )
     print(f"Built {zip_path}")
     print(f"Checksum file {checksum_path}")
     return 0
