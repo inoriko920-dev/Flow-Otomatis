@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadRequest,
     GeneratedMediaDownloadResult,
@@ -106,14 +107,16 @@ class GoogleFlowDownloadProvider:
         detail = evidence.detail[:500]
 
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
-            reported = Path(evidence.output_path or "").expanduser().resolve()
+            # Do not call resolve() before verifying the driver's original
+            # path: a symlink could mask an unrelated file as our partial.
+            reported = Path(evidence.output_path or "").expanduser().absolute()
             if reported != partial_path:
                 raise MediaDownloadAmbiguousError(
                     "Flow reported download success at an unexpected path."
                 )
-            if not partial_path.is_file() or partial_path.stat().st_size <= 0:
+            if not is_available_output(str(partial_path)):
                 raise MediaDownloadAmbiguousError(
-                    "Flow reported download success without a non-empty file."
+                    "Flow reported download success without a readable, nonempty regular file."
                 )
             final_path.parent.mkdir(parents=True, exist_ok=True)
             try:
