@@ -587,3 +587,41 @@ def test_final_approved_mockup_summary_metrics_and_profile_bars(qtbot) -> None:
     ]
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
+
+
+def test_main_app_preview_reuses_real_navigation_instead_of_duplicate_fake_shell(
+    qtbot, monkeypatch
+) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    observed: list[str] = []
+
+    def inspect_dialog(dialog: CreditUixDialog) -> int:
+        assert dialog._app_shell is True
+        sidebar = dialog.findChild(QFrame, "UixSidebar")
+        dock = dialog.findChild(QFrame, "UixRightDock")
+        assert sidebar is not None and sidebar.isHidden()
+        assert dock is not None and dock.isHidden()
+        assert dialog.current_state == "UIX-01-A"
+        assert dialog.source_selector.currentData() == "demo"
+        assert dialog.live_dispatch_enabled is False
+        observed.append(dialog.windowTitle())
+        dialog.close()
+        return 0
+
+    monkeypatch.setattr(CreditUixDialog, "exec", inspect_dialog)
+    window.open_credit_uix_preview()
+    assert len(observed) == 1
+    assert "Simulasi" in observed[0]
+    window.close()
+
+
+def test_standalone_uix_preview_retains_seven_readonly_routes(qtbot) -> None:
+    dialog = CreditUixDialog()
+    qtbot.addWidget(dialog)
+    sidebar = dialog.findChild(QFrame, "UixSidebar")
+    dock = dialog.findChild(QFrame, "UixRightDock")
+    assert sidebar is not None and not sidebar.isHidden()
+    assert dock is not None and not dock.isHidden()
+    assert dialog._app_shell is False
+    dialog.close()
