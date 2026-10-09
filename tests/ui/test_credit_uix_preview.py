@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QStackedLayout,
     QTableWidget,
 )
 
@@ -689,5 +690,58 @@ def test_owner_approved_smart_plan_stepper_and_policy_alert_colors(qtbot) -> Non
     dialog.set_state("UIX-08-B")
     labels = [label.text() for label in dialog.scroller.widget().findChildren(QLabel)]
     assert "G1 — Izin otomatisasi belum dapat dipastikan" in labels
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_modal_groups_show_real_qt_scrim_over_readonly_workspace_and_agent(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-08-B", default_to_demo=True)
+    qtbot.addWidget(dialog)
+    for state in (
+        "UIX-02-A",
+        "UIX-04-A",
+        "UIX-07-A",
+        "UIX-08-A",
+        "UIX-08-B",
+    ):
+        dialog.set_state(state)
+        root = dialog.scroller.widget()
+        assert root is not None
+        layered = root.layout()
+        assert isinstance(layered, QStackedLayout)
+        assert layered.stackingMode() == QStackedLayout.StackingMode.StackAll
+        assert layered.count() == 2
+        assert root.findChild(QFrame, "UixModalScrim") is not None
+        assert root.findChild(QWidget, "UixWorkspaceBackdrop") is not None
+        agent = root.findChild(QFrame, "UixBackdropAgentDock")
+        assert agent is not None
+        assert agent.width() <= 280
+        assert root.findChild(QTableWidget, "UixBackdropSceneTable") is not None
+        assert root.findChild(QFrame, "UixScenarioModal") is not None
+        assert dialog.live_dispatch_enabled is False
+
+    dialog.set_state("UIX-01-A")
+    root = dialog.scroller.widget()
+    assert root is not None
+    assert isinstance(root.layout(), QVBoxLayout)
+    assert root.findChild(QFrame, "UixModalScrim") is None
+    dialog.close()
+
+
+def test_policy_overlay_backdrop_uses_local_workspace_without_remote_entitlement(qtbot) -> None:
+    workspace = _workspace_with_mixed_real_scenes()
+    dialog = CreditUixDialog(
+        workspace=workspace, initial_state="UIX-08-B", default_to_demo=True
+    )
+    qtbot.addWidget(dialog)
+    root = dialog.scroller.widget()
+    assert root is not None
+    backdrop = root.findChild(QWidget, "UixWorkspaceBackdrop")
+    assert backdrop is not None
+    text = " ".join(label.text() for label in backdrop.findChildren(QLabel))
+    assert workspace.episode_id in text
+    assert "Workspace lokal" in text
+    assert "TIDAK DIKETAHUI" in text
+    assert "PROVIDER TIDAK TERSAMBUNG" in text
     assert not dialog.live_dispatch_enabled
     dialog.close()
