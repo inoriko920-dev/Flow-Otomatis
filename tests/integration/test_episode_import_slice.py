@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import warnings
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -396,3 +397,39 @@ def test_legacy_workspace_loads_without_baseline_and_migrates_only_on_write(
     with sqlite3.connect(db) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(scenes)")}
     assert "image_sha256_imported" in columns
+
+
+@pytest.mark.parametrize(
+    "extra_name",
+    [
+        "EP001_STEVE_JOBS_COMPLETE/08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__v1.0.png",
+        "EP001_STEVE_JOBS_COMPLETE/08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__V1.0.PNG",
+    ],
+)
+def test_ambiguous_zip_image_entries_never_import_or_hash(
+    tmp_path: Path, extra_name: str
+) -> None:
+    package = _write_package(tmp_path / "duplicate_images.zip", _manifest())
+    # zipfile deliberately allows duplicate names; a read-by-name then resolves
+    # the last member, which is not an acceptable source for pinned SHA-256.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with zipfile.ZipFile(package, "a") as archive:
+            archive.writestr(extra_name, b"shadow-image-content")
+    reader = EpisodePackageReader()
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        reader.load(package)
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        reader.image_digest(
+            package,
+            "SCENE_016",
+            "../08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__v1.0.png",
+        )
+    projects = tmp_path / "projects"
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        EpisodeImportService(
+            reader,
+            SqliteWorkspaceRepository(projects),
+            image_verifier=reader,
+        ).import_package(package)
+    assert not projects.exists()
