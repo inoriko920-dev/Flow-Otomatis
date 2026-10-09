@@ -1181,6 +1181,7 @@ class MainWindow(QMainWindow):
             workspace=self._current_workspace,
             image_verifier=self._image_verifier,
             default_to_demo=True,
+            app_shell=True,
         )
         workspace = self._current_workspace
         preview.exec()
