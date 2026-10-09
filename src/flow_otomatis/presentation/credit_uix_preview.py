@@ -395,9 +395,7 @@ class CreditUixDialog(QDialog):
         top = QHBoxLayout()
         top.addWidget(
             page_header(
-                "22 Desain UI Final • Simulasi"
-                if app_shell
-                else "Workspace / Pratinjau Multiakun",
+                "22 Desain UI Final • Simulasi" if app_shell else "Workspace / Pratinjau Multiakun",
                 "Contoh interaktif • Omni Flash 1.1  •  720p  •  16:9",
             )
         )
