@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QWidget,
+)
 
 from flow_otomatis.application.ports.workspace_repository import WorkspaceReadIssue
 from flow_otomatis.domain.project import WorkspaceState
