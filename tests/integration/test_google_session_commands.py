@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 
 import pytest
 
+from flow_otomatis.application.ports.google_flow_preflight import (
+    GoogleFlowAccessProbe,
+    GoogleFlowAccessState,
+)
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionProfile,
     GoogleSessionRestartGate,
@@ -140,3 +144,44 @@ def test_check_all_is_serial_and_returns_only_sanitized_profiles() -> None:
     for forbidden in ("cookie", "password", "credential", "browsercontext", "playwright"):
         assert forbidden not in serialized
     assert commands.shutdown(timeout_s=1.0) is True
+
+
+class ThreadAwareFlowPreflight:
+    def __init__(self) -> None:
+        self.thread_ids: list[int] = []
+        self.calls = 0
+
+    def check(self, profile_id: str) -> GoogleFlowAccessProbe:
+        self.thread_ids.append(threading.get_ident())
+        self.calls += 1
+        return GoogleFlowAccessProbe(
+            profile_id=profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Halaman resmi Flow terjangkau; akun belum terverifikasi.",
+        )
+
+    def close(self, profile_id: str) -> None:
+        del profile_id
+
+    def shutdown(self) -> None:
+        pass
+
+
+def test_flow_preflight_uses_session_worker_owner_and_fails_closed_until_ready() -> None:
+    port = ThreadAwareSessionPort()
+    flow = ThreadAwareFlowPreflight()
+    commands = ThreadedGoogleSessionCommands(port, flow_preflight=flow)
+    profile_id = port.profile.profile_id
+
+    with pytest.raises(FlowOtomatisError, match="Periksa ulang sesi"):
+        commands.submit_check_flow(profile_id).result(timeout=1.0)
+    assert flow.calls == 0
+
+    commands.submit_check_profile(profile_id).result(timeout=1.0)
+    probe = commands.submit_check_flow(profile_id).result(timeout=1.0)
+    assert probe.state is GoogleFlowAccessState.REACHABLE_ONLY
+    assert flow.calls == 1
+    assert flow.thread_ids == port.thread_ids[-1:]
+    assert flow.thread_ids[0] != threading.get_ident()
+    assert commands.shutdown(timeout_s=1.0)

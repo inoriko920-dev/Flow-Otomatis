@@ -28,6 +28,41 @@ _PROFILE_ID = re.compile(r"^profile-[0-9a-f]{12}$")
 _GOOGLE_FLOW_URL = "https://labs.google/fx/tools/flow"
 
 
+def classify_flow_read_only_navigation(
+    final_url: str,
+    http_status: int | None,
+) -> tuple[GoogleFlowAccessState, str]:
+    """Fail closed: official-host reachability is never identity verification."""
+
+    parsed = urlparse(final_url)
+    hostname = (parsed.hostname or "").lower()
+    if hostname == "accounts.google.com" or http_status == 401:
+        return (
+            GoogleFlowAccessState.AUTH_REQUIRED,
+            "Flow memerlukan login Google manual; akses workspace belum terverifikasi.",
+        )
+    if http_status is not None and http_status >= 400:
+        return (
+            GoogleFlowAccessState.UNAVAILABLE,
+            f"Flow mengembalikan HTTP {http_status}; akses belum tersedia.",
+        )
+    if hostname == "labs.google" or hostname.endswith(".labs.google"):
+        if "onboard" in parsed.path.lower():
+            return (
+                GoogleFlowAccessState.UNAVAILABLE,
+                "Flow menampilkan alur onboarding; akses workspace belum diverifikasi.",
+            )
+        return (
+            GoogleFlowAccessState.REACHABLE_ONLY,
+            "Halaman Google Flow terjangkau. Identitas akun, workspace dan generate "
+            "belum terverifikasi.",
+        )
+    return (
+        GoogleFlowAccessState.UNKNOWN,
+        "Flow berada pada halaman tidak dikenal; akses belum dapat dikonfirmasi.",
+    )
+
+
 class GoogleFlowPreflightDriver(Protocol):
     """Tiny read-only browser seam for fixture tests."""
 
@@ -79,26 +114,9 @@ class PlaywrightGoogleFlowPreflightDriver:
                 "Browser gagal membuka Flow; tidak ada aksi pembuatan dilakukan.",
             )
 
-        if response is not None and response.status >= 400:
-            return (
-                GoogleFlowAccessState.UNAVAILABLE,
-                f"Flow mengembalikan HTTP {response.status}; tidak ada aksi pembuatan dilakukan.",
-            )
-
-        hostname = (urlparse(page.url).hostname or "").lower()
-        if hostname == "accounts.google.com":
-            return (
-                GoogleFlowAccessState.AUTH_REQUIRED,
-                "Flow mengarahkan ke login Google; selesaikan login secara manual.",
-            )
-        if hostname == "labs.google" or hostname.endswith(".labs.google"):
-            return (
-                GoogleFlowAccessState.REACHABLE,
-                "Halaman resmi Google Flow dapat dijangkau. Generate belum diuji.",
-            )
-        return (
-            GoogleFlowAccessState.UNKNOWN,
-            "Flow terbuka pada host yang tidak dikenali; tidak ada aksi pembuatan dilakukan.",
+        return classify_flow_read_only_navigation(
+            page.url,
+            response.status if response is not None else None,
         )
 
     def close(self, profile_id: str) -> None:
