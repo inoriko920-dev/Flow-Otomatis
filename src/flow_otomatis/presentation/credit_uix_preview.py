@@ -14,6 +14,7 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -308,12 +309,22 @@ class CreditUixDialog(QDialog):
         workspace: WorkspaceState | None = None,
         image_verifier: EpisodeImageVerifierPort | None = None,
         initial_state: str = "UIX-01-A",
+        default_to_demo: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("CreditUixDialog")
         self.setWindowTitle("Flow-Otomatis | Pratinjau 22 UI Multiakun (Simulasi)")
-        self.resize(1720, 960)
-        self.setMinimumSize(1250, 740)
+        # Adapt the window to a 1366x768 laptop; allow Qt scroll for wide tables.
+        self.setMinimumSize(1080, 600)
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            bounds = screen.availableGeometry()
+            self.resize(
+                min(1720, max(1080, bounds.width() - 48)),
+                min(960, max(600, bounds.height() - 48)),
+            )
+        else:
+            self.resize(1480, 840)
         self.setStyleSheet(theme.application_stylesheet())
         self._workspace = workspace
         self._image_verifier = image_verifier
@@ -436,7 +447,8 @@ class CreditUixDialog(QDialog):
         self.source_selector.addItem("Skenario contoh • 12 Scene sintetis", "demo")
         if workspace is not None:
             self.source_selector.addItem("Scene Workspace lokal • baca saja", "local")
-            self.source_selector.setCurrentIndex(1)
+            if not default_to_demo:
+                self.source_selector.setCurrentIndex(1)
             sources = QHBoxLayout()
             sources.addWidget(QLabel("Sumber data"))
             sources.addWidget(self.source_selector, 1)
@@ -454,6 +466,18 @@ class CreditUixDialog(QDialog):
         self.state_selector = QComboBox()
         self.state_selector.setObjectName("UixStateSelector")
         navigation.addWidget(self.state_selector, 2)
+        self.previous_state_button = QPushButton("←")
+        self.previous_state_button.setObjectName("UixPreviousState")
+        self.previous_state_button.setAccessibleName("Tampilan UI sebelumnya")
+        self.previous_state_button.setToolTip("Tampilan UI sebelumnya")
+        self.previous_state_button.clicked.connect(self._previous_state)
+        navigation.addWidget(self.previous_state_button)
+        self.next_state_button = QPushButton("→")
+        self.next_state_button.setObjectName("UixNextState")
+        self.next_state_button.setAccessibleName("Tampilan UI berikutnya")
+        self.next_state_button.setToolTip("Tampilan UI berikutnya")
+        self.next_state_button.clicked.connect(self._next_state)
+        navigation.addWidget(self.next_state_button)
         main.addLayout(navigation)
         self.group_selector.currentIndexChanged.connect(self._group_changed)
         self.state_selector.currentIndexChanged.connect(self._select_from_combo)
@@ -477,21 +501,25 @@ class CreditUixDialog(QDialog):
         )
         self.preflight_button.clicked.connect(self.show_local_preflight)
         self.footer.addWidget(self.preflight_button)
+        # Split secondary actions into a second row for laptop-sized windows.
+        secondary_actions = QHBoxLayout()
+        secondary_actions.addStretch(1)
         self.export_button = QPushButton("Simpan Laporan JSON")
         self.export_button.setObjectName("UixExport")
         self.export_button.clicked.connect(self.export_preview)
-        self.footer.addWidget(self.export_button)
+        secondary_actions.addWidget(self.export_button)
         self.compare_button = QPushButton("Bandingkan UI Final")
         self.compare_button.setObjectName("UixCompareApproved")
         self.compare_button.setToolTip(
             "Tampilkan desain PNG asli yang lulus SHA-256 bersama tampilan Qt saat ini."
         )
         self.compare_button.clicked.connect(self.compare_with_approved_ui)
-        self.footer.addWidget(self.compare_button)
+        secondary_actions.addWidget(self.compare_button)
         close = QPushButton("Tutup")
         close.clicked.connect(self.accept)
-        self.footer.addWidget(close)
+        secondary_actions.addWidget(close)
         main.addLayout(self.footer)
+        main.addLayout(secondary_actions)
         self._group_changed(0)
         self.set_state(initial_state)
 
@@ -508,6 +536,18 @@ class CreditUixDialog(QDialog):
     def live_dispatch_enabled(self) -> bool:
         """Fail-closed public UI guard; no real provider is ever wired here."""
         return False
+
+    def _previous_state(self) -> None:
+        index = next(
+            i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state
+        )
+        self.set_state(UIX_SCENARIOS[max(0, index - 1)].code)
+
+    def _next_state(self) -> None:
+        index = next(
+            i for i, item in enumerate(UIX_SCENARIOS) if item.code == self._current_state
+        )
+        self.set_state(UIX_SCENARIOS[min(len(UIX_SCENARIOS) - 1, index + 1)].code)
 
     def _group_changed(self, index: int) -> None:
         if index < 0:
@@ -573,6 +613,11 @@ class CreditUixDialog(QDialog):
         self.preflight_button.setVisible(local)
         self.preflight_button.setEnabled(local)
         self._current_state = code
+        current_index = next(
+            i for i, item in enumerate(UIX_SCENARIOS) if item.code == code
+        )
+        self.previous_state_button.setEnabled(current_index > 0)
+        self.next_state_button.setEnabled(current_index < len(UIX_SCENARIOS) - 1)
         self._dock_state.setText(f"{code} • {scenario.title}")
         self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
         self._last_local_plan_approved = False
@@ -644,7 +689,13 @@ class CreditUixDialog(QDialog):
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 table.setItem(row_index, col_index, item)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # Horizontal scrolling preserves readable IDs, titles and status columns.
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setStretchLastSection(True)
+        for column in range(len(columns)):
+            suggested = table.sizeHintForColumn(column) + 22
+            table.setColumnWidth(column, min(260, max(112, suggested)))
         table.resizeRowsToContents()
         table.itemSelectionChanged.connect(lambda view=table: self._selected_row_details(view))
 
