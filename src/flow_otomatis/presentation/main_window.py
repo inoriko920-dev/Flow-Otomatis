@@ -542,6 +542,15 @@ class MainWindow(QMainWindow):
             self._project_label.setText("EP001 • Steve Jobs")
             self._status_project.setText("EP001 • 60 scene")
 
+        if self._production_shell:
+            # Some sidebar routes still contain frozen example-only content.
+            # Show an unmistakable banner; do not let the owner mistake
+            # synthetic profiles, output MP4 or credits for persisted data.
+            self._project_label.setText("Pratinjau • Belum ada data proyek")
+            self._project_state_label.setText(f"{fixture.surface} • CONTOH")
+            self._status_project.setText("DATA CONTOH")
+            self._runtime_status.setText("Layar contoh • Generate Flow belum aktif")
+
         screen = build_screen(fixture)
         self._replace_layout_widget(self._content_layout, screen)
         right_panel = build_right_panel(fixture)
