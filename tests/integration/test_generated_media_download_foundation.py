@@ -795,9 +795,7 @@ def test_atomic_download_commit_rejects_stale_replacement_without_erasing_histor
     video = Path(original.output_path or "")
     assert video.read_bytes() == b"fake-video"
 
-    with __import__("sqlite3").connect(
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ) as connection:
+    with __import__("sqlite3").connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as connection:
         connection.execute(
             "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
             ("remote:NEW_RESULT", "SCENE_001"),
