@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
 
+from flow_otomatis.application.ports.google_flow_preflight import (
+    GoogleFlowAccessProbe,
+    GoogleFlowAccessState,
+)
 from flow_otomatis.presentation.main_window import MainWindow
 
 
@@ -138,4 +144,40 @@ def test_unreadable_gemini_key_metadata_cannot_be_mistaken_for_zero_keys(qtbot) 
     assert "api-keys.txt" not in text
     assert "0 key" not in text
     assert window._status_project.text() == "Tidak ada bukti akses provider"
+    window.close()
+
+
+def test_stale_flow_probe_after_profile_storage_failure_is_revoked(qtbot) -> None:
+    class UnreadableSessions:
+        def list_profiles(self):
+            raise OSError("C:/private/browser-profile/cookies.sqlite")
+
+    window = MainWindow(google_session_service=UnreadableSessions())
+    qtbot.addWidget(window)
+    window.configure_production_shell()
+    profile_id = "profile-safe-test"
+    window._fixture_code = "REAL_GOOGLE_LOGIN"
+    window._active_google_profile_id = profile_id
+    window._google_flow_epochs[profile_id] = 3
+    window._google_flow_busy.add(profile_id)
+
+    probe = GoogleFlowAccessProbe(
+        profile_id=profile_id,
+        state=GoogleFlowAccessState.REACHABLE_ONLY,
+        checked_at=datetime.now(UTC),
+        detail="Untrusted result from a pending worker",
+    )
+    window._on_google_flow_checked(profile_id, 3, probe)
+
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    assert window._active_google_profile_id is None
+    assert profile_id not in window._google_flow_busy
+    assert profile_id not in window._google_flow_probes
+    assert window._google_flow_epochs[profile_id] > 3
+    assert "cookies.sqlite" not in _visible_text(window)
+
+    # An exact late duplicate is fenced by the incremented epoch.
+    window._on_google_flow_checked(profile_id, 3, probe)
+    assert profile_id not in window._google_flow_probes
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
     window.close()
