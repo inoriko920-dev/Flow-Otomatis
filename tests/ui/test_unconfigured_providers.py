@@ -101,3 +101,41 @@ def test_direct_profile_and_key_refresh_cannot_open_mock_accounts_in_production(
     assert "LAYANAN TIDAK TERSEDIA" in _visible_text(window)
     assert window._active_google_profile_id is None
     window.close()
+
+
+def test_unreadable_google_profile_metadata_fails_closed_without_leaking_paths(qtbot) -> None:
+    class CorruptSessions:
+        def list_profiles(self):
+            raise OSError("C:/private/google/profile/cookie.sqlite")
+
+    window = MainWindow(google_session_service=CorruptSessions())
+    qtbot.addWidget(window)
+    window.configure_production_shell()
+    window._open_navigation_item("Profil Google")
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES_UNAVAILABLE"
+    text = _visible_text(window)
+    assert "STATUS LAYANAN TIDAK DIKETAHUI" in text
+    assert "Data tersimpan tidak diubah" in text
+    assert "cookie.sqlite" not in text
+    assert "C:/private" not in text
+    assert window._project_label.text() == "Data lokal belum dapat dibaca"
+    assert window._connection_badge.text() == "●  Mode Lokal"
+    window.close()
+
+
+def test_unreadable_gemini_key_metadata_cannot_be_mistaken_for_zero_keys(qtbot) -> None:
+    class CorruptKeys:
+        def list_profiles(self):
+            raise OSError("C:/private/api-keys.txt")
+
+    window = MainWindow(gemini_key_service=CorruptKeys())
+    qtbot.addWidget(window)
+    window.configure_production_shell()
+    window._open_navigation_item("Gemini Keys")
+    assert window.fixture_code == "REAL_GEMINI_KEYS_UNAVAILABLE"
+    text = _visible_text(window)
+    assert "STATUS LAYANAN TIDAK DIKETAHUI" in text
+    assert "api-keys.txt" not in text
+    assert "0 key" not in text
+    assert window._status_project.text() == "Tidak ada bukti akses provider"
+    window.close()
