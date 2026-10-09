@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
-from flow_otomatis.domain.errors import InvalidDurationError
+from flow_otomatis.domain.errors import InternalInvariantError, InvalidDurationError
 from flow_otomatis.domain.scene import SceneReadiness
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
@@ -188,3 +188,45 @@ def test_auto_duration_planner_skips_invalid_targets_and_preserves_missing_input
     assert result.scenes[1].image_sha256_imported == "b" * 64
     assert result.scenes[2].selected_flow_duration_s is None
     assert result.scenes[2].target_duration_s == 11.0
+
+
+def test_bulk_duration_rejects_stale_preview_and_keeps_newer_manual_choice(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    plan = planner.preview_missing_recommended_durations(original.episode_id)
+    assert plan == (("SCENE_016", 8),)
+
+    # Another editor writes a different manual choice while confirmation is open.
+    manually_selected = planner.select_flow_duration(original.episode_id, "SCENE_016", 10)
+    with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
+        planner.fill_missing_recommended_durations(
+            original.episode_id, expected_workspace=original
+        )
+    assert planner.load_workspace(original.episode_id) == manually_selected
+    assert planner.load_workspace(original.episode_id).scenes[0].selected_flow_duration_s == 10
+
+
+def test_bulk_duration_stale_preview_rejects_changed_target_even_if_ceil_is_same(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    scene = original.scenes[0]
+    newer = replace(
+        original,
+        scenes=(replace(scene, target_duration_s=7.55, trim_target_s=7.55),),
+    )
+    repository.update(newer)
+    assert planner.preview_missing_recommended_durations(original.episode_id) == (
+        ("SCENE_016", 8),
+    )
+    with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
+        planner.fill_missing_recommended_durations(
+            original.episode_id, expected_workspace=original
+        )
+    assert planner.load_workspace(original.episode_id) == newer
