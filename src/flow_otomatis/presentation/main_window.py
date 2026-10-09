@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import Future
 from dataclasses import dataclass
+import json
 from functools import partial
 from pathlib import Path
 
@@ -48,6 +49,10 @@ from flow_otomatis.domain.errors import (
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
+from flow_otomatis.presentation.diagnostics_view import (
+    LocalDiagnosticSnapshot,
+    build_local_diagnostics_view,
+)
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -260,6 +265,7 @@ class MainWindow(QMainWindow):
         self._selected_scene_id: str | None = None
         self._active_uix_preview: CreditUixDialog | None = None
         self._uix_return_workspace: WorkspaceState | None = None
+        self._last_diagnostics_snapshot: LocalDiagnosticSnapshot | None = None
         self._google_session_signals = _GoogleSessionSignals(self)
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
@@ -482,6 +488,9 @@ class MainWindow(QMainWindow):
         if item == "Gemini Keys" and self._gemini_key_service is not None:
             self.show_gemini_keys()
             return
+        if item == "Diagnostik" and self._production_shell:
+            self.show_local_diagnostics()
+            return
         self.show_fixture(_NAV_DEFAULTS[item])
 
     def _replace_layout_widget(self, layout: QVBoxLayout, widget: QWidget | None) -> None:
@@ -593,6 +602,75 @@ class MainWindow(QMainWindow):
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
         self._right_host.setVisible(False)
+
+    def show_local_diagnostics(self) -> None:
+        """Show facts from local persistence without any provider interaction."""
+
+        if self._project_library_service is None:
+            snapshot = LocalDiagnosticSnapshot(None, None, None)
+        else:
+            try:
+                scan = self._project_library_service.scan_recent(limit=10)
+            except (FlowOtomatisError, OSError, ValueError):
+                # Fail closed: no raw exception, project path or account data in UI.
+                snapshot = LocalDiagnosticSnapshot(
+                    None,
+                    None,
+                    len(self._current_workspace.scenes)
+                    if self._current_workspace is not None
+                    else None,
+                )
+            else:
+                snapshot = LocalDiagnosticSnapshot(
+                    recent_project_count=len(scan.workspaces),
+                    recent_project_issue_count=len(scan.issues),
+                    active_scene_count=(
+                        len(self._current_workspace.scenes)
+                        if self._current_workspace is not None
+                        else None
+                    ),
+                )
+        self._invalidate_agent_context()
+        self._fixture_code = "REAL_DIAGNOSTICS"
+        self._set_navigation("Diagnostik")
+        self._project_label.setText("Diagnostik lokal")
+        self._project_state_label.setText("Pemeriksaan aplikasi")
+        self._status_project.setText("Hanya data lokal")
+        self._last_diagnostics_snapshot = snapshot
+        view = build_local_diagnostics_view(
+            snapshot,
+            on_refresh=self.show_local_diagnostics,
+            on_export=lambda: self._export_local_diagnostics(snapshot),
+        )
+        self._replace_layout_widget(self._content_layout, view)
+        self._replace_layout_widget(self._right_layout, None)
+        self._right_host.setVisible(False)
+
+    def _export_local_diagnostics(self, snapshot: LocalDiagnosticSnapshot) -> None:
+        """Write a sanitized JSON only after explicit operator file selection."""
+
+        if (
+            self._fixture_code != "REAL_DIAGNOSTICS"
+            or self._last_diagnostics_snapshot is not snapshot
+        ):
+            return
+        filename, _filter = QFileDialog.getSaveFileName(
+            self, "Ekspor diagnostik lokal tanpa rahasia", "diagnostik_lokal.json", "JSON (*.json)"
+        )
+        if not filename:
+            return
+        try:
+            with Path(filename).open("x", encoding="utf-8") as output:
+                json.dump(snapshot.as_report(), output, indent=2, ensure_ascii=False)
+                output.write("\\n")
+        except FileExistsError:
+            QMessageBox.warning(
+                self, "File sudah ada", "File diagnostik lama tidak akan ditimpa."
+            )
+        except OSError:
+            QMessageBox.warning(
+                self, "Ekspor gagal", "Tidak dapat menyimpan laporan diagnostik lokal."
+            )
 
     def _open_local_project_from_ui(self, episode_id: str) -> None:
         """Open a Project Hub row without leaking storage/decode failures to Qt."""
