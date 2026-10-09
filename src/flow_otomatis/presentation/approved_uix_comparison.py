@@ -62,9 +62,7 @@ class ApprovedUixComparisonDialog(QDialog):
             vertical = QVBoxLayout(column)
             heading = QLabel(title)
             heading.setObjectName("UixComparisonLabel")
-            heading.setStyleSheet(
-                f"font-size: 11pt; font-weight: 600; color: {theme.PRIMARY};"
-            )
+            heading.setStyleSheet(f"font-size: 11pt; font-weight: 600; color: {theme.PRIMARY};")
             vertical.addWidget(heading)
             visual = QLabel()
             visual.setObjectName("UixComparisonImage")
@@ -79,9 +77,7 @@ class ApprovedUixComparisonDialog(QDialog):
             )
             visual.setMinimumSize(820, 462)
             vertical.addWidget(visual)
-            vertical.addWidget(
-                QLabel(f"Sumber: {pixmap.width()} × {pixmap.height()} piksel")
-            )
+            vertical.addWidget(QLabel(f"Sumber: {pixmap.width()} × {pixmap.height()} piksel"))
             vertical.addStretch(1)
             cols.addWidget(column)
 
