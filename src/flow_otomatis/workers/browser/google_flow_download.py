@@ -86,6 +86,13 @@ class GoogleFlowDownloadProvider:
             raise MediaDownloadProviderError("Remote result identifier is empty.")
 
         final_path = Path(request.destination_path).expanduser().absolute()
+        # The service checks its project root; the provider also rejects an
+        # immediate redirected download folder when invoked through another
+        # adapter, including NTFS junctions on Windows.
+        if final_path.parent.is_symlink() or final_path.parent.is_junction():
+            raise MediaDownloadProviderError(
+                "Download destination folder is redirected; nothing was written."
+            )
         if os.path.lexists(final_path):
             raise MediaDownloadProviderError(
                 "Final download path already exists and will not be overwritten."
@@ -119,6 +126,13 @@ class GoogleFlowDownloadProvider:
                     "Flow reported download success without a readable, nonempty regular file."
                 )
             final_path.parent.mkdir(parents=True, exist_ok=True)
+            # The worker is asynchronous; recheck the parent before publishing
+            # in case an external actor swapped it during the download.
+            if final_path.parent.is_symlink() or final_path.parent.is_junction():
+                raise MediaDownloadAmbiguousError(
+                    "Download destination folder changed during the attempt; "
+                    "partial preserved for manual recovery."
+                )
             try:
                 # NTFS CreateHardLinkW / POSIX link: fails atomically if final already exists.
                 # Partial and final share the same parent and therefore filesystem.
