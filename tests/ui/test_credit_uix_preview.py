@@ -654,3 +654,24 @@ def test_tariff_and_policy_final_panels_use_owner_approved_readonly_rows(qtbot) 
     assert dialog.findChild(QFrame, "UixScenarioSidePanel") is not None
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
+
+
+def test_owner_approved_smart_plan_stepper_and_policy_alert_colors(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-02-A")
+    qtbot.addWidget(dialog)
+    progress = dialog.findChild(QFrame, "UixSmartCreditPlanStepper")
+    assert progress is not None
+    stages = progress.findChildren(QLabel, "UixSmartCreditPlanStage")
+    assert [stage.text() for stage in stages] == [
+        "1. Scan selesai",
+        "2. Bagi scene",
+        "3. Tinjau anggaran",
+    ]
+    dialog.set_state("UIX-08-A")
+    labels = [label.text() for label in dialog.scroller.widget().findChildren(QLabel)]
+    assert "Persetujuan rencana v3 sudah kedaluwarsa" in labels
+    dialog.set_state("UIX-08-B")
+    labels = [label.text() for label in dialog.scroller.widget().findChildren(QLabel)]
+    assert "G1 — Izin otomatisasi belum dapat dipastikan" in labels
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
