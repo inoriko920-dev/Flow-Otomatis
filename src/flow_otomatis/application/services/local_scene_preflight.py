@@ -28,6 +28,8 @@ _REASON_LABELS = {
     "INVALID_DURATION": "DURASI INVALID",
     "STALE_READINESS": "STATUS LOKAL TIDAK SESUAI",
     "IMAGE_BYTES_UNREADABLE": "BYTE GAMBAR TIDAK TERBACA",
+    "IMAGE_CHANGED_SINCE_IMPORT": "GAMBAR BERUBAH SEJAK IMPOR",
+    "IMAGE_BASELINE_INVALID": "CHECKSUM ACUAN TIDAK VALID",
 }
 
 
@@ -47,6 +49,9 @@ def prepare_local_scene_preflight(
     held: list[dict[str, Any]] = []
     checked_images = 0
     failed_images = 0
+    baseline_matches = 0
+    baseline_mismatches = 0
+    baseline_missing = 0
     for index, scene in enumerate(workspace.scenes, start=1):
         valid_id = _SAFE_SCENE_ID.fullmatch(scene.scene_id) is not None
         safe_id = scene.scene_id if valid_id else f"INVALID_SCENE_ID_AT_{index}"
@@ -66,6 +71,7 @@ def prepare_local_scene_preflight(
             issues.append("MISSING_PROMPT")
 
         image_evidence = "TIDAK DIPERIKSA"
+        baseline_evidence = "BELUM ADA ACUAN"
         if not scene.image_exists:
             image_evidence = "GAMBAR HILANG"
         elif image_verifier is not None:
@@ -88,6 +94,22 @@ def prepare_local_scene_preflight(
             else:
                 checked_images += 1
                 image_evidence = "BYTE TERBACA"
+                baseline = scene.image_sha256_imported
+                if baseline is None:
+                    baseline_missing += 1
+                elif len(baseline) != 64 or any(
+                    char not in "0123456789abcdef" for char in baseline
+                ):
+                    baseline_mismatches += 1
+                    baseline_evidence = "CHECKSUM ACUAN INVALID"
+                    issues.append("IMAGE_BASELINE_INVALID")
+                elif digest != baseline:
+                    baseline_mismatches += 1
+                    baseline_evidence = "BERUBAH SEJAK IMPOR"
+                    issues.append("IMAGE_CHANGED_SINCE_IMPORT")
+                else:
+                    baseline_matches += 1
+                    baseline_evidence = "COCOK DENGAN IMPOR"
 
         chosen = scene.selected_flow_duration_s
         duration_valid = type(chosen) is int and chosen in FLOW_DURATIONS
@@ -116,6 +138,7 @@ def prepare_local_scene_preflight(
             "flow_duration_s": chosen if duration_valid else None,
             "status": "SIAP INPUT LOKAL" if not issues else "DITAHAN",
             "image_evidence": image_evidence,
+            "baseline_evidence": baseline_evidence,
             "issues": [_REASON_LABELS[reason] for reason in issues],
         }
         if issues:
@@ -144,9 +167,18 @@ def prepare_local_scene_preflight(
         ),
         "verified_image_count": checked_images,
         "unreadable_image_count": failed_images,
+        "baseline_match_count": baseline_matches,
+        "baseline_mismatch_count": baseline_mismatches,
+        "baseline_missing_count": baseline_missing,
+        "image_baselines_verified": (
+            image_verifier is not None
+            and len(workspace.scenes) > 0
+            and baseline_matches == len(workspace.scenes)
+        ),
         "warning": (
-            "Byte gambar dibaca dari sumber paket asli (bukan bukti tidak berubah sejak "
-            "impor); izin provider, saldo, dan sesi tetap tidak diketahui. "
+            "Byte gambar dibaca dari paket asli dan dibandingkan dengan acuan "
+            "impor jika tersedia. Proyek lama tanpa acuan tidak membuktikan "
+            "keaslian historis; izin provider, saldo, dan sesi tetap tidak diketahui. "
             if image_verifier is not None
             else "Hanya metadata tersimpan; byte gambar belum dibaca. "
         )
