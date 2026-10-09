@@ -441,3 +441,31 @@ def test_partial_missing_scene_is_not_claimed_as_all_image_bytes_verified() -> N
     assert only_missing["verified_image_count"] == 0
     assert only_missing["image_bytes_verified"] is False
     assert only_missing["held_count"] == 1
+
+def test_sha256_rescan_preserves_selected_scene_after_ready_to_held_reorder(qtbot) -> None:
+    """Never navigate to another Scene merely because byte results reorder rows."""
+    workspace = _workspace(
+        _scene("SCENE_001"),
+        _scene("SCENE_002"),
+        _scene("SCENE_003"),
+    )
+    verifier = _LocalImageReader(("SCENE_002",))
+    dialog = LocalScenePreflightDialog(workspace, image_verifier=verifier)
+    qtbot.addWidget(dialog)
+    dialog.table.setCurrentCell(1, 0)
+    assert dialog.table.item(dialog.table.currentRow(), 0).text() == "SCENE_002"
+
+    dialog.verify_button.click()
+    qtbot.waitUntil(
+        lambda: dialog.report["image_integrity_check"] == "LOCAL_SOURCE_BYTES_READ",
+        timeout=15000,
+    )
+    assert dialog.report["ready_count"] == 2
+    assert dialog.report["held_count"] == 1
+    assert dialog.table.currentRow() == 2
+    assert dialog.table.item(dialog.table.currentRow(), 0).text() == "SCENE_002"
+    assert dialog.table.item(dialog.table.currentRow(), 3).text() == "DITAHAN"
+    assert dialog.open_scene_button.isEnabled()
+    dialog.open_scene_button.click()
+    assert dialog.requested_scene_id == "SCENE_002"
+    dialog.close()
