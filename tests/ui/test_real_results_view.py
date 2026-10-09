@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QTableWidget
 
 from flow_otomatis.application.services import LocalResultsService
@@ -21,7 +23,7 @@ from flow_otomatis.infrastructure.persistence import (
     SqliteWorkspaceRepository,
 )
 from flow_otomatis.presentation.main_window import MainWindow
-from flow_otomatis.presentation.results_view import build_results_view
+from flow_otomatis.presentation.results_view import build_results_view, verified_single_output_folder
 
 
 def _visible_text(window: MainWindow) -> str:
@@ -534,4 +536,114 @@ def test_stale_hasil_refresh_callback_cannot_reload_after_navigation(
     window._refresh_results_from_ui(workspace.episode_id)
     assert window.fixture_code == "REAL_WORKSPACE"
     assert called == []
+    window.close()
+
+
+def test_real_hasil_open_verified_local_output_folder(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    window.show_results_state()
+    captured: list[object] = []
+    monkeypatch.setattr(
+        QDesktopServices, "openUrl", lambda url: captured.append(url) or True
+    )
+    button = window.findChild(QPushButton, "RealResultsOpenFolder")
+    assert button is not None and button.isEnabled()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert len(captured) == 1
+    assert captured[0].isLocalFile()
+    latest = service.snapshot(window.current_workspace.episode_id)
+    assert Path(captured[0].toLocalFile()) == verified_single_output_folder(latest)
+    assert window.fixture_code == "REAL_RESULTS"
+    window.close()
+
+
+def test_results_open_folder_fails_closed_if_mp4_disappears(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, service, _database = ready_results
+    window.show_results_state()
+    before = service.snapshot(window.current_workspace.episode_id)
+    original = Path(before.scenes[0].output_path)
+    original.unlink()
+    opened: list[str] = []
+    warnings: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True
+    )
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _window, title, detail: warnings.append((title, detail))
+    )
+    button = window.findChild(QPushButton, "RealResultsOpenFolder")
+    assert button is not None
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert not opened
+    assert warnings and warnings[0][0] == "Folder Output Tidak Tersedia"
+    assert "private" not in warnings[0][1].lower()
+    window.close()
+
+
+def test_results_open_folder_ignores_stale_page_callback_after_refresh(
+    ready_results, monkeypatch
+) -> None:
+    window, _service, _database = ready_results
+    window.show_results_state()
+    prior = window._last_results_snapshot
+    assert prior is not None
+    window.show_results_state()
+    assert window._last_results_snapshot is not prior
+    opened: list[str] = []
+    monkeypatch.setattr(
+        QDesktopServices, "openUrl", lambda url: opened.append(str(url)) or True
+    )
+    window._open_result_folder_from_ui(prior)
+    assert opened == []
+    window.close()
+
+
+def test_results_open_folder_does_not_choose_between_distinct_directories(
+    ready_results, tmp_path, qtbot
+) -> None:
+    window, service, _database = ready_results
+    actual = service.snapshot(window.current_workspace.episode_id)
+    first = actual.scenes[0]
+    second_dir = tmp_path / "different_folder"
+    second_dir.mkdir()
+    other_file = second_dir / "SCENE_002.mp4"
+    other_file.write_bytes(b"valid-other-video")
+    other = replace(first, scene_id="SCENE_002", output_path=str(other_file))
+    mixed = replace(actual, scenes=(first, other))
+    assert verified_single_output_folder(mixed) is None
+
+    body = build_results_view(
+        mixed,
+        on_export_manifest=lambda: None,
+        on_open_folder=lambda: None,
+    )
+    qtbot.addWidget(body)
+    button = body.findChild(QPushButton, "RealResultsOpenFolder")
+    assert button is not None and not button.isEnabled()
+    assert "beberapa folder" in button.toolTip()
+    body.close()
+    window.close()
+
+
+def test_results_open_folder_windows_failure_is_redacted(
+    ready_results, qtbot, monkeypatch
+) -> None:
+    window, _service, _database = ready_results
+    window.show_results_state()
+    messages: list[tuple[str, str]] = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: False)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _window, title, detail: messages.append((title, detail))
+    )
+    button = window.findChild(QPushButton, "RealResultsOpenFolder")
+    assert button is not None and button.isEnabled()
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert messages == [
+        ("Folder Output Tidak Dapat Dibuka", "Windows belum dapat membuka folder MP4 yang tersedia.")
+    ]
     window.close()
