@@ -515,9 +515,7 @@ def test_approved_dialog_scenarios_keep_centered_native_modal_surface(qtbot) -> 
         if code in {"UIX-08-A", "UIX-08-B"}:
             details = root.findChild(QFrame, "UixScenarioSidePanel")
             assert details is not None
-            assert "Dampak" in " ".join(
-                label.text() for label in details.findChildren(QLabel)
-            )
+            assert "Dampak" in " ".join(label.text() for label in details.findChildren(QLabel))
         assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.set_state("UIX-05-C")
     root = dialog.scroller.widget()
