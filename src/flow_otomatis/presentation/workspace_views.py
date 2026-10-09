@@ -143,10 +143,17 @@ def build_workspace_view(
             on_scene_selected(workspace.scenes[row].scene_id)
 
     table.cellClicked.connect(notify_selected)
-    _button(root, "Scan Ulang Gambar").clicked.connect(on_rescan_images)
+    scan_button = _button(root, "Scan Ulang Gambar")
+    scan_button.clicked.connect(on_rescan_images)
     if on_preview_credit_ui is not None:
-        # Temporary E12-02 extension; no new permanent sidebar route.
-        _button(root, "Pratinjau 22 UI Multiakun (Simulasi)").clicked.connect(on_preview_credit_ui)
+        # Add only to the real Workspace controls; frozen reference views remain unchanged.
+        action_row = scan_button.parentWidget().layout()
+        if action_row is None:
+            raise RuntimeError("Workspace controls layout is missing")
+        preview_button = QPushButton("Pratinjau 22 UI Multiakun (Simulasi)")
+        preview_button.setObjectName("UixPreviewWorkspaceAction")
+        action_row.addWidget(preview_button)
+        preview_button.clicked.connect(on_preview_credit_ui)
 
     for label in root.findChildren(QLabel):
         text = label.text()
