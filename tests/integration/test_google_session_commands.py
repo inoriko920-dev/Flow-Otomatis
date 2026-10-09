@@ -185,3 +185,35 @@ def test_flow_preflight_uses_session_worker_owner_and_fails_closed_until_ready()
     assert flow.thread_ids == port.thread_ids[-1:]
     assert flow.thread_ids[0] != threading.get_ident()
     assert commands.shutdown(timeout_s=1.0)
+
+
+class SlowFlowPreflight(ThreadAwareFlowPreflight):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def check(self, profile_id: str) -> GoogleFlowAccessProbe:
+        self.started.set()
+        assert self.release.wait(timeout=2.0)
+        return super().check(profile_id)
+
+
+def test_slow_flow_check_serializes_against_same_profile_login_and_recheck() -> None:
+    port = ThreadAwareSessionPort()
+    flow = SlowFlowPreflight()
+    commands = ThreadedGoogleSessionCommands(port, flow_preflight=flow)
+    profile_id = port.profile.profile_id
+    commands.submit_check_profile(profile_id).result(timeout=1.0)
+
+    active = commands.submit_check_flow(profile_id)
+    assert flow.started.wait(timeout=1.0)
+    with pytest.raises(FlowOtomatisError, match="masih berjalan"):
+        commands.submit_check_profile(profile_id).result(timeout=0.2)
+    with pytest.raises(FlowOtomatisError, match="masih berjalan"):
+        commands.submit_check_flow(profile_id).result(timeout=0.2)
+
+    flow.release.set()
+    assert active.result(timeout=1.0).state is GoogleFlowAccessState.REACHABLE_ONLY
+    assert flow.calls == 1
+    assert commands.shutdown(timeout_s=1.0)

@@ -291,3 +291,67 @@ def test_flow_reply_after_session_epoch_invalidated_is_ignored(qtbot) -> None:
     )
     qtbot.wait(50)
     assert session.profile.profile_id not in window._google_flow_probes
+
+
+def test_pending_flow_preflight_does_not_block_qt_heartbeat(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+
+    heartbeat: list[int] = []
+    timer = QTimer(window)
+    timer.setInterval(10)
+    timer.timeout.connect(lambda: heartbeat.append(len(heartbeat) + 1))
+    timer.start()
+    _button(window, "Cek Akses Flow").click()
+    assert len(commands.requested) == 1
+
+    qtbot.wait(120)
+    assert len(heartbeat) >= 3
+    assert not _button(window, "Cek Akses Flow").isEnabled()
+
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id=session.profile.profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture read-only preflight.",
+        )
+    )
+    qtbot.waitUntil(lambda: _button(window, "Cek Akses Flow").isEnabled(), timeout=1500)
+
+
+def test_flow_reply_after_window_closed_does_not_change_status(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+    _button(window, "Cek Akses Flow").click()
+    assert len(commands.requested) == 1
+
+    window.close()
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id=session.profile.profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture stale response after close.",
+        )
+    )
+    qtbot.wait(50)
+    assert window._google_flow_probes == {}

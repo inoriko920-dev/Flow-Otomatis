@@ -822,6 +822,8 @@ class MainWindow(QMainWindow):
         future = preflight.check_async(profile_id)
 
         def completed(done: Future[GoogleFlowAccessProbe]) -> None:
+            if self._google_browser_closed:
+                return
             try:
                 probe = done.result()
             except FlowOtomatisError as exc:
