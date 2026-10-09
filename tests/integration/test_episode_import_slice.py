@@ -517,7 +517,8 @@ def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
     assert all(scene.image_sha256_imported is None for scene in current.scenes)
 
 def test_storage_rejects_resolved_db_symlink_escape_before_read_or_write(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Emulate Windows junction / symlink resolution without OS privilege needs."""
     root = tmp_path / "projects"
