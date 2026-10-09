@@ -5,11 +5,15 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from flow_otomatis.application.ports.episode_package import EpisodePackagePort
+from flow_otomatis.application.ports.episode_package import (
+    EpisodeImageVerifierPort,
+    EpisodePackagePort,
+)
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 from flow_otomatis.domain.errors import (
     InternalInvariantError,
     InvalidDurationError,
+    PackageValidationError,
     SceneNotFoundError,
 )
 from flow_otomatis.domain.project import WorkspaceState
@@ -28,9 +32,12 @@ class ScenePlanningService:
         self,
         package_reader: EpisodePackagePort,
         workspace_repository: WorkspaceRepositoryPort,
+        *,
+        image_verifier: EpisodeImageVerifierPort | None = None,
     ) -> None:
         self._package_reader = package_reader
         self._workspace_repository = workspace_repository
+        self._image_verifier = image_verifier
 
     def load_workspace(self, episode_id: str) -> WorkspaceState:
         """Load a persisted workspace or fail with a typed local invariant."""
@@ -129,24 +136,50 @@ class ScenePlanningService:
 
         workspace = self.load_workspace(episode_id)
         snapshot = self._package_reader.load(Path(workspace.source_package_path))
-        image_evidence = {
-            evidence.scene.scene_id: evidence.image_exists for evidence in snapshot.scenes
-        }
-
-        scenes = tuple(
-            replace(
-                scene,
-                image_exists=image_evidence.get(scene.scene_id, False),
-                readiness=derive_scene_readiness(
-                    target_duration_s=scene.target_duration_s,
-                    selected_flow_duration_s=scene.selected_flow_duration_s,
-                    image_exists=image_evidence.get(scene.scene_id, False),
-                    motion_prompt=scene.motion_prompt,
-                ),
+        evidence_by_id = {evidence.scene.scene_id: evidence for evidence in snapshot.scenes}
+        scenes: list[WorkspaceScene] = []
+        for scene in workspace.scenes:
+            evidence = evidence_by_id.get(scene.scene_id)
+            if evidence is not None and evidence.scene.image_file != scene.image_file:
+                # A replaced manifest must not silently substitute a new source
+                # image for the image approved at original import.
+                raise PackageValidationError(
+                    "Referensi gambar Scene berubah sejak impor; scan dibatalkan.",
+                    code="IMAGE_REFERENCE_CHANGED",
+                )
+            exists = evidence is not None and evidence.image_exists
+            if (
+                exists
+                and scene.image_sha256_imported is not None
+                and self._image_verifier is not None
+            ):
+                try:
+                    current_digest = self._image_verifier.image_digest(
+                        Path(workspace.source_package_path), scene.scene_id, scene.image_file
+                    )
+                except Exception as exc:
+                    raise PackageValidationError(
+                        "Byte gambar tidak dapat diverifikasi; scan dibatalkan.",
+                        code="IMAGE_VERIFICATION_FAILED",
+                    ) from exc
+                if current_digest != scene.image_sha256_imported:
+                    raise PackageValidationError(
+                        "Byte gambar berubah sejak impor; scan dibatalkan.",
+                        code="IMAGE_CHANGED_SINCE_IMPORT",
+                    )
+            scenes.append(
+                replace(
+                    scene,
+                    image_exists=exists,
+                    readiness=derive_scene_readiness(
+                        target_duration_s=scene.target_duration_s,
+                        selected_flow_duration_s=scene.selected_flow_duration_s,
+                        image_exists=exists,
+                        motion_prompt=scene.motion_prompt,
+                    ),
+                )
             )
-            for scene in workspace.scenes
-        )
-        return self._save_and_reload(replace(workspace, scenes=scenes))
+        return self._save_and_reload(replace(workspace, scenes=tuple(scenes)))
 
     def _find_scene(self, workspace: WorkspaceState, scene_id: str) -> WorkspaceScene:
         for scene in workspace.scenes:
