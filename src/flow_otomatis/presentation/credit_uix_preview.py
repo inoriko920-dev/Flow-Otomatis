@@ -42,6 +42,7 @@ from flow_otomatis.presentation.approved_uix_assets import (
     load_verified_reference,
 )
 from flow_otomatis.presentation.approved_uix_comparison import ApprovedUixComparisonDialog
+from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
 from flow_otomatis.presentation.widgets import (
     card,
     info_banner,
@@ -466,6 +467,13 @@ class CreditUixDialog(QDialog):
         self.recompute_button.setObjectName("UixRecompute")
         self.recompute_button.clicked.connect(self.recalculate_offline)
         self.footer.addWidget(self.recompute_button)
+        self.preflight_button = QPushButton("Preflight Antrean Lokal")
+        self.preflight_button.setObjectName("UixLocalPreflight")
+        self.preflight_button.setToolTip(
+            "Periksa kesiapan input tanpa menulis job, menghubungi provider, atau memakai kredit."
+        )
+        self.preflight_button.clicked.connect(self.show_local_preflight)
+        self.footer.addWidget(self.preflight_button)
         self.export_button = QPushButton("Simpan Laporan JSON")
         self.export_button.setObjectName("UixExport")
         self.export_button.clicked.connect(self.export_preview)
@@ -558,6 +566,9 @@ class CreditUixDialog(QDialog):
                     "DATA CONTOH. Tidak ada login, Generate, Download, atau pengeluaran kredit."
                 )
         self.export_button.setText("Simpan Scan Lokal JSON" if local else "Simpan Simulasi JSON")
+        self.recompute_button.setEnabled(not local)
+        self.preflight_button.setVisible(local)
+        self.preflight_button.setEnabled(local)
         self._current_state = code
         self._dock_state.setText(f"{code} • {scenario.title}")
         self._dock_row.setText("Pilih baris pada tabel Workspace untuk melihat rinciannya.")
@@ -1238,6 +1249,13 @@ class CreditUixDialog(QDialog):
         """Recalculate in memory using synthetic accounts; never call provider."""
         self._preview = simulate(_DEMO_PLAN)
         self._render(self._current_state)
+
+    def show_local_preflight(self) -> None:
+        """Compute a read-only preview, never enqueue or start a real job."""
+        if not self._using_local_inputs() or self._workspace is None:
+            return
+        preview = LocalScenePreflightDialog(self._workspace, parent=self)
+        preview.exec()
 
     def compare_with_approved_ui(self) -> None:
         """Inspect frozen UI image next to Qt; never alter the reference file."""
