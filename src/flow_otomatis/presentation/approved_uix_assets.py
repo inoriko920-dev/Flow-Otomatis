@@ -117,9 +117,7 @@ def reference_directories() -> tuple[Path, ...]:
     return tuple(candidate_paths)
 
 
-def load_verified_reference(
-    state_code: str, *, supplied_directory: Path | None = None
-) -> Path:
+def load_verified_reference(state_code: str, *, supplied_directory: Path | None = None) -> Path:
     """Return the exact approved PNG only after checking the pinned digest."""
     entry = APPROVED_IMAGES.get(state_code)
     if entry is None:
