@@ -1195,9 +1195,7 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None:
             return
         try:
-            known_profiles = {
-                p.profile_id for p in self._google_session_service.list_profiles()
-            }
+            known_profiles = {p.profile_id for p in self._google_session_service.list_profiles()}
         except FlowOtomatisError, OSError, ValueError:
             # Async probes cannot authorize a profile whose local metadata is
             # currently unreadable; never let a Qt callback crash the app.
