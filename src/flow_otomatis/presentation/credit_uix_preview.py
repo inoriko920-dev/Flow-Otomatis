@@ -312,10 +312,12 @@ class CreditUixDialog(QDialog):
         image_verifier: EpisodeImageVerifierPort | None = None,
         initial_state: str = "UIX-01-A",
         default_to_demo: bool = False,
+        app_shell: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("CreditUixDialog")
-        self.setWindowTitle("Flow-Otomatis | Pratinjau 22 UI Multiakun (Simulasi)")
+        self.setWindowTitle("Flow-Otomatis | 22 Desain UI Final — Mode Simulasi")
+        self._app_shell = app_shell
         # Adapt the window to a 1366x768 laptop; allow Qt scroll for wide tables.
         self.setMinimumSize(1080, 600)
         screen = QApplication.primaryScreen()
@@ -380,6 +382,10 @@ class CreditUixDialog(QDialog):
         rail_layout.addStretch(1)
         rail_layout.addWidget(muted_label("Tidak mengubah proyek atau akun Google."))
         outer.addWidget(rail)
+        if app_shell:
+            # The real main window already owns its navigable sidebar.
+            # Hiding this mock rail prevents duplicate navigation in production.
+            rail.hide()
 
         center = QWidget()
         center.setObjectName("UixCenter")
@@ -388,7 +394,12 @@ class CreditUixDialog(QDialog):
         main.setSpacing(10)
         top = QHBoxLayout()
         top.addWidget(
-            page_header("Workspace / Pratinjau Multiakun", "Omni Flash 1.1  •  720p  •  16:9")
+            page_header(
+                "22 Desain UI Final • Simulasi"
+                if app_shell
+                else "Workspace / Pratinjau Multiakun",
+                "Contoh interaktif • Omni Flash 1.1  •  720p  •  16:9",
+            )
         )
         top.addStretch(1)
         top.addWidget(status_badge("OFFLINE • DATA CONTOH", "warning"))
@@ -435,6 +446,10 @@ class CreditUixDialog(QDialog):
         dock_layout.addStretch(1)
         dock_layout.addWidget(status_badge("LIVE DIBLOKIR", "error"))
         outer.addWidget(dock)
+        if app_shell:
+            # Reuse the real Scene/AI dock visible behind this Qt dialog.
+            # The standalone offline preview still has its own mock dock.
+            dock.hide()
 
         self._source_banner = info_banner(
             "MODE SIMULASI • TIDAK TERHUBUNG GOOGLE FLOW",
