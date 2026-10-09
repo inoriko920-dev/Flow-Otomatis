@@ -107,6 +107,7 @@ def build_workspace_view(
     on_rescan_images: Callable[[], object],
     on_scene_selected: Callable[[str], object],
     on_preview_credit_ui: Callable[[], object] | None = None,
+    on_local_preflight: Callable[[], object] | None = None,
     selected_scene_id: str | None = None,
 ) -> QWidget:
     """Render persisted real scene rows in the frozen ready-workspace screen."""
@@ -154,7 +155,7 @@ def build_workspace_view(
     table.cellClicked.connect(notify_selected)
     scan_button = _button(root, "Scan Ulang Gambar")
     scan_button.clicked.connect(on_rescan_images)
-    if on_preview_credit_ui is not None:
+    if on_preview_credit_ui is not None or on_local_preflight is not None:
         # Add only to the real Workspace controls; frozen reference views remain unchanged.
         toolbar_parent = scan_button.parentWidget()
         if toolbar_parent is None:
@@ -162,10 +163,19 @@ def build_workspace_view(
         action_row = toolbar_parent.layout()
         if action_row is None:
             raise RuntimeError("Workspace controls layout is missing")
-        preview_button = QPushButton("Pratinjau 22 UI Multiakun (Simulasi)")
-        preview_button.setObjectName("UixPreviewWorkspaceAction")
-        action_row.addWidget(preview_button)
-        preview_button.clicked.connect(on_preview_credit_ui)
+        if on_local_preflight is not None:
+            preflight_button = QPushButton("Periksa Kesiapan Scene Lokal")
+            preflight_button.setObjectName("LocalPreflightWorkspaceAction")
+            preflight_button.setToolTip(
+                "Audit Scene lokal tanpa menulis job atau mengakses Google Flow."
+            )
+            action_row.addWidget(preflight_button)
+            preflight_button.clicked.connect(on_local_preflight)
+        if on_preview_credit_ui is not None:
+            preview_button = QPushButton("Pratinjau 22 UI Multiakun (Simulasi)")
+            preview_button.setObjectName("UixPreviewWorkspaceAction")
+            action_row.addWidget(preview_button)
+            preview_button.clicked.connect(on_preview_credit_ui)
 
     for label in root.findChildren(QLabel):
         text = label.text()
