@@ -107,6 +107,7 @@ def build_workspace_view(
     on_rescan_images: Callable[[], object],
     on_scene_selected: Callable[[str], object],
     on_preview_credit_ui: Callable[[], object] | None = None,
+    selected_scene_id: str | None = None,
 ) -> QWidget:
     """Render persisted real scene rows in the frozen ready-workspace screen."""
 
@@ -136,7 +137,15 @@ def build_workspace_view(
             _set_cell(table, row, column, value)
 
     if workspace.scenes:
-        table.setCurrentCell(0, 0)
+        index = next(
+            (
+                index
+                for index, scene in enumerate(workspace.scenes)
+                if scene.scene_id == selected_scene_id
+            ),
+            0,
+        )
+        table.setCurrentCell(index, 0)
 
     def notify_selected(row: int, _column: int) -> None:
         if 0 <= row < len(workspace.scenes):
