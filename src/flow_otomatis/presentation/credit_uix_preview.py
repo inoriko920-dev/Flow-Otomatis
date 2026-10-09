@@ -43,7 +43,6 @@ from flow_otomatis.presentation.widgets import (
     muted_label,
     page_header,
     primary_button,
-    section_header,
     status_badge,
 )
 
@@ -521,45 +520,6 @@ class CreditUixDialog(QDialog):
             metrics.addWidget(metric_card(name, value, note, kind), 0, index)
         layout.addLayout(metrics)
 
-        if code == "UIX-08-B":
-            gate_frame, gate_layout = card(8)
-            gate_layout.addWidget(
-                section_header(
-                    "Gate integrasi Google Flow • semuanya masih terblokir",
-                    "Tidak ada izin atau saldo yang disimpulkan dari login",
-                )
-            )
-            blockers = QGridLayout()
-            blockers.setSpacing(8)
-            for column, (title, detail) in enumerate(
-                (
-                    ("G1 • KEBIJAKAN", "Izin browser otomatis dan multiakun tidak ada."),
-                    ("G5 • KREDIT", "Tarif, saldo, dan otorisasi kredit belum dibuktikan."),
-                    ("G6 • SESI", "READY setelah menutup dan membuka aplikasi belum lulus."),
-                )
-            ):
-                blockers.addWidget(info_banner(title, detail, "error"), 0, column)
-            gate_layout.addLayout(blockers)
-            layout.addWidget(gate_frame)
-        elif code == "UIX-08-A":
-            layout.addWidget(
-                info_banner(
-                    "PLAN KADALUARSA • WAJIB HITUNG ULANG",
-                    "Tarif dalam layar ini fiktif. Tidak ada persetujuan lama "
-                    "yang boleh digunakan untuk alokasi atau Generate baru.",
-                    "warning",
-                )
-            )
-        elif code == "UIX-02-A":
-            layout.addWidget(
-                info_banner(
-                    "SMART CREDIT PLAN — PERIKSA RINCIAN SIMULASI",
-                    "Belum ada verifikasi tarif dan saldo provider. "
-                    "Meninjau alokasi tidak mencadangkan atau menghabiskan kredit.",
-                    "info",
-                )
-            )
-
         columns, rows = self._data_for(code)
         content, content_layout = card(7)
         content_layout.addWidget(self._section_title(code))
@@ -891,14 +851,14 @@ class CreditUixDialog(QDialog):
         if code == "UIX-08-B":
             return ["Persyaratan", "Bukti", "Status", "Tindakan Aman"], [
                 [
-                    "Izin otomatisasi provider",
+                    "G1 • Izin otomatisasi",
                     "Tidak tersedia",
                     "BELUM TERVERIFIKASI",
                     "JANGAN GENERATE",
                 ],
-                ["Izin multiakun", "Tidak tersedia", "BELUM TERVERIFIKASI", "JANGAN ROTASI"],
-                ["Tarif dan saldo akun", "Tidak tersedia", "TIDAK DIKETAHUI", "TUNDA KREDIT"],
-                ["READY pasca-restart", "Tidak tersedia", "BELUM LULUS", "CEK MANUAL"],
+                ["G1 • Izin multiakun", "Tidak tersedia", "BELUM TERVERIFIKASI", "JANGAN ROTASI"],
+                ["G5 • Tarif dan saldo", "Tidak tersedia", "TIDAK DIKETAHUI", "TUNDA KREDIT"],
+                ["G6 • READY pasca-restart", "Tidak tersedia", "BELUM LULUS", "CEK MANUAL"],
                 ["Persetujuan rencana", "Hanya simulasi", "TIDAK BERLAKU LIVE", "JANGAN SUBMIT"],
             ]
         if code == "UIX-04-B":
