@@ -103,7 +103,7 @@ class LocalScenePreflightDialog(QDialog):
         layout.addWidget(caution)
 
         rows = [*self.report["ready"], *self.report["held"]]
-        self.table = QTableWidget(len(rows), 6)
+        self.table = QTableWidget(len(rows), 7)
         self.table.setObjectName("LocalPreflightTable")
         self.table.setHorizontalHeaderLabels(
             [
@@ -113,6 +113,7 @@ class LocalScenePreflightDialog(QDialog):
                 "Kondisi",
                 "Perbaikan Diperlukan",
                 "Bukti Byte Gambar",
+                "Kesesuaian dengan Impor",
             ]
         )
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -130,6 +131,7 @@ class LocalScenePreflightDialog(QDialog):
                 row["status"],
                 "; ".join(row["issues"]) if row["issues"] else "Tidak ada",
                 row["image_evidence"],
+                row["baseline_evidence"],
             ]
             for col_index, value in enumerate(items):
                 self.table.setItem(row_index, col_index, QTableWidgetItem(str(value)))
@@ -227,8 +229,11 @@ class LocalScenePreflightDialog(QDialog):
         self._show_report()
         self.image_check_status.setText(
             f"Gambar dengan byte terbaca: {report['verified_image_count']}; "
-            f"tidak terbaca: {report['unreadable_image_count']}. "
-            "Ini tidak membuktikan isi gambar belum berubah sejak diimpor."
+            f"tidak terbaca: {report['unreadable_image_count']}; "
+            f"cocok acuan impor: {report['baseline_match_count']}; "
+            f"berubah/invalid: {report['baseline_mismatch_count']}; "
+            f"tanpa acuan: {report['baseline_missing_count']}."
+
         )
         self._scan_signals = None
 
@@ -266,6 +271,7 @@ class LocalScenePreflightDialog(QDialog):
                 row["status"],
                 "; ".join(row["issues"]) if row["issues"] else "Tidak ada",
                 row["image_evidence"],
+                row["baseline_evidence"],
             )
             for col_index, value in enumerate(values):
                 self.table.setItem(row_index, col_index, QTableWidgetItem(str(value)))
