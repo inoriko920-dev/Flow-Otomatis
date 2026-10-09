@@ -36,6 +36,11 @@ from PySide6.QtWidgets import (
 from flow_otomatis.application.services.offline_credit_simulation import simulate
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.presentation import theme
+from flow_otomatis.presentation.approved_uix_assets import (
+    ApprovedReferenceError,
+    load_verified_reference,
+)
+from flow_otomatis.presentation.approved_uix_comparison import ApprovedUixComparisonDialog
 from flow_otomatis.presentation.widgets import (
     card,
     info_banner,
@@ -310,6 +315,7 @@ class CreditUixDialog(QDialog):
         self._preview = simulate(_DEMO_PLAN)
         self._current_state = "UIX-01-A"
         self._last_local_plan_approved = False
+        self._approved_reference_folder: Path | None = None
 
         # Recreate the frozen desktop app proportions inside the preview, rather
         # than presenting all 22 states as a plain floating table dialog.
@@ -449,6 +455,13 @@ class CreditUixDialog(QDialog):
         self.export_button.setObjectName("UixExport")
         self.export_button.clicked.connect(self.export_preview)
         self.footer.addWidget(self.export_button)
+        self.compare_button = QPushButton("Bandingkan UI Final")
+        self.compare_button.setObjectName("UixCompareApproved")
+        self.compare_button.setToolTip(
+            "Tampilkan desain PNG asli yang lulus SHA-256 bersama tampilan Qt saat ini."
+        )
+        self.compare_button.clicked.connect(self.compare_with_approved_ui)
+        self.footer.addWidget(self.compare_button)
         close = QPushButton("Tutup")
         close.clicked.connect(self.accept)
         self.footer.addWidget(close)
@@ -1064,6 +1077,45 @@ class CreditUixDialog(QDialog):
         """Recalculate in memory using synthetic accounts; never call provider."""
         self._preview = simulate(_DEMO_PLAN)
         self._render(self._current_state)
+
+    def compare_with_approved_ui(self) -> None:
+        """Inspect frozen UI image next to Qt; never alter the reference file."""
+        try:
+            approved_image = load_verified_reference(
+                self._current_state,
+                supplied_directory=self._approved_reference_folder,
+            )
+        except ApprovedReferenceError:
+            # Main portable can use the original reference folder manually;
+            # the standalone preview EXE embeds all 22 PNG files at build time.
+            selected = QFileDialog.getExistingDirectory(
+                self,
+                "Pilih folder 22 PNG UI final yang telah disetujui",
+                "",
+            )
+            if not selected:
+                return
+            try:
+                approved_image = load_verified_reference(
+                    self._current_state,
+                    supplied_directory=Path(selected),
+                )
+            except (ApprovedReferenceError, OSError) as exc:
+                QMessageBox.warning(self, "Referensi tidak cocok", str(exc))
+                return
+            self._approved_reference_folder = Path(selected)
+        except OSError as exc:
+            QMessageBox.warning(self, "Referensi tidak dapat dibaca", str(exc))
+            return
+
+        current_view = self.grab()
+        dialog = ApprovedUixComparisonDialog(
+            self._current_state,
+            approved_image,
+            current_view,
+            parent=self,
+        )
+        dialog.exec()
 
     def export_preview(self) -> None:
         """Safely export a synthetic report without overwriting an existing file."""
