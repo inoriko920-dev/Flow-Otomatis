@@ -446,3 +446,46 @@ def test_main_window_returns_to_exact_selected_scene_without_persistence(
     assert window.current_workspace == workspace
     assert repr(workspace) == original
     window.close()
+
+
+def test_new_uix_entry_starts_with_distinct_demo_states_then_allows_local_scan(qtbot) -> None:
+    workspace = _workspace_with_mixed_real_scenes()
+    dialog = CreditUixDialog(
+        workspace=workspace, initial_state="UIX-05-C", default_to_demo=True
+    )
+    qtbot.addWidget(dialog)
+    selector = dialog.findChild(QComboBox, "UixDataSourceSelector")
+    assert selector is not None
+    assert selector.currentData() == "demo"
+    rows = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert rows.rowCount() == 2
+    assert rows.item(0, 2).text() == "SUBMIT_UNCERTAIN"
+    assert dialog._report_payload()["mode"] == "OFFLINE_SIMULATION"
+
+    selector.setCurrentIndex(selector.findData("local"))
+    local = dialog.findChild(QTableWidget, "UixDetailTable")
+    assert local.rowCount() == 3
+    assert local.item(0, 0).text() == "SCENE_001"
+    assert dialog._report_payload()["mode"] == "LOCAL_SCENE_READINESS_REPORT"
+    assert not dialog.live_dispatch_enabled
+    dialog.close()
+
+
+def test_uix_screen_paging_has_safe_edges_and_no_live_action(qtbot) -> None:
+    dialog = CreditUixDialog(initial_state="UIX-01-A")
+    qtbot.addWidget(dialog)
+    prev = dialog.findChild(QPushButton, "UixPreviousState")
+    following = dialog.findChild(QPushButton, "UixNextState")
+    assert prev is not None and following is not None
+    assert not prev.isEnabled()
+    following.click()
+    assert dialog.current_state == "UIX-01-B"
+    prev.click()
+    assert dialog.current_state == "UIX-01-A"
+    dialog.set_state("UIX-09-B")
+    assert not following.isEnabled()
+    prev.click()
+    assert dialog.current_state == "UIX-09-A"
+    assert dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled() is False
+    assert dialog.minimumHeight() <= 700
+    dialog.close()
