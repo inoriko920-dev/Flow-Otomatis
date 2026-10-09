@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -746,3 +748,23 @@ def test_policy_overlay_backdrop_uses_local_workspace_without_remote_entitlement
     assert "PROVIDER TIDAK TERSAMBUNG" in text
     assert not dialog.live_dispatch_enabled
     dialog.close()
+
+
+def test_escape_returns_from_embedded_uix_to_real_workspace(qtbot) -> None:
+    workspace = _workspace_with_mixed_real_scenes()
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show_workspace_state(workspace)
+    window.open_credit_uix_preview()
+    assert window.fixture_code == "REAL_UIX22_PREVIEW"
+
+    escape = QKeyEvent(
+        QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier
+    )
+    window.keyPressEvent(escape)
+
+    assert escape.isAccepted()
+    assert window.fixture_code == "REAL_WORKSPACE"
+    assert window.current_workspace is workspace
+    assert window._active_uix_preview is None
+    window.close()
