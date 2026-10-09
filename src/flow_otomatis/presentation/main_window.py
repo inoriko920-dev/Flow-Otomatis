@@ -936,6 +936,7 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Scene planning service is not configured")
         episode_id = self._current_workspace.episode_id
         try:
+            snapshot = self._scene_planning_service.load_workspace(episode_id)
             plan = self._scene_planning_service.preview_missing_recommended_durations(episode_id)
         except FlowOtomatisError as exc:
             QMessageBox.warning(self, "Rencana Durasi Tidak Tersedia", str(exc))
@@ -965,10 +966,25 @@ class MainWindow(QMainWindow):
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return None
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return None
         try:
-            workspace = self._scene_planning_service.fill_missing_recommended_durations(episode_id)
+            workspace = self._scene_planning_service.fill_missing_recommended_durations(
+                episode_id, expected_workspace=snapshot
+            )
         except FlowOtomatisError as exc:
             QMessageBox.warning(self, "Tidak Dapat Mengisi Durasi", str(exc))
+            # Display current durable state rather than a stale planning table.
+            latest = self._scene_planning_service.load_workspace(episode_id)
+            if (
+                self._current_workspace is not None
+                and self._current_workspace.episode_id == episode_id
+            ):
+                self.show_workspace_state(latest)
             return None
         self.show_workspace_state(workspace)
         return workspace
@@ -1009,8 +1025,14 @@ class MainWindow(QMainWindow):
             self._return_to_local_scene(workspace, preview.requested_scene_id)
 
     def select_workspace_scene(self, scene_id: str) -> None:
-        """Select a real Scene row and refresh only the Scene Inspector."""
+        """Select only a persisted Scene row and refresh the Scene Inspector."""
 
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or not any(scene.scene_id == scene_id for scene in self._current_workspace.scenes)
+        ):
+            return
         self._invalidate_agent_context()
         self._selected_scene_id = scene_id
         self._render_workspace_right_panel()
