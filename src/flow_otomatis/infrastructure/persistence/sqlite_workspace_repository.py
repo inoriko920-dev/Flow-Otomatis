@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import datetime
-from threading import Lock
 from pathlib import Path
+from threading import Lock
 
 from flow_otomatis.application.ports.workspace_repository import (
     WorkspaceReadIssue,
