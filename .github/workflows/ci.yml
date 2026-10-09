@@ -236,6 +236,21 @@ jobs:
           $screens = @(Get-ChildItem -Path artifacts/e12_uix22 -Filter 'UIX-*.png')
           if ($screens.Count -ne 22) { throw "Expected exactly 22 UI renders" }
 
+      - name: Fetch 22 approved frozen PNGs for read-only comparison
+        shell: pwsh
+        run: |
+          git fetch --depth=1 origin refs/heads/docs/e12-02-uix-prompt-only-20261008
+          if ($LASTEXITCODE -ne 0) { throw "Cannot fetch approved reference branch" }
+          git worktree add --detach .ci-approved-ui FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Cannot checkout read-only reference worktree" }
+
+      - name: Make 22 side-by-side visual QA sheets
+        run: >
+          uv run python scripts/audit_credit_uix_visual.py
+          .ci-approved-ui/docs/ui/final/assets
+          artifacts/e12_uix22
+          artifacts/uix_review
+
       - name: Build separate UI preview EXE
         run: >
           uv run python -m PyInstaller
@@ -260,5 +275,6 @@ jobs:
           path: |
             dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe
             artifacts/e12_uix22
+            artifacts/uix_review
           if-no-files-found: error
           retention-days: 14
