@@ -453,9 +453,7 @@ def test_main_window_returns_to_exact_selected_scene_without_persistence(qtbot) 
     assert window.fixture_code == "REAL_WORKSPACE"
     assert window._selected_scene_id == "SCENE_003"
     table = next(
-        t
-        for t in window.findChildren(QTableWidget)
-        if t.columnCount() == 9 and t.rowCount() == 3
+        t for t in window.findChildren(QTableWidget) if t.columnCount() == 9 and t.rowCount() == 3
     )
     assert table.item(table.currentRow(), 0).text() == "S003"
     assert window.current_workspace == workspace
