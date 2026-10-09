@@ -424,36 +424,38 @@ def test_demo_cannot_request_scene_and_local_filter_does_not_leak(qtbot) -> None
     dialog.close()
 
 
-def test_main_window_returns_to_exact_selected_scene_without_persistence(
-    qtbot, monkeypatch
-) -> None:
+def test_main_window_returns_to_exact_selected_scene_without_persistence(qtbot) -> None:
     workspace = _workspace_with_mixed_real_scenes()
     original = repr(workspace)
     window = MainWindow()
     qtbot.addWidget(window)
     window.show_workspace_state(workspace)
-
-    def choose_scene(preview: CreditUixDialog) -> int:
-        # Demo-first UIX22 does not silently replace real local Scene inputs.
-        selector = preview.findChild(QComboBox, "UixDataSourceSelector")
-        assert selector is not None
-        selector.setCurrentIndex(selector.findData("local"))
-        assert preview._using_local_inputs()
-        table = preview.findChild(QTableWidget, "UixDetailTable")
-        table.setCurrentCell(2, 0)
-        open_scene = preview.findChild(QPushButton, "UixOpenSceneInWorkspace")
-        assert open_scene.isEnabled()
-        open_scene.click()
-        return int(preview.result())
-
-    monkeypatch.setattr(CreditUixDialog, "exec", choose_scene)
     window.open_credit_uix_preview()
+
+    preview = window._active_uix_preview
+    assert preview is not None
+    assert window.fixture_code == "REAL_UIX22_PREVIEW"
+    assert preview._app_shell is True
+    assert window._content_layout.itemAt(0).widget() is preview
+
+    selector = preview.findChild(QComboBox, "UixDataSourceSelector")
+    assert selector is not None
+    selector.setCurrentIndex(selector.findData("local"))
+    assert preview._using_local_inputs()
+    table = preview.findChild(QTableWidget, "UixDetailTable")
+    assert table is not None
+    table.setCurrentCell(2, 0)
+    open_scene = preview.findChild(QPushButton, "UixOpenSceneInWorkspace")
+    assert open_scene is not None and open_scene.isEnabled()
+    open_scene.click()
+
+    assert window._active_uix_preview is None
     assert window.fixture_code == "REAL_WORKSPACE"
     assert window._selected_scene_id == "SCENE_003"
     table = next(
-        table
-        for table in window.findChildren(QTableWidget)
-        if table.columnCount() == 9 and table.rowCount() == 3
+        t
+        for t in window.findChildren(QTableWidget)
+        if t.columnCount() == 9 and t.rowCount() == 3
     )
     assert table.item(table.currentRow(), 0).text() == "S003"
     assert window.current_workspace == workspace
@@ -590,29 +592,45 @@ def test_final_approved_mockup_summary_metrics_and_profile_bars(qtbot) -> None:
 
 
 def test_main_app_preview_reuses_real_navigation_instead_of_duplicate_fake_shell(
-    qtbot, monkeypatch
+    qtbot,
 ) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
-    observed: list[str] = []
-
-    def inspect_dialog(dialog: CreditUixDialog) -> int:
-        assert dialog._app_shell is True
-        sidebar = dialog.findChild(QFrame, "UixSidebar")
-        dock = dialog.findChild(QFrame, "UixRightDock")
-        assert sidebar is not None and sidebar.isHidden()
-        assert dock is not None and dock.isHidden()
-        assert dialog.current_state == "UIX-01-A"
-        assert dialog.source_selector.currentData() == "demo"
-        assert dialog.live_dispatch_enabled is False
-        observed.append(dialog.windowTitle())
-        dialog.close()
-        return 0
-
-    monkeypatch.setattr(CreditUixDialog, "exec", inspect_dialog)
     window.open_credit_uix_preview()
-    assert len(observed) == 1
-    assert "Simulasi" in observed[0]
+    preview = window._active_uix_preview
+    assert preview is not None
+    assert preview._app_shell is True
+    assert window.fixture_code == "REAL_UIX22_PREVIEW"
+    assert window._content_layout.itemAt(0).widget() is preview
+    assert preview.minimumWidth() == 640
+    assert preview.findChild(QFrame, "UixSidebar").isHidden()
+    assert preview.findChild(QFrame, "UixRightDock").isHidden()
+    assert preview.current_state == "UIX-01-A"
+    assert preview.source_selector.currentData() == "demo"
+    assert preview.live_dispatch_enabled is False
+    assert window._connection_badge.text().endswith("Mode Lokal")
+
+    # A double-click cannot stack a second parallel UIX window.
+    window.open_credit_uix_preview()
+    assert window._active_uix_preview is preview
+
+    back = preview.findChild(QPushButton, "UixClosePreview")
+    assert back is not None and "Kembali" in back.text()
+    back.click()
+    assert window._active_uix_preview is None
+    assert window.fixture_code == "UI-IMG-001A"
+    window.close()
+
+
+def test_navigation_away_from_embedded_uix_cleans_up_active_page(qtbot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.open_credit_uix_preview()
+    assert window._active_uix_preview is not None
+    window.show_fixture("UI-IMG-002A")
+    assert window.fixture_code == "UI-IMG-002A"
+    assert window._active_uix_preview is None
+    assert window._uix_return_workspace is None
     window.close()
 
 
