@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStackedLayout,
     QTableWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from flow_otomatis.domain.project import WorkspaceState
