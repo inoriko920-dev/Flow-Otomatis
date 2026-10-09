@@ -63,9 +63,7 @@ class ScenePlanningService:
         )
         return self._save_with_scene(workspace, updated_scene)
 
-    def preview_missing_recommended_durations(
-        self, episode_id: str
-    ) -> tuple[tuple[str, int], ...]:
+    def preview_missing_recommended_durations(self, episode_id: str) -> tuple[tuple[str, int], ...]:
         """Show proposed local-only choices; never persist or contact the provider."""
         workspace = self.load_workspace(episode_id)
         return self._missing_duration_plan(workspace)
