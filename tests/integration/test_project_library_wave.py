@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.application.services import ProjectLibraryService
-from flow_otomatis.domain.errors import WorkspaceCorruptError
+from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
@@ -229,3 +229,34 @@ def test_readonly_workspace_load_uses_one_snapshot_across_concurrent_writer(
     assert reader.writer_ran
     assert snapshot == original
     assert repo.load(original.episode_id) == changed
+
+
+@pytest.mark.parametrize(
+    "episode_id",
+    [
+        "../EP_UNSAFE",
+        "..\\EP_UNSAFE",
+        "C:\\EP_UNSAFE",
+        "EP_UNSAFE/name",
+        "EP_UNSAFE\\name",
+        "..",
+        "",
+        "ep_lowercase",
+    ],
+)
+def test_untrusted_episode_id_cannot_escape_project_storage(
+    tmp_path: Path, episode_id: str
+) -> None:
+    projects = tmp_path / "projects"
+    repository = SqliteWorkspaceRepository(projects)
+    candidate = replace(_workspace("EP608_SAFE", datetime.now(UTC)), episode_id=episode_id)
+    for command in (
+        lambda: repository.create(candidate),
+        lambda: repository.save(candidate),
+        lambda: repository.update(candidate),
+        lambda: repository.load(episode_id),
+    ):
+        with pytest.raises(StorageError, match="Invalid episode ID"):
+            command()
+    assert not projects.exists()
+    assert not (tmp_path / "EP_UNSAFE").exists()
