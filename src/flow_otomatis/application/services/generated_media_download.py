@@ -108,6 +108,10 @@ class GeneratedMediaDownloadService:
         # symlink target. The Browser Worker is not a trusted filesystem
         # authority, and no redirected target may be persisted as DOWNLOADED.
         output = Path(result.output_path).expanduser().absolute()
+        # A malicious directory swap after the Browser Worker returned must
+        # never be persisted as a completed local download.
+        if self._destination_path(episode_id, scene_id, normalized_take) != destination:
+            raise InternalInvariantError("Project download destination changed unexpectedly.")
         if output != destination:
             raise InternalInvariantError("Download provider returned an unexpected output path.")
         if not is_available_output(str(output)):
