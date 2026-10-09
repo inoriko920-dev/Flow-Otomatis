@@ -617,7 +617,7 @@ class MainWindow(QMainWindow):
         else:
             try:
                 scan = self._project_library_service.scan_recent(limit=10)
-            except (FlowOtomatisError, OSError, ValueError):
+            except FlowOtomatisError, OSError, ValueError:
                 # Fail closed: no raw exception, project path or account data in UI.
                 snapshot = LocalDiagnosticSnapshot(
                     None,
@@ -670,9 +670,7 @@ class MainWindow(QMainWindow):
                 json.dump(snapshot.as_report(), output, indent=2, ensure_ascii=False)
                 output.write("\n")
         except FileExistsError:
-            QMessageBox.warning(
-                self, "File sudah ada", "File diagnostik lama tidak akan ditimpa."
-            )
+            QMessageBox.warning(self, "File sudah ada", "File diagnostik lama tidak akan ditimpa.")
         except OSError:
             QMessageBox.warning(
                 self, "Ekspor gagal", "Tidak dapat menyimpan laporan diagnostik lokal."
