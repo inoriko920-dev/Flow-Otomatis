@@ -771,15 +771,12 @@ def test_play_local_mp4_os_failure_is_redacted(ready_results, qtbot, monkeypatch
     window.close()
 
 
-def test_selected_video_disallows_file_symlink(ready_results, tmp_path) -> None:
+def test_selected_video_disallows_file_symlink(ready_results, monkeypatch) -> None:
     window, service, _database = ready_results
     results = service.snapshot(window.current_workspace.episode_id)
     real_file = Path(results.scenes[0].output_path)
-    link = tmp_path / "alias.mp4"
-    link.symlink_to(real_file)
-    altered = replace(
-        results, scenes=(replace(results.scenes[0], output_path=str(link)),)
-    )
-    assert verified_selected_mp4(altered, "SCENE_001") is None
+    # CI Windows may not allow symlink creation; simulate the reparse point.
+    monkeypatch.setattr(Path, "is_symlink", lambda path: path == real_file)
+    assert verified_selected_mp4(results, "SCENE_001") is None
     assert verified_selected_mp4(results, "nonexistent") is None
     window.close()
