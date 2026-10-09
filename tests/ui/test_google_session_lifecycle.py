@@ -5,7 +5,7 @@ from concurrent.futures import Future
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 
 from flow_otomatis.application.ports.google_flow_preflight import (
     GoogleFlowAccessProbe,
@@ -355,3 +355,99 @@ def test_flow_reply_after_window_closed_does_not_change_status(qtbot) -> None:
     )
     qtbot.wait(50)
     assert window._google_flow_probes == {}
+
+
+def test_late_google_check_all_cannot_reopen_profiles_after_navigation(qtbot) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_profiles()
+
+    future: Future[tuple[GoogleSessionProfile, ...]] = Future()
+    request = window._begin_google_session_request("check_all", None)
+    window._watch_google_all_future(future, request, "Profil Google")
+    window.show_fixture("UI-IMG-001A")
+    future.set_result((port.profile,))
+    assert window.fixture_code == "UI-IMG-001A"
+    assert window._active_google_session_request is None
+    window.close()
+
+
+def test_late_google_open_cannot_override_newer_request_on_same_route(qtbot) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_profiles()
+    old: Future[GoogleSessionProfile] = Future()
+    newer: Future[GoogleSessionProfile] = Future()
+    req_old = window._begin_google_session_request("open", port.profile.profile_id)
+    window._watch_google_profile_future(old, req_old, "Bantuan Login")
+    req_new = window._begin_google_session_request("check", port.profile.profile_id)
+    window._watch_google_profile_future(newer, req_new, "Profil Google")
+
+    old.set_result(port.profile)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES"
+    assert window._active_google_session_request == req_new
+    newer.set_result(port.profile)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES"
+    assert window._active_google_session_request is None
+    window.close()
+
+
+def test_late_google_recheck_ignored_after_return_to_account_list(qtbot) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_login(port.profile)
+    future: Future[GoogleSessionProfile] = Future()
+    request = window._begin_google_session_request("recheck", port.profile.profile_id)
+    window._watch_google_profile_future(future, request, "Bantuan Login")
+
+    window.show_google_profiles()
+    future.set_result(port.profile)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES"
+    assert window._active_google_profile_id is None
+    window.close()
+
+
+def test_late_google_session_error_does_not_warn_unrelated_route(
+    qtbot, monkeypatch
+) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_profiles()
+    errors: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda _window, title, _message: errors.append(title)
+    )
+
+    failed: Future[GoogleSessionProfile] = Future()
+    request = window._begin_google_session_request("check", port.profile.profile_id)
+    window._watch_google_profile_future(failed, request, "Profil Google")
+    window.show_fixture("UI-IMG-007A")
+    failed.set_exception(RuntimeError("private browser worker detail"))
+    assert errors == []
+    assert window.fixture_code == "UI-IMG-007A"
+    window.close()
+
+
+def test_google_session_reply_for_other_profile_never_switches_account(qtbot) -> None:
+    port = FixtureSessionPort()
+    window = MainWindow(google_session_service=GoogleSessionService(port))
+    qtbot.addWidget(window)
+    window.show_google_profiles()
+    future: Future[GoogleSessionProfile] = Future()
+    request = window._begin_google_session_request("open", port.profile.profile_id)
+    window._watch_google_profile_future(future, request, "Bantuan Login")
+    wrong = GoogleSessionProfile(
+        profile_id="profile-ffffffffffff",
+        label="Different account",
+        state=GoogleSessionState.READY,
+        last_checked_at=datetime.now(UTC),
+        detail="Untrusted crossed reply",
+    )
+    future.set_result(wrong)
+    assert window.fixture_code == "REAL_GOOGLE_PROFILES"
+    assert window._active_google_session_request is None
+    window.close()
