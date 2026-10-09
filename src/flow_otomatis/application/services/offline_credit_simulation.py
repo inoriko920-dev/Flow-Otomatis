@@ -102,10 +102,10 @@ def simulate(payload: object) -> dict[str, Any]:
         )
         project_id = _identifier(item["project_id"], where=f"scenes[{index}].project_id")
         scene_id = _identifier(item["scene_id"], where=f"scenes[{index}].scene_id")
-        key = (project_id, scene_id)
-        if key in seen:
+        scene_key = (project_id, scene_id)
+        if scene_key in seen:
             raise InvalidSimulationInput(f"Duplicate work: {project_id}/{scene_id}")
-        seen.add(key)
+        seen.add(scene_key)
         seconds = item["duration_s"]
         if type(seconds) is not int or seconds not in _SUPPORTED_DURATIONS:
             raise InvalidSimulationInput("duration_s must be exactly 4, 6, 8 or 10")
