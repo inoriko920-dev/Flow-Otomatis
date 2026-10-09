@@ -896,12 +896,8 @@ class MainWindow(QMainWindow):
         self._set_project_chrome(self._current_workspace, "Hasil")
         view = build_results_view(
             results,
-            on_export_manifest=lambda: self._export_result_manifest_from_ui(
-                results.episode_id
-            ),
-            on_open_diagnostics=lambda: self._open_diagnostics_from_results(
-                results.episode_id
-            ),
+            on_export_manifest=lambda: self._export_result_manifest_from_ui(results.episode_id),
+            on_open_diagnostics=lambda: self._open_diagnostics_from_results(results.episode_id),
         )
         self._replace_layout_widget(self._content_layout, view)
         self._replace_layout_widget(self._right_layout, None)
