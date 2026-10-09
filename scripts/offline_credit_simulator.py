@@ -12,6 +12,7 @@ from flow_otomatis.application.services.offline_credit_simulation import (
     simulate,
 )
 
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Offline multi-profile credit planning (NO Google Flow access)."
