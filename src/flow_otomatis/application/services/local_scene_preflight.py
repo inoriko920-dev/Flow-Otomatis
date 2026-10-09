@@ -48,9 +48,7 @@ def prepare_local_scene_preflight(workspace: WorkspaceState) -> dict[str, Any]:
             issues.append("DUPLICATE_SCENE_ID")
 
         target = scene.target_duration_s
-        target_valid = (
-            type(target) in (int, float) and math.isfinite(target) and 0 < target <= 10
-        )
+        target_valid = type(target) in (int, float) and math.isfinite(target) and 0 < target <= 10
         if not target_valid:
             issues.append("INVALID_TARGET")
         if not scene.image_exists:
