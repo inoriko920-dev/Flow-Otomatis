@@ -32,6 +32,7 @@ def build_project_hub_view(
     issues: Sequence[WorkspaceReadIssue] = (),
     on_open: Callable[[str], object],
     on_import: Callable[[], object],
+    on_preview_ui: Callable[[], object] | None = None,
 ) -> QWidget:
     """Render healthy and isolated unreadable projects in the frozen layout."""
 
@@ -42,6 +43,18 @@ def build_project_hub_view(
     import_button = _button(root, "Impor Paket Episode")
     if import_button is not None:
         import_button.clicked.connect(on_import)
+        if on_preview_ui is not None:
+            actions = import_button.parentWidget()
+            row = actions.layout() if actions is not None else None
+            if row is not None:
+                preview_button = QPushButton("Lihat 22 Desain UI Baru")
+                preview_button.setObjectName("ProjectHubUix22Preview")
+                preview_button.setToolTip(
+                    "Buka 22 desain UI yang telah disetujui. Mode simulasi, "
+                    "tanpa login atau Generate; tidak memerlukan project."
+                )
+                preview_button.clicked.connect(on_preview_ui)
+                row.insertWidget(1, preview_button)
 
     if not total_entries:
         return root
