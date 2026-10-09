@@ -132,8 +132,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     window = build_main_window(args.fixture)
     if not explicit_fixture:
-        # Production starts in the real Project Hub, not a static demo fixture.
-        # Explicit --fixture always preserves the approved 30 screenshot routes.
+        # Avoid mock Online/Autosave badges even on frozen fallback routes.
+        # Explicit --fixture preserves all 30 approved capture routes.
+        window.configure_production_shell()
         window.show_project_hub()
     window.show()
 
