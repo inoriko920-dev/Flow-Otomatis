@@ -686,7 +686,6 @@ def test_download_blocks_unsafe_windows_components_before_any_provider_or_write(
     assert not (root / "EP500_DOWNLOAD" / "downloads").exists()
 
 
-
 @pytest.mark.parametrize(
     ("late_state", "late_remote_id"),
     [
