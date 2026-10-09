@@ -864,9 +864,7 @@ def test_handoff_ready_banner_requires_actual_generate_and_download(ready_result
 
 
 
-def test_results_ui_rejects_stale_download_status_and_video_action(
-    ready_results, qtbot
-) -> None:
+def test_results_ui_rejects_stale_download_status_and_video_action(ready_results, qtbot) -> None:
     window, service, database = ready_results
     original = service.snapshot(window.current_workspace.episode_id)
     assert original.handoff_ready
@@ -891,7 +889,9 @@ def test_results_ui_rejects_stale_download_status_and_video_action(
 
     play = window.findChild(QPushButton, "RealResultsOpenSelectedVideo")
     if play is not None:
-        table = next(table for table in window.findChildren(QTableWidget) if table.columnCount() == 6)
+        table = next(
+            table for table in window.findChildren(QTableWidget) if table.columnCount() == 6
+        )
         table.selectRow(0)
         assert not play.isEnabled()
     assert window.last_result_manifest_path is None
