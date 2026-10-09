@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -448,3 +449,97 @@ def test_recorded_mp4_replaced_by_symlink_fails_closed_in_results_and_manifest(
     )
     assert persisted is not None
     assert persisted.state == DownloadState.DOWNLOADED
+
+
+
+@pytest.mark.parametrize(
+    ("stale_job_state", "stale_remote_id"),
+    [
+        ("QUEUED", "remote:R03"),
+        ("FAILED", "remote:R03"),
+        ("ATTENTION_REQUIRED", "remote:R03"),
+        ("GENERATED", ""),
+    ],
+)
+def test_download_history_does_not_claim_success_after_generate_becomes_stale(
+    tmp_path: Path, stale_job_state: str, stale_remote_id: str
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    episode_id = "EP400_RESULTS"
+    database = tmp_path / "projects" / episode_id / "project.sqlite3"
+    before = service.snapshot(episode_id)
+    assert before.handoff_ready
+    assert before.scenes[0].download_state == DownloadState.DOWNLOADED
+
+    # Simulate older persisted job revisions/failed jobs without deleting
+    # the MP4 that the operator may still want to inspect manually.
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET state = ?, remote_result_id = ? WHERE scene_id = ?",
+            (stale_job_state, stale_remote_id, "SCENE_001"),
+        )
+        connection.commit()
+
+    current = service.snapshot(episode_id)
+    assert current.downloaded_count == 0
+    assert current.handoff_ready is False
+    assert current.attention_count >= 1
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert current.scenes[0].output_path == str(video.resolve())
+    assert video.read_bytes() == b"real-local-test-video"
+
+    manifest = json.loads(service.export_manifest(episode_id).read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+
+    # Historical records are intentionally preserved for manual reconciliation.
+    old = SqliteDownloadResultRepository(tmp_path / "projects").get(episode_id, "SCENE_001")
+    assert old is not None
+    assert old.state == DownloadState.DOWNLOADED
+    assert old.output_path == str(video.resolve())
+
+    with pytest.raises(InternalInvariantError):
+        service.record_downloaded(episode_id, "SCENE_001", str(video))
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_download_history_without_any_current_generate_job_is_unavailable(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    episode_id = "EP400_RESULTS"
+    database = tmp_path / "projects" / episode_id / "project.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("DELETE FROM generation_jobs WHERE scene_id = ?", ("SCENE_001",))
+        connection.commit()
+
+    after = service.snapshot(episode_id)
+    assert after.scenes[0].generate_state is None
+    assert after.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert after.downloaded_count == 0
+    assert not after.handoff_ready
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+@pytest.mark.parametrize(
+    ("state", "remote"),
+    [
+        (None, "remote:old"),
+        (GenerationJobState.FAILED, "remote:old"),
+        (GenerationJobState.GENERATED, ""),
+    ],
+)
+def test_direct_manifest_writer_reconciles_inconsistent_cached_snapshot(
+    tmp_path: Path, state: GenerationJobState | None, remote: str
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    cached = replace(
+        original,
+        scenes=(replace(original.scenes[0], generate_state=state, remote_result_id=remote),),
+    )
+    output = ResultManifestWriter(tmp_path / "projects").write(cached)
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert payload["scenes"][0]["generate_status"] == (
+        state.value if state is not None else "NOT_QUEUED"
+    )
+    assert video.read_bytes() == b"real-local-test-video"
