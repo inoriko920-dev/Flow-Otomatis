@@ -197,5 +197,9 @@ def test_production_navigation_never_reports_fake_online_or_autosave(qtbot) -> N
         assert window._saved_badge.text() == "●  Data Lokal"
         assert window._autosave_label.text() == "Penyimpanan lokal"
         assert "Generate Flow belum aktif" in window._runtime_status.text()
+        assert "Layar contoh" in window._runtime_status.text()
+        assert window._status_project.text() == "DATA CONTOH"
+        assert "Pratinjau" in window._project_label.text()
+        assert "CONTOH" in window._project_state_label.text()
 
     window.close()
