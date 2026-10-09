@@ -257,6 +257,8 @@ class SqliteDownloadResultRepository:
     def _row_to_record(self, row: sqlite3.Row) -> DownloadRecord:
         from datetime import datetime
 
+        # sqlite3.Row membership checks values, not column names.
+        columns = row.keys()
         return DownloadRecord(
             episode_id=str(row["episode_id"]),
             scene_id=str(row["scene_id"]),
@@ -267,7 +269,7 @@ class SqliteDownloadResultRepository:
             error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
             generation_remote_result_id=(
                 str(row["generation_remote_result_id"])
-                if "generation_remote_result_id" in row.keys()
+                if "generation_remote_result_id" in columns
                 and row["generation_remote_result_id"] is not None
                 else None
             ),
