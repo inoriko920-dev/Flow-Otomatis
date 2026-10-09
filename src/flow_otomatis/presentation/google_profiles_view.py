@@ -7,6 +7,10 @@ from datetime import UTC
 
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from flow_otomatis.application.ports.google_flow_preflight import (
+    GoogleFlowAccessProbe,
+    GoogleFlowAccessState,
+)
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionProfile,
     GoogleSessionRestartGate,
@@ -22,6 +26,17 @@ from flow_otomatis.presentation.widgets import (
     section_header,
     table_widget,
 )
+
+_FLOW_TEXT = {
+    GoogleFlowAccessState.REACHABLE_ONLY: "Halaman terjangkau; akses belum terverifikasi",
+    GoogleFlowAccessState.AUTH_REQUIRED: "Perlu login Google",
+    GoogleFlowAccessState.UNAVAILABLE: "Flow belum tersedia",
+    GoogleFlowAccessState.UNKNOWN: "Belum dapat dipastikan",
+    GoogleFlowAccessState.ERROR: "Gagal diperiksa",
+    GoogleFlowAccessState.ACCESS_VERIFIED: "Akses terverifikasi",
+    GoogleFlowAccessState.UNCHECKED: "Belum diperiksa",
+    GoogleFlowAccessState.CHECKING: "Sedang diperiksa",
+}
 
 _STATE_TEXT = {
     GoogleSessionState.READY: "Siap",
@@ -138,6 +153,9 @@ def build_google_login_view(
     on_open_login: Callable[[], None],
     on_recheck: Callable[[], None],
     on_back: Callable[[], None],
+    flow_probe: GoogleFlowAccessProbe | None = None,
+    flow_busy: bool = False,
+    on_check_flow: Callable[[], None] | None = None,
 ) -> QWidget:
     """Render real manual-login help/status for one safe profile."""
 
@@ -194,6 +212,22 @@ def build_google_login_view(
             strong=restart_gate.ready_after_restart,
         )
     )
+    flow_status = (
+        "Sedang diperiksa"
+        if flow_busy
+        else _FLOW_TEXT[flow_probe.state]
+        if flow_probe is not None
+        else "Belum diperiksa"
+    )
+    steps_layout.addWidget(labeled_value("Akses Flow", flow_status))
+    if flow_probe is not None:
+        steps_layout.addWidget(
+            info_banner(
+                "Hasil pemeriksaan Flow (hanya-baca)",
+                flow_probe.detail,
+                "info",
+            )
+        )
     steps_layout.addWidget(labeled_value("1", "Buka sesi login di Google Chrome normal"))
     steps_layout.addWidget(labeled_value("2", "Selesaikan login, MFA, atau CAPTCHA secara manual"))
     steps_layout.addWidget(
@@ -217,6 +251,11 @@ def build_google_login_view(
     open_button.clicked.connect(lambda checked=False: on_open_login())
     action_layout.addWidget(back_button)
     action_layout.addStretch(1)
+    if on_check_flow is not None:
+        flow_button = secondary_button("Cek Akses Flow")
+        flow_button.setEnabled(profile.state is GoogleSessionState.READY and not flow_busy)
+        flow_button.clicked.connect(lambda checked=False: on_check_flow())
+        action_layout.addWidget(flow_button)
     action_layout.addWidget(recheck_button)
     action_layout.addWidget(open_button)
     steps_layout.addWidget(action_row)

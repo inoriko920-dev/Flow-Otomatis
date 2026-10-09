@@ -21,12 +21,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from flow_otomatis.application.ports import GoogleSessionProfile
+from flow_otomatis.application.ports import (
+    GoogleFlowAccessProbe,
+    GoogleSessionProfile,
+    GoogleSessionState,
+)
 from flow_otomatis.application.services import (
     EpisodeImportService,
     GeminiAgentReply,
     GeminiAgentService,
     GeminiKeyService,
+    GoogleFlowPreflightService,
     GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
@@ -182,6 +187,13 @@ class _GoogleSessionSignals(QObject):
     failed = Signal(str, str)
 
 
+class _GoogleFlowSignals(QObject):
+    """Emit sanitized read-only Flow results to the Qt owner thread."""
+
+    checked = Signal(object, int)
+    failed = Signal(str, int, str)
+
+
 _DIALOG_BACKGROUNDS = {
     "UI-IMG-001C": "UI-IMG-001A",
     "UI-IMG-012A": "UI-IMG-002A",
@@ -204,6 +216,7 @@ class MainWindow(QMainWindow):
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
+        google_flow_preflight_service: GoogleFlowPreflightService | None = None,
         gemini_key_service: GeminiKeyService | None = None,
         gemini_agent_service: GeminiAgentService | None = None,
     ) -> None:
@@ -221,6 +234,11 @@ class MainWindow(QMainWindow):
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
+        self._google_flow_preflight_service = google_flow_preflight_service
+        self._google_flow_probes: dict[str, GoogleFlowAccessProbe] = {}
+        self._google_flow_epochs: dict[str, int] = {}
+        self._google_flow_busy: set[str] = set()
+        self._google_browser_closed = False
         self._gemini_key_service = gemini_key_service
         self._gemini_agent_service = gemini_agent_service
         self._agent_answer: str | None = None
@@ -238,6 +256,9 @@ class MainWindow(QMainWindow):
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
         self._google_session_signals.failed.connect(self._show_google_session_error)
+        self._google_flow_signals = _GoogleFlowSignals(self)
+        self._google_flow_signals.checked.connect(self._on_google_flow_checked)
+        self._google_flow_signals.failed.connect(self._on_google_flow_failed)
         self._gemini_health_signals = _GeminiHealthSignals(self)
         self._gemini_health_signals.checked.connect(self._on_gemini_health_checked)
         self._gemini_health_signals.failed.connect(self._show_gemini_health_error)
@@ -699,6 +720,13 @@ class MainWindow(QMainWindow):
         view = build_google_login_view(
             profile,
             restart_gate=restart_gate,
+            flow_probe=self._google_flow_probes.get(profile.profile_id),
+            flow_busy=profile.profile_id in self._google_flow_busy,
+            on_check_flow=(
+                self._check_active_google_flow
+                if self._google_flow_preflight_service is not None
+                else None
+            ),
             on_open_login=self._reopen_active_google_login,
             on_recheck=self._recheck_active_google_login,
             on_back=self.show_google_profiles,
@@ -727,6 +755,7 @@ class MainWindow(QMainWindow):
     def _open_google_login(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
+        self._invalidate_google_flow(profile_id)
         future = self._google_session_service.open_login_async(profile_id)
         self._watch_google_profile_future(future, "open", "Bantuan Login")
 
@@ -740,20 +769,104 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None or self._active_google_profile_id is None:
             self.show_google_profiles()
             return
+        self._invalidate_google_flow(self._active_google_profile_id)
         future = self._google_session_service.check_profile_async(self._active_google_profile_id)
         self._watch_google_profile_future(future, "recheck", "Bantuan Login")
 
     def _check_google_profile(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
+        self._invalidate_google_flow(profile_id)
         future = self._google_session_service.check_profile_async(profile_id)
         self._watch_google_profile_future(future, "check", "Profil Google")
 
     def _check_all_google_profiles(self) -> None:
         if self._google_session_service is None:
             return
+        for profile in self._google_session_service.list_profiles():
+            self._invalidate_google_flow(profile.profile_id)
         future = self._google_session_service.check_all_async()
         self._watch_google_all_future(future, "Profil Google")
+
+    def _invalidate_google_flow(self, profile_id: str) -> int:
+        """Revoke cached Flow proof and fence callbacks after session changes."""
+
+        self._google_flow_probes.pop(profile_id, None)
+        self._google_flow_busy.discard(profile_id)
+        epoch = self._google_flow_epochs.get(profile_id, 0) + 1
+        self._google_flow_epochs[profile_id] = epoch
+        return epoch
+
+    def _check_active_google_flow(self) -> None:
+        """Run read-only Flow preflight without blocking Qt or mutating Flow."""
+
+        sessions = self._google_session_service
+        preflight = self._google_flow_preflight_service
+        profile_id = self._active_google_profile_id
+        if sessions is None or preflight is None or profile_id is None:
+            return
+        if profile_id in self._google_flow_busy:
+            return
+        if sessions.get_restart_gate(profile_id).current_state is not GoogleSessionState.READY:
+            QMessageBox.warning(self, "Cek Akses Flow", "Cek Ulang Sesi Google terlebih dahulu.")
+            return
+
+        epoch = self._invalidate_google_flow(profile_id)
+        self._google_flow_busy.add(profile_id)
+        current_profile = next(
+            (p for p in sessions.list_profiles() if p.profile_id == profile_id),
+            None,
+        )
+        if current_profile is not None:
+            self.show_google_login(current_profile)
+        future = preflight.check_async(profile_id)
+
+        def completed(done: Future[GoogleFlowAccessProbe]) -> None:
+            try:
+                probe = done.result()
+            except FlowOtomatisError as exc:
+                self._google_flow_signals.failed.emit(profile_id, epoch, str(exc))
+            except Exception:
+                self._google_flow_signals.failed.emit(
+                    profile_id, epoch, "Pemeriksaan Flow gagal tanpa data akun sensitif."
+                )
+            else:
+                self._google_flow_signals.checked.emit(probe, epoch)
+
+        future.add_done_callback(completed)
+
+    def _on_google_flow_checked(self, probe: GoogleFlowAccessProbe, epoch: int) -> None:
+        if self._google_browser_closed:
+            return
+        if self._google_flow_epochs.get(probe.profile_id) != epoch:
+            return
+        if probe.profile_id not in {p.profile_id for p in self._google_session_service.list_profiles()}:
+            return
+        self._google_flow_busy.discard(probe.profile_id)
+        self._google_flow_probes[probe.profile_id] = probe
+        self._refresh_active_google_login(probe.profile_id)
+
+    def _on_google_flow_failed(self, profile_id: str, epoch: int, detail: str) -> None:
+        if self._google_browser_closed or self._google_flow_epochs.get(profile_id) != epoch:
+            return
+        self._google_flow_busy.discard(profile_id)
+        self._refresh_active_google_login(profile_id)
+        if self._fixture_code == "REAL_GOOGLE_LOGIN" and self._active_google_profile_id == profile_id:
+            QMessageBox.warning(self, "Cek Akses Flow", detail)
+
+    def _refresh_active_google_login(self, profile_id: str) -> None:
+        if (
+            self._google_session_service is None
+            or self._fixture_code != "REAL_GOOGLE_LOGIN"
+            or self._active_google_profile_id != profile_id
+        ):
+            return
+        profile = next(
+            (p for p in self._google_session_service.list_profiles() if p.profile_id == profile_id),
+            None,
+        )
+        if profile is not None:
+            self.show_google_login(profile)
 
     def _watch_google_profile_future(
         self,
@@ -803,21 +916,29 @@ class MainWindow(QMainWindow):
         action: str,
         profile: GoogleSessionProfile,
     ) -> None:
+        if self._google_browser_closed:
+            return
         if action == "open":
             self.show_google_login(profile)
             return
-        if action == "recheck" and self._active_google_profile_id == profile.profile_id:
-            self.show_google_login(profile)
+        if action == "recheck":
+            if self._active_google_profile_id == profile.profile_id:
+                self.show_google_login(profile)
             return
-        self.show_google_profiles()
+        if self._fixture_code == "REAL_GOOGLE_PROFILES":
+            self.show_google_profiles()
 
     def _show_google_session_error(self, title: str, message: str) -> None:
-        QMessageBox.warning(self, title, message)
+        if not self._google_browser_closed:
+            QMessageBox.warning(self, title, message)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Bound how long Qt waits while Browser Worker cleans up."""
 
         self._agent_closed = True
+        self._google_browser_closed = True
+        for profile_id in tuple(self._google_flow_epochs):
+            self._invalidate_google_flow(profile_id)
         self._invalidate_agent_context()
         if self._google_session_service is not None:
             self._google_session_service.shutdown(timeout_s=1.5)
