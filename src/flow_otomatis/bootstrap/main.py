@@ -54,7 +54,9 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
     import_service = EpisodeImportService(
         package_reader, workspace_repository, image_verifier=package_reader
     )
-    planning_service = ScenePlanningService(package_reader, workspace_repository)
+    planning_service = ScenePlanningService(
+        package_reader, workspace_repository, image_verifier=package_reader
+    )
     library_service = ProjectLibraryService(workspace_repository)
     job_repository = SqliteGenerationJobRepository(paths.projects_root)
     download_repository = SqliteDownloadResultRepository(paths.projects_root)
