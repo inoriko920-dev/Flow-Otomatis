@@ -79,7 +79,6 @@ def _set_metric(root: QWidget, title: str, value: str, detail: str) -> None:
     raise RuntimeError(f"Frozen Hasil card missing metric: {title}")
 
 
-
 def verified_single_output_folder(results: ProjectResults) -> Path | None:
     """One existing local MP4 folder, or no unambiguous safe action.
 
