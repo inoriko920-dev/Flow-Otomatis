@@ -630,7 +630,7 @@ class MainWindow(QMainWindow):
         self._project_state_label.setText(f"{route} • Belum ada project")
         self._status_project.setText("0 project aktif")
         view = build_empty_project_view(
-            route,
+            "Workspace" if route == "Workspace" else "Hasil",
             on_home=self.show_project_hub,
             on_import=(
                 self._choose_episode_package if self._episode_import_service is not None else None
