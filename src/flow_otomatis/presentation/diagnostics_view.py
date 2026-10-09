@@ -6,8 +6,8 @@ does not include provider logs, tokens, profile identifiers or remote claims.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from PySide6.QtWidgets import QLabel, QPushButton, QTableWidget, QTableWidgetItem, QWidget
 
