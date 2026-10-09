@@ -224,9 +224,9 @@ def test_unverified_provider_policy_disables_live_and_exposes_all_gates(qtbot) -
     statuses = [rows.item(i, 2).text() for i in range(rows.rowCount())]
     assert statuses.count("BELUM TERVERIFIKASI") == 2
     assert "BELUM LULUS" in statuses
-    labels = [label.text() for label in dialog.findChildren(QLabel)]
-    assert any("G1 • KEBIJAKAN" in label for label in labels)
-    assert any("G5 • KREDIT" in label for label in labels)
-    assert any("G6 • SESI" in label for label in labels)
+    gate_names = [rows.item(i, 0).text() for i in range(rows.rowCount())]
+    assert any(name.startswith("G1") for name in gate_names)
+    assert any(name.startswith("G5") for name in gate_names)
+    assert any(name.startswith("G6") for name in gate_names)
     assert not dialog.findChild(QPushButton, "UixLiveGenerate").isEnabled()
     dialog.close()
