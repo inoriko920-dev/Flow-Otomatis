@@ -111,9 +111,7 @@ def test_partial_budget_and_stale_plan_show_separate_statuses(qtbot) -> None:
     dialog.set_state("UIX-04-B")
     rows = dialog.findChild(QTableWidget, "UixDetailTable")
     assert rows.rowCount() == 3
-    assert "HITUNG ULANG" in [
-        rows.item(i, 3).text() for i in range(rows.rowCount())
-    ]
+    assert "HITUNG ULANG" in [rows.item(i, 3).text() for i in range(rows.rowCount())]
     dialog.close()
 
 
@@ -145,7 +143,12 @@ def test_sidebar_preserves_seven_original_routes_as_non_live_labels(qtbot) -> No
     assert dock.width() == 376
     routes = sidebar.findChildren(QLabel, "UixSidebarRoute")
     assert [r.text().strip() for r in routes] == [
-        "Beranda", "Workspace", "Hasil", "Profil Google",
-        "Gemini Keys", "Diagnostik", "Pengaturan",
+        "Beranda",
+        "Workspace",
+        "Hasil",
+        "Profil Google",
+        "Gemini Keys",
+        "Diagnostik",
+        "Pengaturan",
     ]
     dialog.close()
