@@ -27,6 +27,7 @@ def build_account_service_unavailable_view(
     *,
     on_home: Callable[[], object],
     on_diagnostics: Callable[[], object],
+    read_error: bool = False,
 ) -> QWidget:
     """Offer local recovery navigation without claiming any provider access."""
 
@@ -40,15 +41,28 @@ def build_account_service_unavailable_view(
     layout = QVBoxLayout(root)
     layout.setContentsMargins(20, 18, 20, 18)
     layout.setSpacing(16)
-    layout.addWidget(page_header(route, "Mode lokal • Layanan belum dikonfigurasi"))
+    layout.addWidget(
+        page_header(
+            route,
+            "Mode lokal • Data belum dapat diperiksa"
+            if read_error
+            else "Mode lokal • Layanan belum dikonfigurasi",
+        )
+    )
 
     service_name = "Pengelola sesi Google" if route == "Profil Google" else "Pengelola kunci Gemini"
+    detail = (
+        f"Status {service_name} gagal dibaca dari penyimpanan lokal. "
+        "Data tersimpan tidak diubah. Detail file dan akun disembunyikan."
+        if read_error
+        else f"{service_name} belum tersedia dalam proses aplikasi ini. "
+        "Tidak dapat menampilkan profil atau kunci asli."
+    )
     layout.addWidget(
         info_banner(
-            "LAYANAN TIDAK TERSEDIA",
-            f"{service_name} belum tersedia dalam proses aplikasi ini. "
-            "Tidak dapat menampilkan profil atau kunci asli. "
-            "Tidak ada status login, akses Flow, saldo, atau kuota yang "
+            "STATUS LAYANAN TIDAK DIKETAHUI" if read_error else "LAYANAN TIDAK TERSEDIA",
+            detail
+            + " Tidak ada status login, akses Flow, saldo, atau kuota yang "
             "boleh disimpulkan dari layar ini.",
             "warning",
         )
