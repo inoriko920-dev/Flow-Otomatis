@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QLineEdit,
-    QPushButton,
     QProgressBar,
+    QPushButton,
     QTableWidget,
 )
 
