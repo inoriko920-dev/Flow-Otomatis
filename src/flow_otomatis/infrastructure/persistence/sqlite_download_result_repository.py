@@ -311,7 +311,7 @@ class SqliteDownloadResultRepository:
                     SELECT 1 FROM generation_jobs
                     WHERE episode_id = ? AND scene_id = ?
                       AND state = 'GENERATED'
-                      AND remote_result_id = ?
+                      AND TRIM(COALESCE(remote_result_id, '')) = ?
                     LIMIT 1
                     """,
                     (episode_id, scene_id, expected_remote_result_id),
