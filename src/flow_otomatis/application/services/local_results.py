@@ -12,13 +12,13 @@ from flow_otomatis.application.ports.result_manifest import ResultManifestWriter
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
-from flow_otomatis.domain.scene import WorkspaceScene
 from flow_otomatis.domain.result import (
     DownloadRecord,
     DownloadState,
     ProjectResults,
     SceneResult,
 )
+from flow_otomatis.domain.scene import WorkspaceScene
 
 
 class LocalResultsService:
