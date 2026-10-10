@@ -651,7 +651,8 @@ class SqliteGenerationJobRepository:
         # Pre-v2 records can be decoded without mutating their schema.
         def optional(column: str) -> object | None:
             try:
-                return row[column]
+                value: object = row[column]
+                return value
             except IndexError, KeyError:
                 return None
 
