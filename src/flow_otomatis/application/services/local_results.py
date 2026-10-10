@@ -203,12 +203,9 @@ class LocalResultsService:
         # transaction commits, or the local MP4 can disappear before this
         # service returns. Match the exact persisted revision and file again
         # so Hasil callers never receive a stale, falsely confirmed result.
-        if (
-            not self._download_repository.matches_current_generated_download(
-                record, expected_generation=job
-            )
-            or not is_available_output(str(local_output))
-        ):
+        if not self._download_repository.matches_current_generated_download(
+            record, expected_generation=job
+        ) or not is_available_output(str(local_output)):
             raise InternalInvariantError(
                 "Local Download history or MP4 changed after atomic save; "
                 "local video needs reconciliation."
@@ -230,8 +227,7 @@ class LocalResultsService:
             )
         ):
             raise InternalInvariantError(
-                "Local Download source changed after atomic save; "
-                "manual reconciliation required."
+                "Local Download source changed after atomic save; manual reconciliation required."
             )
         return record
 
