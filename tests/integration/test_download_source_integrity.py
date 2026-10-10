@@ -648,3 +648,101 @@ def test_sol12_ordinary_failed_download_does_not_create_manual_retry_claim(
             """
         ).fetchone()
     assert audit_table is None
+
+
+@pytest.mark.parametrize(
+    "concurrent_change",
+    [
+        "generate_queued",
+        "generate_remote_id",
+        "generate_fingerprint",
+        "generate_revision",
+        "scene_duration",
+        "scene_not_ready",
+        "download_revision",
+        "download_ambiguous",
+    ],
+)
+def test_sol13_retry_claim_rejects_changed_sqlite_facts_before_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrent_change: str,
+) -> None:
+    """Simulate another process mutating SQLite after the first Download read.
+
+    A matching remote ID is insufficient if the prepared revision, Scene, or
+    reviewed Download row changed. Reject without consuming the manual review.
+    """
+
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    database = rig.root / _EPISODE / "project.sqlite3"
+    original_get = rig.downloads.get
+    seen = False
+
+    def stale_read_then_concurrent_commit(episode_id: str, scene_id: str) -> DownloadRecord | None:
+        nonlocal seen
+        record = original_get(episode_id, scene_id)
+        if seen:
+            return record
+        seen = True
+        changes = {
+            "generate_queued": (
+                "UPDATE generation_jobs SET state = 'QUEUED' WHERE scene_id = ?",
+                (_SCENE,),
+            ),
+            "generate_remote_id": (
+                "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+                ("remote:other-result", _SCENE),
+            ),
+            "generate_fingerprint": (
+                "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+                ("different-prepared-request-revision", _SCENE),
+            ),
+            "generate_revision": (
+                "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+                ("2040-01-01T00:00:00+00:00", _SCENE),
+            ),
+            "scene_duration": (
+                "UPDATE scenes SET selected_flow_duration_s = ? WHERE scene_id = ?",
+                (6, _SCENE),
+            ),
+            "scene_not_ready": (
+                "UPDATE scenes SET readiness = ? WHERE scene_id = ?",
+                ("MISSING_IMAGE", _SCENE),
+            ),
+            "download_revision": (
+                "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+                ("2040-01-01T00:00:00+00:00", _SCENE),
+            ),
+            "download_ambiguous": (
+                "UPDATE download_results SET state = ? WHERE scene_id = ?",
+                (DownloadState.ATTENTION_REQUIRED, _SCENE),
+            ),
+        }
+        sql, args = changes[concurrent_change]
+        with sqlite3.connect(database) as connection:
+            connection.execute(sql, args)
+            connection.commit()
+        return record
+
+    monkeypatch.setattr(rig.downloads, "get", stale_read_then_concurrent_commit)
+    with pytest.raises(InternalInvariantError, match="manual reconciliation|source image"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+    monkeypatch.setattr(rig.downloads, "get", original_get)
+
+    assert seen
+    assert rig.provider.calls == 0
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
+    with sqlite3.connect(database) as connection:
+        actions = [
+            row[0]
+            for row in connection.execute(
+                "SELECT action FROM download_reconciliation_audit ORDER BY id"
+            )
+        ]
+    assert actions == ["OPERATOR_REVIEWED_RETRY"]
+    stored = rig.downloads.get(_EPISODE, _SCENE)
+    assert stored is not None
+    if concurrent_change not in {"download_revision", "download_ambiguous"}:
+        assert stored == reviewed
