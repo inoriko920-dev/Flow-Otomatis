@@ -376,7 +376,9 @@ class SqliteDownloadResultRepository:
             is not None
         )
 
-    def matches_current_generated_download(self, record: DownloadRecord) -> bool:
+    def matches_current_generated_download(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob | None = None
+    ) -> bool:
         """Revalidate stored Download and Generate in one read-only SQLite query.
 
         Never initialize legacy tables, migrate schema, or update history
@@ -387,6 +389,11 @@ class SqliteDownloadResultRepository:
             record.state != DownloadState.DOWNLOADED
             or not record.generation_remote_result_id
             or record.output_path is None
+        ):
+            return False
+        if expected_generation is not None and (
+            expected_generation.episode_id != record.episode_id
+            or expected_generation.scene_id != record.scene_id
         ):
             return False
         db_path = self._db_path(record.episode_id)
@@ -414,9 +421,20 @@ class SqliteDownloadResultRepository:
                       AND d.output_path = ?
                       AND d.take = ?
                       AND d.generation_remote_result_id = ?
+                      AND d.error_message IS ?
                       AND g.state = 'GENERATED'
                       AND TRIM(COALESCE(g.remote_result_id, '')) = ?
                       AND g.request_fingerprint IS NOT NULL
+                      AND (? IS NULL OR (
+                          g.job_id = ?
+                          AND g.updated_at = ?
+                          AND g.request_fingerprint = ?
+                          AND g.image_file = ?
+                          AND g.motion_prompt = ?
+                          AND g.model = ?
+                          AND g.resolution = ?
+                          AND g.aspect_ratio = ?
+                      ))
                       AND s.image_exists = 1
                       AND s.readiness = 'READY'
                       AND g.target_duration_s = s.target_duration_s
@@ -435,7 +453,20 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.generation_remote_result_id,
+                        record.error_message,
                         record.generation_remote_result_id,
+                        expected_generation.job_id if expected_generation else None,
+                        expected_generation.job_id if expected_generation else None,
+                        (
+                            expected_generation.updated_at.isoformat()
+                            if expected_generation else None
+                        ),
+                        expected_generation.request_fingerprint if expected_generation else None,
+                        expected_generation.image_file if expected_generation else None,
+                        expected_generation.motion_prompt if expected_generation else None,
+                        expected_generation.model if expected_generation else None,
+                        expected_generation.resolution if expected_generation else None,
+                        expected_generation.aspect_ratio if expected_generation else None,
                     ),
                 ).fetchone()
                 return matching is not None
