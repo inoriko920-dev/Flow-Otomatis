@@ -189,3 +189,91 @@ def test_legacy_success_history_is_read_only_until_explicit_new_write(tmp_path: 
             str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")
         }
     assert "generation_remote_result_id" in upgraded_names
+
+
+@pytest.mark.parametrize(
+    "unsafe_id",
+    [
+        "",
+        ".",
+        "..",
+        "../EP_LEGACY",
+        "EP_LEGACY/../../outside",
+        r"..\\EP_LEGACY",
+        r"C:\\outside",
+        "EP_LEGACY:other",
+        "EP_LEGACY.",
+        "EP_LEGACY ",
+        "EP_LEGACY\\nested",
+        "CON",
+        "PRN.txt",
+        "NUL",
+        "COM1",
+        "LPT9",
+        "EP_BAD\\x00",
+    ],
+)
+def test_download_database_boundary_rejects_unsafe_episode_paths(
+    tmp_path: Path, unsafe_id: str
+) -> None:
+    """Direct DB access must not bypass the service-level Windows path gate."""
+
+    projects_root = tmp_path / "projects"
+    untouched = _database(projects_root)
+    before = _digest(untouched)
+    repository = SqliteDownloadResultRepository(projects_root)
+    failed = DownloadRecord(
+        episode_id=unsafe_id,
+        scene_id="SCENE_001",
+        state=DownloadState.FAILED,
+        updated_at=datetime.now(UTC),
+        error_message="synthetic failure",
+    )
+    downloaded = DownloadRecord(
+        episode_id=unsafe_id,
+        scene_id="SCENE_001",
+        state=DownloadState.DOWNLOADED,
+        updated_at=datetime.now(UTC),
+        output_path=str(tmp_path / "safe.mp4"),
+        generation_remote_result_id="remote:GOOD",
+    )
+
+    with pytest.raises(StorageError, match="Unsafe project episode"):
+        repository.get(unsafe_id, "SCENE_001")
+    with pytest.raises(StorageError, match="Unsafe project episode"):
+        repository.list_for_episode(unsafe_id)
+    with pytest.raises(StorageError, match="Unsafe project episode"):
+        repository.save(failed)
+    with pytest.raises(StorageError, match="Unsafe project episode"):
+        repository.save_failure_if_unconfirmed(failed)
+    with pytest.raises(StorageError, match="Unsafe project episode"):
+        repository.save_if_current_generate(downloaded, "remote:GOOD")
+
+    assert _digest(untouched) == before
+    assert sorted(p.name for p in projects_root.iterdir()) == ["EP_LEGACY"]
+
+
+@pytest.mark.parametrize("bad_identity", [None, "", "remote:DIFFERENT", " remote:GOOD "])
+def test_atomic_download_rejects_contradictory_generate_binding_before_database_io(
+    tmp_path: Path, bad_identity: str | None
+) -> None:
+    """A guarded commit cannot relabel a Download from the wrong Generate ID."""
+
+    projects_root = tmp_path / "projects"
+    database = _database(projects_root)
+    repository = SqliteDownloadResultRepository(projects_root)
+    before = _digest(database)
+    record = DownloadRecord(
+        episode_id="EP_LEGACY",
+        scene_id="SCENE_001",
+        state=DownloadState.DOWNLOADED,
+        updated_at=datetime.now(UTC),
+        output_path=str(tmp_path / "video.mp4"),
+        generation_remote_result_id=bad_identity,
+    )
+
+    with pytest.raises(ValueError, match="identity does not match"):
+        repository.save_if_current_generate(record, "remote:GOOD")
+
+    assert _digest(database) == before
+    _assert_history_table_absent(database)
