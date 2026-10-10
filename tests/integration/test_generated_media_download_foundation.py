@@ -1259,6 +1259,57 @@ def test_t18_collision_appearing_during_download_never_overwrites_final(tmp_path
     assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
 
 
+@pytest.mark.parametrize("publication_change", ["modified_content", "independent_final"])
+def test_published_file_is_rechecked_before_success_and_partial_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    publication_change: str,
+) -> None:
+    """A late writer or divergent filesystem result must not certify an MP4."""
+
+    from flow_otomatis.workers.browser import google_flow_download
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original_link = google_flow_download.os.link
+
+    def changed_publication(source: str | Path, destination: str | Path) -> None:
+        if publication_change == "modified_content":
+            original_link(source, destination)
+            # Hard links share bytes. A late browser write can invalidate
+            # the file after its initial validation but before publication ends.
+            Path(destination).write_bytes(b"<!doctype html><html>expired session</html>")
+        else:
+            # Simulate an unexpected/nonconforming publishing primitive that
+            # creates valid-looking but independent bytes at the final path.
+            Path(destination).write_bytes(b"independent-file")
+
+    monkeypatch.setattr(google_flow_download.os, "link", changed_publication)
+    with pytest.raises(MediaDownloadAmbiguousError, match="final verification"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    partials = list(final.parent.glob(final.name + ".*.part"))
+    assert len(partials) == 1
+    assert final.is_file()
+    assert partials[0].is_file()
+    if publication_change == "modified_content":
+        assert final.read_bytes() == b"<!doctype html><html>expired session</html>"
+        assert partials[0].read_bytes() == final.read_bytes()
+    else:
+        assert final.read_bytes() == b"independent-file"
+        assert partials[0].read_bytes() == b"fake-video"
+
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.ATTENTION_REQUIRED
+    assert recorded.output_path is None
+    assert recorded.generation_remote_result_id == "remote:SCENE_001"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+
+
 def test_t19_unsupported_no_clobber_primitive_fails_without_fallback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
