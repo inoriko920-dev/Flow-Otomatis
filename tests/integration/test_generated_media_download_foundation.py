@@ -331,6 +331,60 @@ def test_download_requires_generated_state_and_never_starts_generate(tmp_path: P
 
 
 @pytest.mark.parametrize(
+    "state",
+    [
+        GoogleFlowDownloadState.SAFE_FAILURE,
+        GoogleFlowDownloadState.CANCELLED,
+        GoogleFlowDownloadState.AUTH_REQUIRED,
+    ],
+)
+@pytest.mark.parametrize("output_kind", ["external", "blank"])
+def test_contradictory_failure_evidence_requires_review_before_retry(
+    tmp_path: Path,
+    state: GoogleFlowDownloadState,
+    output_kind: str,
+) -> None:
+    """Non-success with a named output is unconfirmed, not safely retryable."""
+
+    outside = tmp_path / "DO_NOT_PERSIST-outside.mp4"
+    outside.write_bytes(b"unrelated-file-preserved")
+
+    class ContradictoryDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            return GoogleFlowDownloadEvidence(
+                state=state,
+                detail="access_token=DO_NOT_PERSIST",
+                output_path=str(outside) if output_kind == "external" else "",
+            )
+
+    driver = ContradictoryDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="conflicting Download evidence"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    current = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert current is not None
+    assert current.state == DownloadState.ATTENTION_REQUIRED
+    assert current.generation_remote_result_id == "remote:SCENE_001"
+    assert current.output_path is None
+    assert "DO_NOT_PERSIST" not in (current.error_message or "")
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
+    assert outside.read_bytes() == b"unrelated-file-preserved"
+    assert not (root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4").exists()
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
     ("state", "error_type", "expected_state"),
     [
         (
