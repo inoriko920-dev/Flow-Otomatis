@@ -578,6 +578,86 @@ def test_typed_provider_error_with_published_mp4_requires_manual_reconciliation(
     assert final.read_bytes() == b"published-before-typed-error"
 
 
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        MediaDownloadProviderError,
+        MediaDownloadAuthenticationRequiredError,
+        MediaDownloadCancelledError,
+    ],
+)
+@pytest.mark.parametrize("partial_contents", [b"", b"uncertain-browser-transfer"])
+def test_alternate_provider_typed_failure_with_partial_requires_review(
+    tmp_path: Path,
+    error_type: type[MediaDownloadProviderError],
+    partial_contents: bytes,
+) -> None:
+    """A typed safe error cannot hide attempt-owned temporary Download evidence."""
+
+    class PartialThenFailedProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            self.calls += 1
+            final = Path(request.destination_path)
+            partial = final.with_name(f"{final.name}.custom-attempt.part")
+            partial.parent.mkdir(parents=True, exist_ok=True)
+            partial.write_bytes(partial_contents)
+            raise error_type("private-browser-session=DO_NOT_PERSIST")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    provider = PartialThenFailedProvider()
+    service._provider = provider  # type: ignore[assignment]
+
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation") as raised:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None
+    assert record.state == DownloadState.ATTENTION_REQUIRED
+    assert record.generation_remote_result_id == "remote:SCENE_001"
+    assert record.output_path is None
+    assert "DO_NOT_PERSIST" not in (record.error_message or "")
+
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    final = directory / "SCENE_001__take_01.mp4"
+    partial = directory / "SCENE_001__take_01.mp4.custom-attempt.part"
+    assert not final.exists()
+    assert partial.read_bytes() == partial_contents
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
+
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert provider.calls == 1
+    assert partial.read_bytes() == partial_contents
+
+
+def test_unrelated_partial_does_not_change_safe_failure_classification(
+    tmp_path: Path,
+) -> None:
+    """Only this canonical MP4's partials are evidence for a given attempt."""
+
+    class UnrelatedPartialProvider:
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            destination = Path(request.destination_path)
+            other = destination.parent / "different-scene.mp4.old.part"
+            other.write_bytes(b"another-scene-evidence")
+            raise MediaDownloadAuthenticationRequiredError("login required")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    service._provider = UnrelatedPartialProvider()  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAuthenticationRequiredError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None
+    assert record.state == DownloadState.FAILED
+    assert (
+        root / "EP500_DOWNLOAD" / "downloads" / "different-scene.mp4.old.part"
+    ).read_bytes() == b"another-scene-evidence"
+
+
 def test_typed_provider_error_cannot_override_rival_success_at_same_destination(
     tmp_path: Path,
 ) -> None:
