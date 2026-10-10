@@ -296,9 +296,17 @@ def test_controlled_download_failure_records_failure_without_retry(
     ("state", "error_type", "expected_state"),
     [
         (GoogleFlowDownloadState.SAFE_FAILURE, MediaDownloadProviderError, DownloadState.FAILED),
-        (GoogleFlowDownloadState.AUTH_REQUIRED, MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
+        (
+            GoogleFlowDownloadState.AUTH_REQUIRED,
+            MediaDownloadAuthenticationRequiredError,
+            DownloadState.FAILED,
+        ),
         (GoogleFlowDownloadState.CANCELLED, MediaDownloadCancelledError, DownloadState.FAILED),
-        (GoogleFlowDownloadState.AMBIGUOUS, MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
+        (
+            GoogleFlowDownloadState.AMBIGUOUS,
+            MediaDownloadAmbiguousError,
+            DownloadState.ATTENTION_REQUIRED,
+        ),
     ],
 )
 def test_browser_evidence_detail_never_enters_errors_or_sqlite(
@@ -377,9 +385,7 @@ def test_browser_driver_typed_exception_text_never_leaks(
     assert record.state == expected_state
     assert record.error_message
     assert "DO_NOT_PERSIST" not in record.error_message
-    assert b"DO_NOT_PERSIST" not in (
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ).read_bytes()
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
     assert len(driver.calls) == 1
 
 
@@ -412,9 +418,7 @@ def test_download_service_redacts_custom_provider_error_on_sqlite_boundary(
     assert record.state == expected_state
     assert record.error_message
     assert "DO_NOT_PERSIST" not in record.error_message
-    assert b"DO_NOT_PERSIST" not in (
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ).read_bytes()
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
 
 
 @pytest.mark.parametrize(
