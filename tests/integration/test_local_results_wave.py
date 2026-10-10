@@ -733,6 +733,8 @@ def test_t08_changed_duration_makes_historical_download_unavailable(tmp_path: Pa
     ("field", "changed_value"),
     [
         ("image_file", "new-image.png"),
+        ("image_exists", False),
+        ("readiness", SceneReadiness.MISSING_IMAGE),
         ("motion_prompt", "Different prompt"),
         ("model", "Unrelated model"),
         ("resolution", "1080p"),
@@ -793,3 +795,73 @@ def test_t10_scene_edit_during_download_commit_is_rejected_without_deleting_vide
     assert video.read_bytes() == b"synthetic-video-evidence"
     assert downloads.get("EP400_RESULTS", "SCENE_001") is None
     assert racing_service.snapshot("EP400_RESULTS").handoff_ready is False
+
+@pytest.mark.parametrize(
+    "scene_change",
+    [
+        {"image_exists": False, "readiness": SceneReadiness.MISSING_IMAGE},
+        {"readiness": SceneReadiness.MISSING_PROMPT},
+    ],
+)
+def test_f03_not_ready_scene_refuses_new_download_certificate_and_keeps_bytes(
+    tmp_path: Path, scene_change: dict[str, object]
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "ready-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:READY", "ready-owner")
+    output = tmp_path / "existing-approved-result.mp4"
+    output.write_bytes(b"preserved-older-mp4")
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    original = repo.load("EP400_RESULTS")
+    assert original is not None
+    changed = replace(original.scenes[0], **scene_change)
+    repo.update(replace(original, scenes=(changed,)), expected_workspace=original)
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
+    assert output.read_bytes() == b"preserved-older-mp4"
+    assert SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001") is None
+    assert not service.snapshot("EP400_RESULTS").handoff_ready
+
+
+def test_f03_atomic_download_rejects_missing_image_after_initial_service_check(
+    tmp_path: Path,
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "atomic-ready-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:ATOMIC", "atomic-ready-owner")
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    output = tmp_path / "accepted-old-result.mp4"
+    output.write_bytes(b"keep-when-scene-lost-image")
+
+    class ImageDisappearsBeforeCommit(SqliteDownloadResultRepository):
+        def save_if_current_generate(
+            self, record: DownloadRecord, expected_remote_result_id: str
+        ) -> bool:
+            workspace = repo.load(record.episode_id)
+            assert workspace is not None
+            changed = replace(
+                workspace,
+                scenes=(
+                    replace(
+                        workspace.scenes[0],
+                        image_exists=False,
+                        readiness=SceneReadiness.MISSING_IMAGE,
+                    ),
+                ),
+            )
+            repo.update(changed, expected_workspace=workspace)
+            return super().save_if_current_generate(record, expected_remote_result_id)
+
+    guarded = LocalResultsService(
+        repo, jobs, ImageDisappearsBeforeCommit(root), ResultManifestWriter(root)
+    )
+    with pytest.raises(InternalInvariantError, match="changed during atomic Download save"):
+        guarded.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
+    assert output.read_bytes() == b"keep-when-scene-lost-image"
+    assert SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001") is None
+
+
