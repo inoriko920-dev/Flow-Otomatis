@@ -152,6 +152,7 @@ class GeneratedMediaDownloadService:
         # Re-read source bytes immediately before the provider boundary so
         # a changed input cannot begin a new download unnoticed.
         self._require_current_source(episode_id, scene_id, job)
+        reviewed_download: DownloadRecord | None = None
         if existing is not None and existing.state == DownloadState.FAILED:
             # A prior operator review can approve ONE attempt only. Claim it
             # under the SQLite write lock before any provider invocation;
@@ -184,6 +185,15 @@ class GeneratedMediaDownloadService:
                         "manual reconciliation required."
                     )
                 self._require_current_source(episode_id, scene_id, job)
+                if self._download_repository.get(episode_id, scene_id) != existing:
+                    raise InternalInvariantError(
+                        "Download history changed after reviewed retry claim; "
+                        "manual reconciliation required."
+                    )
+                # Carry the claimed revision to the final SQLite success
+                # transaction. A later race must not overwrite a changed
+                # FAILED row, rival success, or new ambiguity.
+                reviewed_download = existing
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -365,11 +375,13 @@ class GeneratedMediaDownloadService:
             take=normalized_take,
             generation_remote_result_id=remote_result_id,
         )
-        if not self._download_repository.save_if_current_generate(record, remote_result_id):
-            # The result changed after the second read but before commit.
-            # Keep the MP4 bytes and historical rows for manual reconciliation.
+        if not self._download_repository.save_if_current_generate(
+            record, remote_result_id, expected_reviewed_download=reviewed_download
+        ):
+            # The Generate result or the reviewed Download revision changed
+            # after our reads. Keep MP4 bytes and SQLite history intact.
             raise InternalInvariantError(
-                "Generate result changed during atomic Download save; "
+                "Generate or Download revision changed during atomic Download save; "
                 "local video needs reconciliation."
             )
         # A changed source during the SQLite commit must not be returned as
