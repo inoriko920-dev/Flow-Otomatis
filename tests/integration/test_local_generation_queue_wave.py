@@ -26,14 +26,14 @@ from flow_otomatis.domain.job import (
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
+from flow_otomatis.infrastructure.persistence import (
+    SqliteGenerationJobRepository,
+    SqliteWorkspaceRepository,
+)
 from flow_otomatis.workers.browser import (
     GoogleFlowGenerationProvider,
     GoogleFlowSubmitEvidence,
     GoogleFlowSubmitState,
-)
-from flow_otomatis.infrastructure.persistence import (
-    SqliteGenerationJobRepository,
-    SqliteWorkspaceRepository,
 )
 
 
