@@ -161,7 +161,9 @@ def test_navigation_control_accepts_keyboard_focus(qtbot: object) -> None:
         window.close()
 
 
-def test_canonical_table_alignment_uses_supported_qt_flags_without_deprecation(qtbot: object) -> None:
+def test_canonical_table_alignment_uses_supported_qt_flags_without_deprecation(
+    qtbot: object,
+) -> None:
     """Keep approved alignment while avoiding thousands of Qt warnings."""
 
     del qtbot
@@ -182,4 +184,3 @@ def test_canonical_table_alignment_uses_supported_qt_flags_without_deprecation(q
         ]
     finally:
         table.close()
-
