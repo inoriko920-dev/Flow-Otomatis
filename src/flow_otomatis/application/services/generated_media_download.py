@@ -335,8 +335,12 @@ class GeneratedMediaDownloadService:
             if workspace is not None
             else None
         )
-        if scene is None or not matches_current_generated_scene(
-            job, scene, workspace.source_package_path, self._image_verifier
+        if (
+            workspace is None
+            or scene is None
+            or not matches_current_generated_scene(
+                job, scene, workspace.source_package_path, self._image_verifier
+            )
         ):
             raise InternalInvariantError(
                 "Download source image or prepared Generate revision no longer matches; "
