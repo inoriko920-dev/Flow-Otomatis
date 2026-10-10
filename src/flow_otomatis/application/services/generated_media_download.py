@@ -147,7 +147,7 @@ class GeneratedMediaDownloadService:
                 self._download_repository.save_attention_if_unconfirmed(record)
             else:
                 self._download_repository.save_failure_if_unconfirmed(record)
-            if final_appeared and not isinstance(exc, MediaDownloadAmbiguousError):
+            if final_appeared:
                 raise MediaDownloadAmbiguousError(
                     "Download destination appeared during a failed provider attempt; "
                     "manual reconciliation required."
