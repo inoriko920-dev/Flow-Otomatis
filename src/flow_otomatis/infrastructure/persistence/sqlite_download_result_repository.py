@@ -331,6 +331,7 @@ class SqliteDownloadResultRepository:
                     FROM download_results AS d
                     JOIN generation_jobs AS g
                       ON d.episode_id = g.episode_id AND d.scene_id = g.scene_id
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
                     WHERE d.episode_id = ? AND d.scene_id = ?
                       AND d.state = 'DOWNLOADED'
                       AND d.updated_at = ?
@@ -339,6 +340,14 @@ class SqliteDownloadResultRepository:
                       AND d.generation_remote_result_id = ?
                       AND g.state = 'GENERATED'
                       AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.request_fingerprint IS NOT NULL
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
                     LIMIT 1
                     """,
                     (
