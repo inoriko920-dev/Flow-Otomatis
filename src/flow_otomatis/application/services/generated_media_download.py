@@ -10,6 +10,7 @@ from flow_otomatis.application.ports.download_results import DownloadResultRepos
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
+    MediaDownloadAmbiguousError,
     MediaDownloadProviderError,
 )
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
@@ -67,6 +68,11 @@ class GeneratedMediaDownloadService:
             )
 
         existing = self._download_repository.get(episode_id, scene_id)
+        if existing is not None and existing.state == DownloadState.ATTENTION_REQUIRED:
+            raise InternalInvariantError(
+                "Prior Download outcome is ambiguous; manual reconciliation required "
+                "before another provider attempt."
+            )
         if (
             existing is not None
             and existing.state == DownloadState.DOWNLOADED
@@ -104,13 +110,22 @@ class GeneratedMediaDownloadService:
             record = DownloadRecord(
                 episode_id=episode_id,
                 scene_id=scene_id,
-                state=DownloadState.FAILED,
+                state=(
+                    DownloadState.ATTENTION_REQUIRED
+                    if isinstance(exc, MediaDownloadAmbiguousError)
+                    else DownloadState.FAILED
+                ),
                 updated_at=datetime.now(UTC),
                 take=normalized_take,
                 error_message=str(exc)[:500],
+                generation_remote_result_id=remote_result_id,
             )
-            # A losing concurrent attempt must not erase a successful download.
-            self._download_repository.save_failure_if_unconfirmed(record)
+            # Ambiguity is sticky: do not silently re-attempt a possibly
+            # completed browser download or erase a successful rival record.
+            if record.state == DownloadState.ATTENTION_REQUIRED:
+                self._download_repository.save_attention_if_unconfirmed(record)
+            else:
+                self._download_repository.save_failure_if_unconfirmed(record)
             raise
 
         # Validate the exact published file path, not a canonicalized
