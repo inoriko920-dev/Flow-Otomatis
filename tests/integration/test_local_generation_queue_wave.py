@@ -695,6 +695,7 @@ def test_import_pinned_image_change_after_queue_prepare_never_submits(
     assert blocked.attention_code is GenerationAttentionCode.REQUEST_STALE
     assert provider.calls == []
 
+
 @pytest.mark.parametrize(
     ("exception_type", "expected_state", "expected_attention"),
     [
@@ -760,9 +761,9 @@ def test_t05_t07_generate_provider_errors_never_persist_raw_details(
         assert secret_fragment not in (outcome.error_message or "")
         assert secret_fragment not in (raw[0] or "")
         assert secret_fragment not in caplog.text
-    assert queue.run_next("EP300_QUEUE") is None if expected_attention is not None else True
+    if expected_attention is not None:
+        assert queue.run_next("EP300_QUEUE") is None
     assert provider.calls == 1
-
 
 
 def test_t11_google_safe_failure_queue_requires_explicit_reprepare(tmp_path: Path) -> None:
