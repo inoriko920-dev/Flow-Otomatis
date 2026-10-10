@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -68,7 +69,9 @@ class ResultManifestWriter:
                 ) from exc
         return exports
 
-    def write(self, results: ProjectResults) -> Path:
+    def write(
+        self, results: ProjectResults, *, recheck: Callable[[], ProjectResults] | None = None
+    ) -> Path:
         output_dir = self._verified_export_directory(results.episode_id)
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
         if target.is_symlink():
@@ -87,6 +90,34 @@ class ResultManifestWriter:
             else scene
             for scene in results.scenes
         )
+        # A published MP4 can be replaced while this manifest is being
+        # serialized. The output status alone is not enough: remember its
+        # filesystem identity and modification metadata before staging.
+        def output_signature(path: str | None) -> tuple[int, int, int, int, int] | None:
+            if not path or not is_available_output(path):
+                return None
+            try:
+                info = os.stat(path, follow_symlinks=False)
+            except (OSError, RuntimeError, ValueError):
+                return None
+            return (
+                info.st_dev,
+                info.st_ino,
+                info.st_size,
+                info.st_mtime_ns,
+                info.st_ctime_ns,
+            )
+
+        signatures: dict[str, tuple[int, int, int, int, int]] = {}
+        for scene in verified_scenes:
+            if scene.download_state == DownloadState.DOWNLOADED:
+                signature = output_signature(scene.output_path)
+                if signature is None:
+                    raise InternalInvariantError(
+                        "Manifest MP4 changed before export; manual reconciliation required."
+                    )
+                signatures[scene.scene_id] = signature
+
         payload = {
             "schema_version": "1.0",
             "episode_id": results.episode_id,
@@ -162,6 +193,24 @@ class ResultManifestWriter:
                 )
             if target.is_symlink():
                 raise InternalInvariantError("Result export target was redirected")
+            # Re-read SQLite/Scene/source through the owning service AFTER
+            # writing and syncing the temporary JSON. Never publish a success
+            # that belonged to an older Download/Generate revision.
+            if recheck is not None and recheck() != results:
+                raise InternalInvariantError(
+                    "Result history changed during manifest export; "
+                    "previous manifest and MP4 retained for reconciliation."
+                )
+            # Also reject filesystem changes that leave the same effective
+            # Download status, including a replaced nonempty MP4.
+            for scene in verified_scenes:
+                if scene.download_state == DownloadState.DOWNLOADED and (
+                    output_signature(scene.output_path) != signatures[scene.scene_id]
+                ):
+                    raise InternalInvariantError(
+                        "Manifest MP4 changed during export; "
+                        "previous manifest and video retained for reconciliation."
+                    )
             os.replace(temporary, target)
         finally:
             # Do not follow a redirected parent during cleanup. When the
