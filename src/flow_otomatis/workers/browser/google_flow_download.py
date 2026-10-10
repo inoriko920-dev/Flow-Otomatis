@@ -166,7 +166,10 @@ class GoogleFlowDownloadProvider:
         # A driver cannot certify SAFE_FAILURE, CANCELLED or AUTH_REQUIRED
         # if it has already written an attempt-owned partial: the local
         # outcome requires reconciliation before a future browser retry.
-        if os.path.lexists(partial_path) and evidence.state is not GoogleFlowDownloadState.AMBIGUOUS:
+        if (
+            os.path.lexists(partial_path)
+            and evidence.state is not GoogleFlowDownloadState.AMBIGUOUS
+        ):
             raise MediaDownloadAmbiguousError(
                 "Flow left a partial file despite an unconfirmed outcome; "
                 "inspect the preserved file before any retry."
