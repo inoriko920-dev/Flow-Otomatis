@@ -172,7 +172,7 @@ class GoogleFlowDownloadProvider:
             # Do not resolve() before comparing: symlinks must not be hidden.
             try:
                 reported = Path(evidence.output_path).expanduser().absolute()
-            except (OSError, RuntimeError, ValueError) as exc:
+            except (OSError, RuntimeError, ValueError):
                 raise MediaDownloadAmbiguousError(
                     "Flow browser reported an unsafe Download output path; "
                     "manual reconciliation is required before retry."
