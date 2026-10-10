@@ -342,3 +342,93 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
 - [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
 - [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.
+
+## 8 October 2026 — E12-02 UI prompt checkpoint
+- [x] T01: Inventory 9 UIX extension groups and 22 image states, using existing 30 frozen UI references.
+- [x] T02: Prepare prompt matrix and self-contained prompt variants; downloadable DOCX and ZIP available in conversation.
+- [x] T03: Mandatory STOP after prompt preparation; no generated UI images yet.
+- [ ] T04: Create/review/approve each image with user input; not started.
+- [ ] T05: Consolidate all approved UI images into one final reference DOCX; not started.
+- [ ] G4 UI freeze BLOCKED; G0 strict and provider gates remain blocked. No code or E12-03 work.
+
+
+## E12-02 review of all 22 UI mockups — 2026-10-08 (on PR #25 only)
+- [x] UIX-01-A through UIX-09-B: 22 draft mockups created; each V2 PNG 1920×1080; independent ZIP/manifest SHA-256 and review DOCX embedded-image validation **22/22 PASS**.
+- [x] Image hash and 22-ID visual-approval checklist recorded in `docs/ui/review/E12_02_V2_22_IMAGE_MANIFEST_AND_OWNER_SIGNOFF_PENDING_2026-10-08.md` (GitHub text only).
+- [ ] **Owner must explicitly approve all exact 22 V2 images** or request corrections by ID; technical integrity does not mean visual approval.
+- [ ] Consolidate approved 22 PNG into one **FINAL** UI reference DOCX and obtain reference-DOCX signoff; current V2 DOCX is REVIEW ONLY and NOT in GitHub.
+- [ ] Original PNG binaries and final DOCX must be put in repo and verified before any UI G4 PASS claim; PR #25 must stay draft/unmerged pending UI approval.
+- [ ] **BLOCKED**: UI G4, strict G0, E12-01 ADR T06, provider G1/G5/G6. No code, E12-03, real Generate/Download or credits.
+
+
+## E12-02 — explicit 22-image approval received, 2026-10-08
+- [x] **Owner APPROVED** all 22 exact V2 images including illustration/sample-data differences; check approved hashes in `docs/ui/final/E12_02_APPROVED_22_UI_MANIFEST_AND_HANDOFF_2026-10-08.md`.
+- [x] **One FINAL reference DOCX CREATED & locally verified**: 27 pages, 22/22 original V2 PNG embedded byte-for-byte, SHA-256 `9a84372cbb10ad5e2db2d070c1d20319759aabee11ff85324a1193544ec6f1dd`.
+- [x] Downloadable ZIP created locally with DOCX+22 PNG+checksums; CRC/SHA pass; ZIP SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da`.
+- [ ] **BLOCKED: upload exact 22 PNG and DOCX binary files into GitHub**. GitHub branch currently contains only the approved text manifest. Do not claim full artifact archive or G4 overall PASS until uploaded SHA-256 values verified in repo.
+- [ ] G0 strict, G1 provider, G5 tariff, G6 restart READY, E12-01 ADR T06 remain independently pending. **NO CODING, NO MERGE, NO LIVE CREDIT USE**.
+
+
+## E12-02 continuation 2026-10-08 — G0 and G4 exact-file gap verified
+- [x] Read-only verified final approved 22-PNG ZIP (27 entries / CRC PASS); owner approval and final DOCX evidence persist.
+- [x] GitHub final approved 22-UI DOCX **NOT** present as binary; 22 PNG **NOT** present as binaries; **G4 overall PENDING**, despite 22/22 visual signoff PASS.
+- [x] G0 source parity investigation: original 30-image Word reference exists locally (41,006,814 bytes; SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`); GitHub main has intentional compressed DOCX 329,255 bytes (Git blob `6e93a7e654e84ba2dd37af1fbc31c68ce3107f26`). **NOT byte-identical; pixel equivalence UNVERIFIED.**
+- [ ] **G0 strict BLOCKED:** independently preserve original exact bytes in GitHub or prove/approve compressed visual equivalence; do not overwrite existing reference silently.
+- [ ] **G4 archive PENDING:** authenticated binary upload of all 22 PNG+final DOCX, verify exact SHA-256.
+- [ ] G1/G5/G6/ADR-T06 still PENDING; **NO CODE / LIVE ACTIONS / MERGE**.
+- Full details `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`.
+
+
+## 2026-10-08 — Binary PR25 upload kit staged, remote push pending
+- [x] Build one **100,450,016-byte** local upload ZIP, SHA-256 `df0593d23792af1f17ddfa420032e469be0ad1775585c78311ddaf4bb0ea5860`. It contains **22 approved UI PNG + FINAL DOCX + 30-UI original G0 DOCX**, plus immutable hash manifest and checksum-first Git for Windows helpers. Archive CRC and 24/24 binary SHA **PASS**.
+- [x] Local Git archival simulation: 25 permitted docs-only paths staged and committed, **PASS**; no application code or `main` changes.
+- [ ] **Execute authenticated GitHub binary upload to PR #25 branch** (not done); verify actual GitHub commit/tree/blob contents against all 24 SHA-256 plus DOCX media. Do not mark G4 full PASS until independently verified.
+- [ ] Strict G0 additionally requires other original DOCX authority evidence; archiving 30-UI uncompressed original alone does not automatically finish G0.
+- [ ] No coding/merge, provider action, or credit use before ALL gates PASS.
+- Handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`.
+
+
+## E12-02 corrected PR25 ZIP V2 — 2026-10-08
+- [x] Discontinue V1 uploader (PowerShell Git argument passing problem). Build V2 `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_V2_DIVERIFIKASI_2026-10-08.zip`, SHA-256 `e51789935bc414e62597403e19a0871d21af65612e06f1fecc581216d9a87c09`.
+- [x] Verify 24/24 binary exact hashes unchanged, ZIP CRC, expected branch/destinations; local isolated Git commit rehearsal 25/25 docs-only paths, 24/24 blob comparisons PASS.
+- [ ] **Push V2 from a genuinely authenticated Windows/Git session**, verify GitHub remote head and exact 24 uploaded binaries; local PowerShell Windows run and real GitHub push NOT YET TESTED.
+- [ ] Gate G4 binary archive not PASS until actual uploaded commit+SHA evidence. G0 strict and other implementation gates remain blocked. No merge or coding.
+
+
+## 2026-10-08 — T06 cross-ADR preflight audit (NOT owner approval)
+- [x] Independently review ADR-020..023 from `main`: global coordinator, profile eligibility, durable SUBMIT_STARTED, isolated account actors; note two P1 contract clarifications: `SAFE_FAILURE` vs `FAILED_SAFE` inconsistent naming and READY-after-restart requiring fresh verification.
+- [x] Produce 4-page DOCX review (conversation artifact) and GitHub Markdown audit `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
+- [ ] **T06 is PENDING owner ASTRA decisions D01–D06; ADRs remain PROPOSED.** This does not authorize coding.
+- [ ] PR25 GitHub approved binary archive still 0/24, G4 pending. G0 strict BLOCKED; G1/G3/G5/G6 continue pending. No merge/live work.
+
+
+## 2026-10-08 — Official Google Flow pricing/policy primary-source review
+- [x] Retrieve official Google Flow Help and Google Terms source URLs; reference **Omni Flash 720p: 4s 7 credits, 6s 10, 8s 12, 10s 15 per generated video**, not per request, subject to change and recheck.
+- [x] Document 50 daily base credits as Google public allowance **only**, NOT a verified actual balance or multi-account dispatch entitlement; mixed/stale localized tariff indexed results require provider UI recheck.
+- [x] Capture 2-page ASTRA-only research DOCX locally and Markdown evidence on PR #25: `docs/planning/audits/E12_2026_10_08_GOOGLE_FLOW_OFFICIAL_G1_G5_TARIFF_EVIDENCE.md`.
+- [ ] G1 official permission for mutating browser/multi-account automation **UNKNOWN/BLOCKED**; no provider proof collected. G5 real per-account price and balance **UNVERIFIED**, nominal public reference only. Reconfirm current quote, outputs and eligibility before any live action.
+- [ ] Approved 22 V2 image ZIP + DOCX + original 30-UI DOCX remain outside GitHub until authenticated Windows upload. G4 archive pending, G0 strict/ADR T06/G6 pending. NO CODE, NO MERGE, NO LIVE CREDIT USE.
+
+
+## 2026-10-08 — V3 Git Bash archival kit tested with isolated local bare remote
+- [x] **Use V3 only** `FLOW_OTOMATIS_E12_02_PR25_UPLOAD_GIT_BASH_V3_TESTED_2026-10-08.zip`; ZIP 100,352,438 bytes, SHA256 `0abd520d45a0952e4fbc35205171cc39f5d90ea733a5239cfad69f3da57ccf76`; CRC PASS; 24/24 original approved binary checksums and 22 PNG dimensions PASS.
+- [x] True local Git E2E rehearsal: clone, stage 25 docs-only paths, commit, push to isolated bare remote, compare remote HEAD and 24/24 original Git blob hashes — **PASS**. Idempotent second run without commit — PASS; modified-source SHA256 rejection — PASS.
+- [ ] Windows Git Bash/GitHub-auth push **NOT DONE**; all 24 approved binary files still absent from PR #25 until independently checked. G4 archive PENDING. V1 and V2 upload kits deprecated.
+- [ ] Strict G0, G1/G5/G6 and ADR T06 remain blocked/pending; **NO CODING / NO MERGE / NO LIVE CREDITS**.
+- [x] Canonical handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V3_GIT_BASH_LOCAL_REMOTE_PASS_2026-10-08.md`.
+
+
+## 2026-10-08 — E12-02 owner-approved UI archive completed on GitHub (latest, supersedes 0/24 tasks)
+- [x] Authenticated Windows Git Bash V3 push of exact **22 UI PNG + FINAL DOCX + G0 original uncompressed DOCX** to Draft PR #25 review branch.
+- [x] Verify GitHub REST tree **24/24 exact Git blob IDs / file sizes** against local source ZIP, approved source SHA256 manifest PASS; commit `6fc332e10ee0109e200c152724a4deeb5978aa3c`.
+- [x] Diff old PR head vs upload commit: 25 **added** files strictly under `docs/ui/`, no app code, original compressed reference untouched, PR DRAFT/unmerged; CI upload commit SUCCESS.
+- [x] Mark **G4 UI binary archival PASS** with evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`. **No more manual upload required.**
+- [ ] Strict G0 original planning-doc authority parity, G1 provider terms, G5 live credit, G6 verified READY after restart, ADR-020..023 T06 signoff and all remaining gates still need independent resolution; **coding and merge remain on hold**.
+
+
+## 2026-10-09 — G0 original authority parity: real mismatch
+- [x] Independently check original frozen 30-UI DOCX (ZIP CRC PASS; 30 PNG) against `main` compressed reference (30 JPEG); GitHub ZIP central metadata confirms four non-media entries differ, including main document XML and image relationships. Original is already safely archived unchanged in PR #25.
+- [x] Confirm old 24/24 G4 approved assets uploaded and CI SUCCESS; do not request duplicate upload.
+- [x] Inventory missing **authoritative original E12 planning DOCX**, distinguish original variants vs reconstructed copies; identify two distinct local E12-00 files (47,457 vs 47,452 bytes) requiring source-authority decision.
+- [ ] **G0 strict BLOCKED** until approved source variant, visual authority selection and original planning-doc archival/evidence. See `docs/planning/audits/G0_2026_10_09_ORIGINAL_30_UI_VS_COMPRESSED_AND_PLANNING_AUTHORITY.md`.
+- [ ] G1 provider permission, G5 live credit account-specific evidence, G6 session READY proof, and E12-01 T06 decision independently pending; no coding or merge.

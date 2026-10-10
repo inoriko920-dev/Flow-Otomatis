@@ -668,3 +668,70 @@ Gemini does not depend on the Google Flow login gate:
 - Proposed global single-DB reservation+attempt authority, per-project outbox projection, per-account signed-in actor isolation, immutable credit/budget evidence, ambiguity-safe submit/recovery. No `src/`, UI, SQLite schema or live behavior changed.
 - E12-01 T01–T05 planning drafts prepared; T06 ASTRA/owner decision and acceptance of cross-module architecture PENDING. G0 original Word doc visual parity BLOCKED, G1 policy UNKNOWN, G5 price/credit UNKNOWN, G6 READY-after-restart PENDING; no production coding.
 - Next wave E12-02 is **UI prompt only**, with hard STOP after prompts until all final UI images reviewed and consolidated in one DOCX. Do not start E12-02 in this wave.
+
+
+## 2026-10-08 — E12-02 UI V2 integrity proof on review PR #25 (NOT FINAL)
+- All 22 standalone screenshots UIX-01-A .. UIX-09-B exist **as conversation artifacts**; V2 ZIP 59,313,950 bytes contains 22/22 distinct 1920×1080 PNG whose hashes/sizes match ZIP manifest. DOCX REVIEW 29,670,945 bytes embeds byte-identical 22/22 PNG; CRC PASS.
+- Source-of-truth review SHA-256 checklist committed on the documentation-only branch as `docs/ui/review/E12_02_V2_22_IMAGE_MANIFEST_AND_OWNER_SIGNOFF_PENDING_2026-10-08.md`. The screenshots and V2 DOCX **have not been uploaded to GitHub**.
+- **OWNER SIGNOFF NOT RECEIVED:** all images remain DRAFT; final UI reference DOCX not issued; G4 remains BLOCKED. Generic 'lanjutkan' is not signoff. Draft PR #25 MUST NOT be misrepresented as final UI authority or code readiness.
+- Existing 30 frozen UI refs unchanged; 12/12 in UIX-09-B is one batch of 60, not all project scenes. Simulated prices, balances and live results are not real. No code change or Google Flow action.
+
+
+## 2026-10-08 — E12-02 OWNER APPROVED; FINAL DOCX VERIFIED; binary archive pending
+**Supersedes the earlier E12-02 notes saying “owner signoff pending”** while retaining their historical audit findings. User explicitly accepted all 22 V2 UI images including differences in illustration and simulation/example values. Exact hashes in `docs/ui/final/E12_02_APPROVED_22_UI_MANIFEST_AND_HANDOFF_2026-10-08.md`.
+- **FINAL DOCX**: `FLOW_OTOMATIS_E12_02_REFERENSI_UI_FINAL_22_DESAIN_DISETUJUI_2026-10-08.docx`, 27 rendered pages, 22/22 byte-identical embedded approved PNG, SHA-256 `9a84372cbb10ad5e2db2d070c1d20319759aabee11ff85324a1193544ec6f1dd` (downloadable conversation artifact, NOT in GitHub).
+- **FINAL ZIP**: `FLOW_OTOMATIS_E12_02_22_UI_FINAL_APPROVED_DOCX_PNG_2026-10-08.zip`, 22 original PNG + DOCX + checksums, ZIP integrity PASS, SHA-256 `ad6f7a49efeee690384f3e1126d5d546bec81b21e7203d4e53c2c0fece8fc6da` (conversation artifact, NOT in GitHub).
+- **G4 visual signoff: PASS; G4 binary archive: PENDING, hence G4 overall cannot yet be marked PASS.** GitHub connector writes documentation but cannot directly read the local binary contents for upload; the local Git remote was unreachable. Avoid claiming binary upload. PR #25 stays DRAFT and unmerged, no production code.
+- Other gates G0/G1/G5/G6 and ADR T06 remain blocked/unverified. User expressly forbids coding until all gates PASS.
+
+
+## 2026-10-08 — G0 binary parity discrepancy measured (no mutation)
+- E12-02 owner signoff for 22 new UI images **PASS**; final DOCX and ZIP locally verified, GitHub binary asset upload **PENDING**, G4 overall not PASS.
+- Original 30-UI DOCX locally: **41,006,814 bytes**, SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f`, Git blob SHA-1 `88b08c8c2ef001fc7d22aecd04625a75c206064d`, **30 embedded media**.
+- GitHub main reference path has **329,255-byte** intentionally compressed DOCX, Git blob `6e93a7e654e84ba2dd37af1fbc31c68ce3107f26` according to recursive Git tree. Byte parity **FAIL**, visual parity **NOT TESTED**, so strict G0 remains **BLOCKED**. This size difference is not by itself evidence of file corruption.
+- Additional read-only audit committed at `docs/planning/audits/E12_02_G0_UI_REFERENCE_BINARY_PARITY_AND_G4_ARCHIVE_2026-10-08.md`. No overwrite and no code change. Other gates G1/G5/G6/ADR-T06 still pending.
+
+
+## 2026-10-08 — PR25 binary upload kit assembled, not yet pushed
+- Owner-approved UI pack remains **22/22 visual signoff PASS**, final Word document **27-page/local PASS**.
+- Built self-contained Git-for-Windows archival kit with 24 exact-source binaries and a manifest: ZIP **100,450,016 bytes**, SHA256 `df0593d23792af1f17ddfa420032e469be0ad1775585c78311ddaf4bb0ea5860`; ZIP CRC and SHA 24/24 PASS. Offline Git simulation staged 25 paths exclusively under `docs/ui/`, PASS.
+- Includes exact original 30-image G0 authority DOCX 41,006,814 bytes, explicitly at a new provenance path rather than replacing repo's 329,255-byte compressed version. Upload kit binaries still **LOCAL ONLY**, not GitHub; Windows auth/push not exercised here. **G4 binary archival PENDING; G0 strict still BLOCKED; G1/G5/G6, ADR T06 unchanged.**
+- GitHub review-branch textual handoff: `docs/handoff/current/E12_02_PR25_BINARY_UPLOAD_KIT_READY_REMOTE_UPLOAD_PENDING_2026-10-08.md`. No code, merge, or remote Generate.
+
+
+## 2026-10-08 — E12-02 PR25 corrected V2 upload kit (supersedes V1, remote pending)
+- **DO NOT USE V1** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_2026-10-08.zip`: PowerShell `RunGit` calls lack explicit array parameter binding. Use **V2** `FLOW_OTOMATIS_E12_02_PR25_ARSIP_SIAP_UNGGAH_V2_DIVERIFIKASI_2026-10-08.zip`, 100,355,921 bytes, SHA-256 `e51789935bc414e62597403e19a0871d21af65612e06f1fecc581216d9a87c09`.
+- V2 exact original binary source unchanged, 24/24 SHA PASS; ZIP CRC PASS; 5 corrected Git invocation sites; strict GitHub path allowlist; 24 original Git blob checks. Local isolated Git rehearsal PASS (25 docs-only staged paths, 24/24 Git blob comparisons). **Windows PowerShell execution and actual remote GitHub push NOT TESTED; all 24 binaries still NOT IN GITHUB.**
+- V2 audit handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V2_CORRECTED_REMOTE_PENDING_2026-10-08.md`. PR #25 remains DRAFT, no merge/code. G4 archival PENDING, G0/G1/G5/G6 and ADR T06 unchanged.
+
+
+## 2026-10-08 — T06 preflight completed but decisions pending
+- Cross-ADR consistency review (ADR-020..023) prepared with 4-page review-only DOCX locally; report published in `docs/planning/audits/E12_01_T06_CROSS_ADR_PREFLIGHT_OWNER_DECISIONS_PENDING_2026-10-08.md`.
+- F01 contract status naming `SAFE_FAILURE` vs `FAILED_SAFE` differs within ADR-022; F02 a stored prior READY proof is not a present READY after restart; F03 snapshot TTL/provider evidence unknown. All are recommendations, not decisions.
+- **D01–D06 owner signoff T06 PENDING**, existing ADR statuses PROPOSED. UI 22/22 visually approved; E12-02 GitHub 24 binary files still missing; G4/G0/G1/G3/G5/G6 prevent coding and live use.
+
+
+## 2026-10-08 — Official Google Flow G1/G5 public documentation reviewed
+- Primary source `https://support.google.com/flow/answer/16526234?co=GENIE.Platform%3DDesktop&hl=en` currently lists **Gemini Omni Flash 720p prices 7/10/12/15 credits for 4/6/8/10s per generated video**; documentation also describes 50 daily baseline credits, but no account-specific balance/eligibility verified. Stale indexed localized results differ, and Google warns prices can change. Use dated public reference for simulation only, require fresh per-account actual quote before submit.
+- Model durations and 720p profile confirmed by `https://support.google.com/flow/answer/16352836?hl=en`; official ToS `https://policies.google.com/terms?hl=id` does **NOT prove authorization for the proposed simultaneous multi-account browser automation**, so G1 **UNKNOWN/BLOCKED**. No Google Flow account was accessed.
+- Research report in `docs/planning/audits/E12_2026_10_08_GOOGLE_FLOW_OFFICIAL_G1_G5_TARIFF_EVIDENCE.md`; 2-page companion DOCX created locally, **not uploaded as binary**. G5 **PARTIAL PUBLIC EVIDENCE / NOT PASS**. UI visual signoff 22/22 PASS, PR #25 binary archive 0/24, G4 pending, G0 strict/ADR T06/G6 blocked. Do not begin app coding or live actions.
+
+
+## 2026-10-08 — E12-02 canonical V3 upload kit, Git Bash local remote E2E PASS
+- Previous V1/V2 Windows upload kits are **SUPERSEDED**; use `FLOW_OTOMATIS_E12_02_PR25_UPLOAD_GIT_BASH_V3_TESTED_2026-10-08.zip` with SHA-256 `0abd520d45a0952e4fbc35205171cc39f5d90ea733a5239cfad69f3da57ccf76` (100,352,438 bytes). ZIP CRC PASS, approved 24/24 hashes PASS, 22 PNG 1920x1080 PASS.
+- Actual isolated local Git clone/commit/push/re-read 24/24 blobs PASS; repeated run creates no commit; source tamper fails. This demonstrates local script behavior, **NOT** authenticated Windows/GitHub execution.
+- Branch PR #25 still has **0/24 uploaded binaries**, G4 archival PENDING; original G0 parity and other strict gates remain blocked. Current handoff: `docs/handoff/current/E12_02_PR25_UPLOAD_KIT_V3_GIT_BASH_LOCAL_REMOTE_PASS_2026-10-08.md`.
+
+
+## 2026-10-08 — PR #25 24/24 GitHub binary archive VERIFIED / G4 UI archival PASS (latest)
+- User performed authenticated V3 Windows Git Bash upload to PR #25 review branch. **GitHub upload commit `6fc332e10ee0109e200c152724a4deeb5978aa3c`**; commit tree independently lists 22 approved PNG, 27-page final 22-UI DOCX and exact original 30-image DOCX: **24/24 Git blob IDs and byte counts matched locally computed approved originals**.
+- One upload commit added exactly **25 `docs/ui/` paths** (the 24 binaries and JSON manifest), no app source/code or existing UI reference altered; CI on upload commit **SUCCESS**; `main` unchanged; PR #25 remains draft and not merged.
+- **E12-02 user visual approval: PASS; final DOCX: PASS; G4 approved binary archive: PASS.** Earlier log entries saying `0/24` refer to the pre-upload situation and are superseded. Archive evidence `docs/planning/audits/E12_02_G4_REMOTE_ARCHIVE_24_OF_24_VERIFIED_2026-10-08.md`.
+- Strict **G0 still BLOCKED** (authority parity and missing original planning docs), **G1 UNKNOWN/BLOCKED**, **G5 live account credits/tariff UNVERIFIED**, **G6 READY-after-restart UNVERIFIED**, **ADR T06 pending owner approval**. No app coding, merge, live Generate/Download or credit consumption authorized by this G4 success.
+
+
+## 2026-10-09 — Strict G0 30-UI original-versus-compressed audit
+- **G4 approved 24/24 UI binary archive remains PASS; no repeat upload needed**; PR #25 committed original 30-image DOCX SHA-256 `1549d0c9d39d71632abfab15f454fa291a7cdd5c6253453432f87fc5fd57711f` at `docs/ui/original_uncompressed/` without overwriting compressed `main` copy.
+- Independent DOCX ZIP central-directory comparison: both references have 30 images, but original 30 **PNG**, 46,192,516 uncompressed media bytes, and main compressed 30 **JPEG**, 304,570 bytes; **4/17 non-media archive elements have different CRC/size**, including `word/document.xml` (original 117,201 bytes vs compressed 38,809). **Exact text/layout/visual parity NOT established; strict G0 remains BLOCKED pending owner authority decision**.
+- E12-00 original planning DOCX candidate has two distinct local byte variants (**47,457 vs 47,452 bytes**). Master V1.1 authoritative original candidate 79,528 bytes and E12-01 original candidates not found as exact Git blobs. Reconstructed copies do not prove original binary provenance. New G0 report `docs/planning/audits/G0_2026_10_09_ORIGINAL_30_UI_VS_COMPRESSED_AND_PLANNING_AUTHORITY.md`.
+- **No merge/coding/live Generate**. Other G1/G5/G6/T06 gates are independent.
