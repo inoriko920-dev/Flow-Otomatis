@@ -167,10 +167,13 @@ class GoogleFlowDownloadProvider:
                 # Partial and final share the same parent and therefore filesystem.
                 os.link(partial_path, final_path)
             except FileExistsError as exc:
-                # Both the other owner's final file and our own partial are preserved.
-                raise MediaDownloadProviderError(
-                    "Final download appeared during this attempt; "
-                    "the existing file is preserved. Inspect the partial before retrying."
+                # The browser already produced a partial, but another actor
+                # published the final path before our atomic hard link. It is
+                # unsafe to classify this as a confirmed safe failure: both
+                # files need reconciliation before any new provider attempt.
+                raise MediaDownloadAmbiguousError(
+                    "Final download appeared during this attempt; the other file "
+                    "and this attempt's partial are preserved for manual reconciliation."
                 ) from exc
             except OSError as exc:
                 # Never fall back to os.replace/copy-and-delete: the filesystem must
