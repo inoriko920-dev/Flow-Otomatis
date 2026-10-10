@@ -773,8 +773,7 @@ def test_sol14_crash_between_claim_commit_and_provider_dispatch_requires_re_revi
     assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
         actions = [
-            row[0]
-            for row in connection.execute("SELECT action FROM download_reconciliation_audit")
+            row[0] for row in connection.execute("SELECT action FROM download_reconciliation_audit")
         ]
     assert actions == ["OPERATOR_REVIEWED_RETRY", "OPERATOR_REVIEWED_RETRY_CLAIMED"]
 
@@ -817,9 +816,7 @@ def test_sol14_generate_mutated_after_claim_before_provider_blocks_dispatch(
                 else "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?"
             )
             new_value = (
-                "2040-01-01T00:00:00+00:00"
-                if change == "revision"
-                else "altered-after-claim"
+                "2040-01-01T00:00:00+00:00" if change == "revision" else "altered-after-claim"
             )
             with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
                 connection.execute(query, (new_value, _SCENE))
