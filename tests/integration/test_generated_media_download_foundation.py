@@ -1186,7 +1186,10 @@ def test_browser_nonvideo_response_never_becomes_confirmed_mp4(
     assert len(driver.calls) == 1
 
 
-@pytest.mark.parametrize("malformed_suffix", ["\\x00", "\\x00private-token=DO_NOT_PERSIST"])
+@pytest.mark.parametrize(
+    "malformed_suffix",
+    [chr(0), chr(0) + "private-token=DO_NOT_PERSIST"],
+)
 def test_browser_success_path_with_nul_is_ambiguous_and_keeps_partial(
     tmp_path: Path,
     malformed_suffix: str,
