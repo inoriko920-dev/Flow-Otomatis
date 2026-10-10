@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier, Event
+import traceback
 
 import pytest
 
@@ -992,8 +993,10 @@ def test_unexpected_browser_exception_requires_review_without_disclosing_details
 
     driver = CrashedDriver()
     root, _jobs, downloads, service = _setup(tmp_path, driver)
-    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation"):
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation") as raised:
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert raised.value.__suppress_context__
+    assert "DO_NOT_PERSIST" not in "".join(traceback.format_exception(raised.value))
 
     recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert recorded is not None
