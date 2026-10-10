@@ -710,14 +710,26 @@ def test_t18_collision_appearing_during_download_never_overwrites_final(tmp_path
     driver = CollisionDriver()
     root, jobs, downloads, service = _setup(tmp_path, driver)
     final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
-    with pytest.raises(MediaDownloadProviderError, match="appeared"):
+    with pytest.raises(MediaDownloadAmbiguousError, match="appeared"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
     assert final.read_bytes() == b"already-owned-final"
     partials = list(final.parent.glob(final.name + ".*.part"))
     assert len(partials) == 1
     assert partials[0].read_bytes() == b"fake-video"
     assert len(driver.calls) == 1
-    assert downloads.get("EP500_DOWNLOAD", "SCENE_001").state == DownloadState.FAILED
+    collision = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert collision is not None
+    assert collision.state == DownloadState.ATTENTION_REQUIRED
+    assert collision.generation_remote_result_id == "remote:SCENE_001"
+    assert collision.output_path is None
+    # Even choosing a different take must not silently retry an unresolved
+    # collision between two potentially valid MP4 results.
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert len(driver.calls) == 1
+    assert not (final.parent / "SCENE_001__take_02.mp4").exists()
+    assert final.read_bytes() == b"already-owned-final"
+    assert partials[0].read_bytes() == b"fake-video"
     assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
 
 
