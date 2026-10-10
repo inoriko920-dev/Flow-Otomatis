@@ -148,6 +148,92 @@ def test_generated_scene_download_is_atomic_and_idempotent(tmp_path: Path) -> No
     assert output.is_relative_to(projects_root.resolve())
 
 
+
+@pytest.mark.parametrize(
+    "change",
+    ["queued_generate", "new_generate_id", "download_revision", "ambiguous_download"],
+)
+def test_cached_mp4_reuse_rechecks_both_rows_after_first_service_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    """A stale in-memory job or Download row never authorizes cached MP4 reuse."""
+
+    import hashlib
+    import sqlite3
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(original.output_path or "")
+    before_bytes = video.read_bytes()
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    initial_calls = len(driver.calls)
+
+    original_get = downloads.get
+
+    def race_after_get(episode_id: str, scene_id: str):
+        current = original_get(episode_id, scene_id)
+        with sqlite3.connect(database) as connection:
+            if change == "queued_generate":
+                connection.execute(
+                    "UPDATE generation_jobs SET state = ? WHERE scene_id = ?",
+                    (GenerationJobState.QUEUED.value, scene_id),
+                )
+            elif change == "new_generate_id":
+                connection.execute(
+                    "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+                    ("remote:REPLACEMENT", scene_id),
+                )
+            elif change == "download_revision":
+                connection.execute(
+                    "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+                    ("2040-01-01T00:00:00+00:00", scene_id),
+                )
+            else:
+                connection.execute(
+                    "UPDATE download_results SET state = ? WHERE scene_id = ?",
+                    (DownloadState.ATTENTION_REQUIRED, scene_id),
+                )
+            connection.commit()
+        return current
+
+    monkeypatch.setattr(downloads, "get", race_after_get)
+    with pytest.raises(InternalInvariantError, match="Cached Download no longer matches"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == initial_calls
+    assert video.read_bytes() == before_bytes
+
+    monkeypatch.setattr(downloads, "get", original_get)
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert hashlib.sha256(video.read_bytes()).digest() == hashlib.sha256(before_bytes).digest()
+    if change == "download_revision":
+        assert stored.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
+    elif change == "ambiguous_download":
+        assert stored.state == DownloadState.ATTENTION_REQUIRED
+    else:
+        assert stored == original
+
+
+def test_cached_mp4_identity_guard_reads_sqlite_without_writes(tmp_path: Path) -> None:
+    """An ordinary idempotent Download read must not alter successful SQLite history."""
+
+    import hashlib
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    before = hashlib.sha256(database.read_bytes()).hexdigest()
+
+    assert downloads.matches_current_generated_download(original)
+    assert service.download_scene("EP500_DOWNLOAD", "SCENE_001") == original
+    assert hashlib.sha256(database.read_bytes()).hexdigest() == before
+    assert len(driver.calls) == 1
+
+
 def test_download_requires_generated_state_and_never_starts_generate(tmp_path: Path) -> None:
     driver = FakeDownloadDriver()
     _root, jobs, _downloads, service = _setup(tmp_path, driver)
