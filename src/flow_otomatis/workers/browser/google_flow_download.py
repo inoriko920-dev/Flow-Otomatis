@@ -154,6 +154,19 @@ class GoogleFlowDownloadProvider:
                 "manual reconciliation is required before retry."
             )
 
+        # A driver claiming a safe failure/cancellation/authentication
+        # outcome must not also claim it saved a file. These contradictory
+        # signals cannot establish a safe retry, even if the named file lives
+        # outside our attempt-owned partial path.
+        if (
+            evidence.state is not GoogleFlowDownloadState.DOWNLOADED
+            and evidence.output_path is not None
+        ):
+            raise MediaDownloadAmbiguousError(
+                "Flow browser returned conflicting Download evidence; "
+                "manual reconciliation is required before retry."
+            )
+
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
             # A malformed output path is not authority to publish or to
             # discard the browser attempt's partial bytes.
