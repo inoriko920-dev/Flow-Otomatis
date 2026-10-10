@@ -633,6 +633,85 @@ def test_alternate_provider_typed_failure_with_partial_requires_review(
     assert partial.read_bytes() == partial_contents
 
 
+@pytest.mark.parametrize("scene_id", ["SCENE_[001]", "SCENE_[AB]"])
+def test_alternate_provider_partial_is_detected_for_literal_bracket_scene_names(
+    tmp_path: Path,
+    scene_id: str,
+) -> None:
+    """Glob metacharacters in a valid Scene ID cannot conceal its own partial."""
+
+    import sqlite3
+
+    class PartialFailureProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            self.calls += 1
+            path = Path(request.destination_path)
+            path.with_name(f"{path.name}.test-attempt.part").write_bytes(b"unconfirmed")
+            raise MediaDownloadAuthenticationRequiredError("session expired")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    with sqlite3.connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET scene_id = ?, remote_result_id = ? WHERE scene_id = ?",
+            (scene_id, f"remote:{scene_id}", "SCENE_001"),
+        )
+        connection.commit()
+
+    provider = PartialFailureProvider()
+    service._provider = provider  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", scene_id)
+
+    stored = downloads.get("EP500_DOWNLOAD", scene_id)
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == f"remote:{scene_id}"
+    final = root / "EP500_DOWNLOAD" / "downloads" / f"{scene_id}__take_01.mp4"
+    partial = final.with_name(f"{final.name}.test-attempt.part")
+    assert partial.read_bytes() == b"unconfirmed"
+    assert not final.exists()
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", scene_id)
+    assert provider.calls == 1
+
+
+def test_bracket_scene_name_does_not_match_unrelated_partial(
+    tmp_path: Path,
+) -> None:
+    """Literal brackets must not accidentally match another Scene's part file."""
+
+    import sqlite3
+
+    scene_id = "SCENE_[01]"
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    with sqlite3.connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET scene_id = ?, remote_result_id = ? WHERE scene_id = ?",
+            (scene_id, f"remote:{scene_id}", "SCENE_001"),
+        )
+        connection.commit()
+
+    class UnrelatedPartProvider:
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            final = Path(request.destination_path)
+            (final.parent / "SCENE_0__take_01.mp4.other.part").write_bytes(b"unrelated")
+            raise MediaDownloadAuthenticationRequiredError("manual login required")
+
+    service._provider = UnrelatedPartProvider()  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAuthenticationRequiredError):
+        service.download_scene("EP500_DOWNLOAD", scene_id)
+
+    record = downloads.get("EP500_DOWNLOAD", scene_id)
+    assert record is not None
+    assert record.state == DownloadState.FAILED
+    assert (
+        root / "EP500_DOWNLOAD" / "downloads" / "SCENE_0__take_01.mp4.other.part"
+    ).read_bytes() == b"unrelated"
+
+
 def test_unrelated_partial_does_not_change_safe_failure_classification(
     tmp_path: Path,
 ) -> None:
