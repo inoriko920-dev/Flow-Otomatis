@@ -117,8 +117,24 @@ class GoogleFlowDownloadProvider:
                 raise MediaDownloadAmbiguousError(
                     "Flow driver left a partial file after reporting failure; "
                     "inspect the preserved file before any retry."
-                ) from exc
-            raise
+                ) from None
+            # Error text supplied by a browser driver is untrusted. Preserve
+            # the failure category but never return raw session/URL details.
+            if isinstance(exc, MediaDownloadAmbiguousError):
+                raise MediaDownloadAmbiguousError(
+                    "Flow download outcome is uncertain; manual reconciliation required."
+                ) from None
+            if isinstance(exc, MediaDownloadAuthenticationRequiredError):
+                raise MediaDownloadAuthenticationRequiredError(
+                    "Google session requires manual login."
+                ) from None
+            if isinstance(exc, MediaDownloadCancelledError):
+                raise MediaDownloadCancelledError(
+                    "Download was cancelled before a confirmed local file existed."
+                ) from None
+            raise MediaDownloadProviderError(
+                "Google Flow download failed safely."
+            ) from None
         except Exception as exc:
             # After a browser attempt starts, an unexpected driver crash or
             # timeout cannot prove that no remote/local transfer occurred.
@@ -128,8 +144,6 @@ class GoogleFlowDownloadProvider:
                 "Flow browser attempt stopped unexpectedly; the outcome is "
                 "uncertain and requires manual reconciliation before retry."
             ) from exc
-        detail = evidence.detail[:500]
-
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
             # Do not call resolve() before verifying the driver's original
             # path: a symlink could mask an unrelated file as our partial.
@@ -186,12 +200,12 @@ class GoogleFlowDownloadProvider:
 
         if evidence.state is GoogleFlowDownloadState.AUTH_REQUIRED:
             raise MediaDownloadAuthenticationRequiredError(
-                detail or "Google session requires manual login."
+                "Google session requires manual login."
             )
         if evidence.state is GoogleFlowDownloadState.CANCELLED:
-            raise MediaDownloadCancelledError(detail or "Download was cancelled safely.")
+            raise MediaDownloadCancelledError("Download was cancelled safely.")
         if evidence.state is GoogleFlowDownloadState.AMBIGUOUS:
             raise MediaDownloadAmbiguousError(
-                detail or "Flow download outcome is ambiguous; automatic retry is forbidden."
+                "Flow download outcome is ambiguous; automatic retry is forbidden."
             )
-        raise MediaDownloadProviderError(detail or "Google Flow download failed safely.")
+        raise MediaDownloadProviderError("Google Flow download failed safely.")
