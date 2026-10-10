@@ -1101,8 +1101,12 @@ def test_sol16_post_commit_mp4_mutation_must_not_return_verified_success(
     video = rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
 
     class ReplaceFileAfterVerifiedRow(SqliteDownloadResultRepository):
-        def matches_current_generated_download(self, record: DownloadRecord) -> bool:
-            accepted = super().matches_current_generated_download(record)
+        def matches_current_generated_download(
+            self, record: DownloadRecord, *, expected_generation: GenerationJob | None = None
+        ) -> bool:
+            accepted = super().matches_current_generated_download(
+                record, expected_generation=expected_generation
+            )
             if accepted:
                 if file_change == "empty":
                     video.write_bytes(b"")
