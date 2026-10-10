@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 
 from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
@@ -176,47 +177,63 @@ class GeneratedMediaDownloadService:
                 "Download provider stopped unexpectedly; manual reconciliation required."
             ) from None
 
-        # Providers are untrusted at runtime despite the typed port. A
-        # malformed "success" cannot attest to an MP4, even if the browser
-        # has already written final bytes before returning the result.
+        # Providers are untrusted at runtime despite the typed port. An
+        # unverified "success" may already have written MP4 bytes, so it must
+        # be sticky and require review before another browser attempt.
         if (
             not isinstance(result, GeneratedMediaDownloadResult)
             or not isinstance(result.output_path, str)
             or not result.output_path.strip()
-            or "\0" in result.output_path
+            or "\\0" in result.output_path
         ):
-            self._download_repository.save_attention_if_unconfirmed(
-                DownloadRecord(
-                    episode_id=episode_id,
-                    scene_id=scene_id,
-                    state=DownloadState.ATTENTION_REQUIRED,
-                    updated_at=datetime.now(UTC),
-                    take=normalized_take,
-                    error_message=(
-                        "Download provider returned invalid success evidence; "
-                        "manual reconciliation required."
-                    ),
-                    generation_remote_result_id=remote_result_id,
-                )
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned invalid success evidence; manual reconciliation required.",
             )
-            raise MediaDownloadAmbiguousError(
-                "Download provider returned invalid success evidence; "
-                "manual reconciliation required."
-            ) from None
 
-        # Validate the exact published file path, not a canonicalized
-        # symlink target. The Browser Worker is not a trusted filesystem
-        # authority, and no redirected target may be persisted as DOWNLOADED.
-        output = Path(result.output_path).expanduser().absolute()
-        # A malicious directory swap after the Browser Worker returned must
-        # never be persisted as a completed local download.
-        if self._destination_path(episode_id, scene_id, normalized_take) != destination:
-            raise InternalInvariantError("Project download destination changed unexpectedly.")
-        if output != destination:
-            raise InternalInvariantError("Download provider returned an unexpected output path.")
+        try:
+            # Validate the original published path; never resolve a symlink
+            # that could mask unrelated content as our own successful MP4.
+            output = Path(result.output_path).expanduser().absolute()
+        except (OSError, RuntimeError, ValueError):
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned an unsafe output path; manual reconciliation required.",
+            )
+        try:
+            # The folder may have become redirected during the browser attempt.
+            same_destination = (
+                self._destination_path(episode_id, scene_id, normalized_take) == destination
+            )
+        except InternalInvariantError:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download destination changed during the attempt; manual reconciliation required.",
+            )
+        if not same_destination or output != destination:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned a mismatched output path; manual reconciliation required.",
+            )
         if not is_available_output(str(output)):
-            raise InternalInvariantError(
-                "Download provider did not produce a readable nonempty regular file."
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned an unavailable or redirected MP4; manual reconciliation required.",
             )
         # The Generate job may be invalidated while the browser worker is
         # downloading. A completed MP4 is not authorization to persist an old
@@ -253,6 +270,29 @@ class GeneratedMediaDownloadService:
                 "local video needs reconciliation."
             )
         return record
+
+    def _reject_unverified_success(
+        self,
+        episode_id: str,
+        scene_id: str,
+        take: int,
+        remote_result_id: str,
+        reason: str,
+    ) -> NoReturn:
+        """Preserve uncertain success evidence without retrying or exposing provider data."""
+
+        self._download_repository.save_attention_if_unconfirmed(
+            DownloadRecord(
+                episode_id=episode_id,
+                scene_id=scene_id,
+                state=DownloadState.ATTENTION_REQUIRED,
+                updated_at=datetime.now(UTC),
+                take=take,
+                error_message=reason,
+                generation_remote_result_id=remote_result_id,
+            )
+        )
+        raise MediaDownloadAmbiguousError(reason) from None
 
     def release_retry_after_manual_review(
         self,
