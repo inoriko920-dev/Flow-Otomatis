@@ -161,6 +161,12 @@ class SqliteDownloadResultRepository:
         try:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                if not self._failure_generate_is_current(connection, record):
+                    # The attempt belongs to an old Generate result. Do not
+                    # pollute the new result with a stale failure/ambiguity.
+                    connection.rollback()
+                    return
                 connection.execute(
                     """
                     INSERT INTO download_results (
@@ -205,6 +211,12 @@ class SqliteDownloadResultRepository:
         try:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                if not self._failure_generate_is_current(connection, record):
+                    # The attempt belongs to an old Generate result. Do not
+                    # pollute the new result with a stale failure/ambiguity.
+                    connection.rollback()
+                    return
                 connection.execute(
                     """
                     INSERT INTO download_results (
@@ -237,6 +249,35 @@ class SqliteDownloadResultRepository:
                 connection.commit()
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save ambiguous download outcome: {exc}") from exc
+
+    @staticmethod
+    def _failure_generate_is_current(
+        connection: sqlite3.Connection, record: DownloadRecord
+    ) -> bool:
+        """Reject stale browser outcomes under the same SQLite write lock.
+
+        Legacy local failure reports intentionally have no remote identity
+        and keep their existing conditional-write behavior.
+        """
+
+        remote_id = record.generation_remote_result_id
+        if remote_id is None:
+            return True
+        if not remote_id or remote_id != remote_id.strip():
+            return False
+        return (
+            connection.execute(
+                """
+                SELECT 1 FROM generation_jobs
+                WHERE episode_id = ? AND scene_id = ?
+                  AND state = 'GENERATED'
+                  AND TRIM(COALESCE(remote_result_id, '')) = ?
+                LIMIT 1
+                """,
+                (record.episode_id, record.scene_id, remote_id),
+            ).fetchone()
+            is not None
+        )
 
     def matches_current_generated_download(self, record: DownloadRecord) -> bool:
         """Revalidate stored Download and Generate in one read-only SQLite query.
