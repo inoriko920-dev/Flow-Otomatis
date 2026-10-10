@@ -4,6 +4,7 @@
 Flow-Otomatis is a Windows 11 x64 desktop application distributed as a portable ZIP. Primary UI language: Indonesian.
 
 ## Read before changing anything
+0. docs/product/OWNER_END_TO_END_TARGET_2026-10-11.md — target akhir, batas fitur, dan acceptance (wajib)
 1. PROJECT_STATE.md
 2. TASKS.md
 3. docs/planning/
