@@ -26,6 +26,11 @@ from flow_otomatis.domain.job import (
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
+from flow_otomatis.workers.browser import (
+    GoogleFlowGenerationProvider,
+    GoogleFlowSubmitEvidence,
+    GoogleFlowSubmitState,
+)
 from flow_otomatis.infrastructure.persistence import (
     SqliteGenerationJobRepository,
     SqliteWorkspaceRepository,
@@ -746,3 +751,107 @@ def test_t05_t07_generate_provider_errors_never_persist_raw_details(
     assert provider.calls == 1
 
 
+
+
+def test_t11_google_safe_failure_queue_requires_explicit_reprepare(tmp_path: Path) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+
+    class SafeDriver:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.SAFE_FAILURE,
+                detail="Rejected before acceptance: FAKE_SECRET_UNTRUSTED",
+            )
+
+    driver = SafeDriver()
+    queue = LocalGenerationQueueService(
+        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(), owner_id="safe-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    failed = queue.run_next("EP300_QUEUE")
+    assert failed is not None
+    assert failed.state is GenerationJobState.FAILED
+    assert failed.attention_code is None
+    assert "FAKE_SECRET_UNTRUSTED" not in (failed.error_message or "")
+    assert driver.calls == 1
+    # Only an explicit command may reset this proven preacceptance failure.
+    queue.prepare_queue("EP300_QUEUE")
+    assert jobs.list_for_episode("EP300_QUEUE")[0].state is GenerationJobState.QUEUED
+    assert driver.calls == 1
+    queue.run_next("EP300_QUEUE")
+    assert driver.calls == 2
+
+
+def test_t12_invalid_generation_request_never_invokes_browser_driver(
+    tmp_path: Path,
+) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+    original = workspace_repo.load("EP300_QUEUE")
+    assert original is not None
+    invalid = replace(
+        original,
+        scenes=(
+            replace(original.scenes[0], model="unapproved-model"),
+            original.scenes[1],
+        ),
+    )
+    workspace_repo.update(invalid, expected_workspace=original)
+
+    class ShouldNeverSubmit:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.ACCEPTED,
+                detail="unexpected",
+                remote_result_id="unexpected",
+            )
+
+    driver = ShouldNeverSubmit()
+    queue = LocalGenerationQueueService(
+        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(), owner_id="precheck-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None and outcome.state is GenerationJobState.FAILED
+    assert outcome.attention_code is None
+    assert driver.calls == 0
+
+
+def test_t12_accepted_without_id_stays_ambiguous_after_reprepare(tmp_path: Path) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+
+    class MissingIdDriver:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.ACCEPTED,
+                detail="Accepted but no identifier",
+            )
+
+    driver = MissingIdDriver()
+    queue = LocalGenerationQueueService(
+        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(), owner_id="unknown-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.attention_code is GenerationAttentionCode.SUBMIT_AMBIGUOUS
+    queue.prepare_queue("EP300_QUEUE")
+    assert queue.run_next("EP300_QUEUE") is None
+    assert driver.calls == 1
