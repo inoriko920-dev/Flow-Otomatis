@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from flow_otomatis.domain.job import GenerationJob
 from flow_otomatis.domain.result import DownloadRecord
 
 
@@ -52,13 +53,16 @@ class DownloadResultRepositoryPort(Protocol):
         """
         ...
 
-    def claim_reviewed_retry_if_present(self, record: DownloadRecord) -> bool | None:
+    def claim_reviewed_retry_if_present(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
         """Atomically consume the current operator review for one Download attempt.
 
         Return True when the review was consumed, None for an ordinary FAILED
         record without a review, or False when a previously reviewed revision
-        was already claimed or changed. A spent review must require renewed
-        manual reconciliation, including across crashes and processes.
+        was already claimed or changed. Match the exact Generate request
+        fingerprint/revision and current Scene inside the same write lock.
+        A spent review must require renewed reconciliation after crashes.
         """
         ...
 
