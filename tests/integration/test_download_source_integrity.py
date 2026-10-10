@@ -1010,3 +1010,141 @@ def test_sol15_claim_audit_required_even_when_review_row_fields_match(
     assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
     assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     assert job.state == GenerationJobState.GENERATED
+
+
+@pytest.mark.parametrize(
+    "concurrent_change",
+    [
+        "download_failed",
+        "download_attention",
+        "download_revision",
+        "generate_queued",
+        "generate_remote_id",
+    ],
+)
+def test_sol16_post_commit_db_change_must_not_return_stale_download_success(
+    tmp_path: Path, concurrent_change: str
+) -> None:
+    """Committed success is not a license to return stale in-memory evidence."""
+
+    rig = _setup(tmp_path)
+    database = rig.root / _EPISODE / "project.sqlite3"
+    changes = {
+        "download_failed": (
+            "UPDATE download_results SET state = ? WHERE scene_id = ?",
+            (DownloadState.FAILED, _SCENE),
+        ),
+        "download_attention": (
+            "UPDATE download_results SET state = ? WHERE scene_id = ?",
+            (DownloadState.ATTENTION_REQUIRED, _SCENE),
+        ),
+        "download_revision": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", _SCENE),
+        ),
+        "generate_queued": (
+            "UPDATE generation_jobs SET state = 'QUEUED' WHERE scene_id = ?",
+            (_SCENE,),
+        ),
+        "generate_remote_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:another-generated-result", _SCENE),
+        ),
+    }
+
+    class ChangeDatabaseAfterSave(SqliteDownloadResultRepository):
+        def save_if_current_generate(
+            self, record: DownloadRecord, expected_remote_result_id: str
+        ) -> bool:
+            saved = super().save_if_current_generate(record, expected_remote_result_id)
+            if saved:
+                sql, args = changes[concurrent_change]
+                with sqlite3.connect(database) as connection:
+                    connection.execute(sql, args)
+                    connection.commit()
+            return saved
+
+    service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        ChangeDatabaseAfterSave(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="history or MP4 changed after atomic save"):
+        service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 1
+    current = rig.downloads.get(_EPISODE, _SCENE)
+    assert current is not None
+    video = rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
+    assert video.read_bytes() == b"preserved-synthetic-mp4"
+    if concurrent_change == "download_failed":
+        assert current.state == DownloadState.FAILED
+    elif concurrent_change == "download_attention":
+        assert current.state == DownloadState.ATTENTION_REQUIRED
+    elif concurrent_change == "download_revision":
+        assert current.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
+    else:
+        assert current.state == DownloadState.DOWNLOADED
+        assert not rig.results.snapshot(_EPISODE).handoff_ready
+
+
+@pytest.mark.parametrize("file_change", ["empty", "html_error", "removed"])
+def test_sol16_post_commit_mp4_mutation_must_not_return_verified_success(
+    tmp_path: Path, file_change: str
+) -> None:
+    """Provider bytes can be replaced even after SQLite has reported success."""
+
+    rig = _setup(tmp_path)
+    video = rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
+
+    class ReplaceFileAfterVerifiedRow(SqliteDownloadResultRepository):
+        def matches_current_generated_download(self, record: DownloadRecord) -> bool:
+            accepted = super().matches_current_generated_download(record)
+            if accepted:
+                if file_change == "empty":
+                    video.write_bytes(b"")
+                elif file_change == "html_error":
+                    video.write_bytes(b"<!DOCTYPE html><html>Expired login</html>")
+                else:
+                    video.unlink()
+            return accepted
+
+    service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        ReplaceFileAfterVerifiedRow(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="history or MP4 changed after atomic save"):
+        service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 1
+    persisted = rig.downloads.get(_EPISODE, _SCENE)
+    assert persisted is not None
+    assert persisted.state == DownloadState.DOWNLOADED
+    assert not rig.results.snapshot(_EPISODE).handoff_ready
+    if file_change == "empty":
+        assert video.read_bytes() == b""
+    elif file_change == "html_error":
+        assert video.read_bytes() == b"<!DOCTYPE html><html>Expired login</html>"
+    else:
+        assert not video.exists()
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+def test_sol16_unchanged_download_returns_record_and_cached_reuse(
+    tmp_path: Path, zip_source: bool
+) -> None:
+    rig = _setup(tmp_path, zip_source=zip_source)
+    stored = rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert stored.state == DownloadState.DOWNLOADED
+    assert rig.downloads.get(_EPISODE, _SCENE) == stored
+    assert rig.service.download_scene(_EPISODE, _SCENE) == stored
+    assert rig.provider.calls == 1
+    assert rig.results.snapshot(_EPISODE).handoff_ready
