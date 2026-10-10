@@ -39,7 +39,7 @@ def is_available_output(output_path: str | None) -> bool:
             # under a .mp4 filename. These are demonstrably not video bytes
             # and must never be attested as a downloaded result. This is a
             # narrow negative check, not a complete MP4 decoder.
-            leading = prefix.lstrip(b"\\xef\\xbb\\xbf \\t\\r\\n").lower()
+            leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
             if leading.startswith((b"<!doctype html", b"<html", b"<?xml", b"{", b"[")):
                 return False
             return True
