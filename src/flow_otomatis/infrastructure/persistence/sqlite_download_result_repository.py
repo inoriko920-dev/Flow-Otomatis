@@ -86,10 +86,19 @@ class SqliteDownloadResultRepository:
                 connection.execute("BEGIN IMMEDIATE")
                 current = connection.execute(
                     """
-                    SELECT 1 FROM generation_jobs
-                    WHERE episode_id = ? AND scene_id = ?
-                      AND state = 'GENERATED'
-                      AND TRIM(COALESCE(remote_result_id, '')) = ?
+                    SELECT 1 FROM generation_jobs AS g
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
+                    WHERE g.episode_id = ? AND g.scene_id = ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.request_fingerprint IS NOT NULL
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
                     LIMIT 1
                     """,
                     (record.episode_id, record.scene_id, remote_id),
