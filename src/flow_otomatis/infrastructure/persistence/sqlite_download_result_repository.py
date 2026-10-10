@@ -216,6 +216,129 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save ambiguous download outcome: {exc}") from exc
 
+    def reconcile_attention_for_retry(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+    ) -> bool:
+        """Release an operator-reviewed ambiguity with audit and optimistic locking.
+
+        This is not a Download success assertion. It only permits a new,
+        separately initiated attempt; no remote request or local file mutation
+        occurs. An older observer cannot unlock a newer ambiguous outcome.
+        """
+
+        if (
+            not expected_remote_result_id
+            or not expected_remote_result_id.strip()
+            or expected_remote_result_id != expected_remote_result_id.strip()
+            or not expected_updated_at
+        ):
+            raise ValueError("Reconciliation needs exact Generate ID and Download revision")
+        try:
+            with self._connect(episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                previous = connection.execute(
+                    """
+                    SELECT state, updated_at, generation_remote_result_id,
+                           output_path, error_message, take
+                    FROM download_results
+                    WHERE episode_id = ? AND scene_id = ?
+                    """,
+                    (episode_id, scene_id),
+                ).fetchone()
+                current = connection.execute(
+                    """
+                    SELECT 1 FROM generation_jobs
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND state = 'GENERATED'
+                      AND remote_result_id = ?
+                    LIMIT 1
+                    """,
+                    (episode_id, scene_id, expected_remote_result_id),
+                ).fetchone()
+                if (
+                    previous is None
+                    or previous[0] != DownloadState.ATTENTION_REQUIRED
+                    or previous[1] != expected_updated_at
+                    or previous[2] != expected_remote_result_id
+                    or previous[3] is not None
+                    or current is None
+                ):
+                    connection.rollback()
+                    return False
+
+                # Created only in a real, explicitly requested reconciliation
+                # write, never from read-only result inspection.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS download_reconciliation_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        episode_id TEXT NOT NULL,
+                        scene_id TEXT NOT NULL,
+                        generation_remote_result_id TEXT NOT NULL,
+                        prior_updated_at TEXT NOT NULL,
+                        prior_error_message TEXT,
+                        take INTEGER NOT NULL,
+                        action TEXT NOT NULL,
+                        resolved_at TEXT NOT NULL
+                    )
+                    """
+                )
+                from datetime import UTC, datetime
+
+                resolved_at = datetime.now(UTC).isoformat()
+                connection.execute(
+                    """
+                    INSERT INTO download_reconciliation_audit (
+                        episode_id, scene_id, generation_remote_result_id,
+                        prior_updated_at, prior_error_message, take,
+                        action, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        episode_id,
+                        scene_id,
+                        expected_remote_result_id,
+                        previous[1],
+                        previous[4],
+                        previous[5],
+                        "OPERATOR_REVIEWED_RETRY",
+                        resolved_at,
+                    ),
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE download_results
+                    SET state = ?, updated_at = ?, error_message = ?
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND state = ? AND updated_at = ?
+                      AND generation_remote_result_id = ?
+                      AND output_path IS NULL
+                    """,
+                    (
+                        DownloadState.FAILED,
+                        resolved_at,
+                        "Manual review completed; retry requires a separate explicit action.",
+                        episode_id,
+                        scene_id,
+                        DownloadState.ATTENTION_REQUIRED,
+                        expected_updated_at,
+                        expected_remote_result_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    connection.rollback()
+                    return False
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError("Could not atomically reconcile ambiguous Download") from exc
+
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         db_path = self._db_path(episode_id)
         if not db_path.is_file():
