@@ -260,6 +260,37 @@ def test_f03_cached_mp4_refuses_old_scene_duration_without_touching_history(
     assert mp4.read_bytes() == original_bytes
 
 
+@pytest.mark.parametrize(
+    "scene_change",
+    [
+        {"image_exists": False, "readiness": SceneReadiness.MISSING_IMAGE},
+        {"readiness": SceneReadiness.MISSING_PROMPT},
+    ],
+)
+def test_f03_cached_video_is_not_reused_when_scene_is_not_ready(
+    tmp_path: Path, scene_change: dict[str, object]
+) -> None:
+    driver = FakeDownloadDriver()
+    root, jobs, downloads, service = _setup(tmp_path, driver)
+    recorded = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(recorded.output_path or "")
+    original = video.read_bytes()
+    workspace_repo = SqliteWorkspaceRepository(root)
+    workspace = workspace_repo.load("EP500_DOWNLOAD")
+    assert workspace is not None
+    updated = replace(workspace.scenes[0], **scene_change)
+    workspace_repo.update(
+        replace(workspace, scenes=(updated,)), expected_workspace=workspace
+    )
+    assert downloads.matches_current_generated_download(recorded) is False
+    with pytest.raises(InternalInvariantError, match="Cached Download no longer matches"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == recorded
+    assert video.read_bytes() == original
+    assert jobs.list_for_episode("EP500_DOWNLOAD")[0].state is GenerationJobState.GENERATED
+
+
 def test_cached_mp4_identity_guard_reads_sqlite_without_writes(tmp_path: Path) -> None:
     """An ordinary idempotent Download read must not alter successful SQLite history."""
 
