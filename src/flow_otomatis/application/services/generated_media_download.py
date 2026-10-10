@@ -12,6 +12,8 @@ from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
     MediaDownloadAmbiguousError,
+    MediaDownloadAuthenticationRequiredError,
+    MediaDownloadCancelledError,
     MediaDownloadProviderError,
 )
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
@@ -113,6 +115,17 @@ class GeneratedMediaDownloadService:
         try:
             result = self._provider.download(request)
         except MediaDownloadProviderError as exc:
+            # Providers and browser drivers may include session URLs, tokens
+            # or filesystem paths in their error text. Persist only our
+            # fixed classification, never untrusted exception messages.
+            if isinstance(exc, MediaDownloadAmbiguousError):
+                safe_error = "Download outcome uncertain; manual reconciliation required."
+            elif isinstance(exc, MediaDownloadAuthenticationRequiredError):
+                safe_error = "Google session requires manual login."
+            elif isinstance(exc, MediaDownloadCancelledError):
+                safe_error = "Download was cancelled before a confirmed local file existed."
+            else:
+                safe_error = "Google Flow download failed; review the provider before retry."
             record = DownloadRecord(
                 episode_id=episode_id,
                 scene_id=scene_id,
@@ -123,7 +136,7 @@ class GeneratedMediaDownloadService:
                 ),
                 updated_at=datetime.now(UTC),
                 take=normalized_take,
-                error_message=str(exc)[:500],
+                error_message=safe_error,
                 generation_remote_result_id=remote_result_id,
             )
             # Ambiguity is sticky: do not silently re-attempt a possibly
