@@ -199,6 +199,40 @@ class LocalResultsService:
                 "Generate result changed during atomic Download save; "
                 "local video needs reconciliation."
             )
+        # A rival process can change Download/Generate after the SQLite
+        # transaction commits, or the local MP4 can disappear before this
+        # service returns. Match the exact persisted revision and file again
+        # so Hasil callers never receive a stale, falsely confirmed result.
+        if (
+            not self._download_repository.matches_current_generated_download(
+                record, expected_generation=job
+            )
+            or not is_available_output(str(local_output))
+        ):
+            raise InternalInvariantError(
+                "Local Download history or MP4 changed after atomic save; "
+                "local video needs reconciliation."
+            )
+        refreshed_workspace = self._workspace_repository.load(episode_id)
+        refreshed_scene = (
+            next(
+                (item for item in refreshed_workspace.scenes if item.scene_id == scene_id),
+                None,
+            )
+            if refreshed_workspace is not None
+            else None
+        )
+        if (
+            refreshed_workspace is None
+            or refreshed_scene is None
+            or not self._matches_current_scene(
+                job, refreshed_scene, refreshed_workspace.source_package_path
+            )
+        ):
+            raise InternalInvariantError(
+                "Local Download source changed after atomic save; "
+                "manual reconciliation required."
+            )
         return record
 
     def record_download_failed(
