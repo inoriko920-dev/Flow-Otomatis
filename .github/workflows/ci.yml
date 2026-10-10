@@ -122,8 +122,29 @@ jobs:
       - name: Smoke staged Chromium
         run: uv run python scripts/smoke_browser_runtime.py .runtime/browsers
 
-      - name: Build portable onedir ZIP
-        run: uv run python scripts/build_portable.py --browser-source .runtime/browsers
+      - name: Fetch owner-approved 22 final UI screenshots for portable bundle
+        shell: pwsh
+        run: |
+          git fetch --depth=1 origin refs/heads/docs/e12-02-uix-prompt-only-20261008
+          if ($LASTEXITCODE -ne 0) { throw "Cannot fetch approved UI reference branch" }
+          git worktree add --detach .ci-approved-ui FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Cannot load approved UI reference worktree" }
+
+      - name: Check immutable 22 final UI images before packaging
+        run: >
+          uv run python scripts/verify_approved_uix_assets.py
+          .ci-approved-ui/docs/ui/final/assets
+
+      - name: Build portable onedir ZIP with 22 pinned UI screenshots
+        run: >
+          uv run python scripts/build_portable.py
+          --browser-source .runtime/browsers
+          --approved-ui-source .ci-approved-ui/docs/ui/final/assets
+
+      - name: Check bundled 22 immutable final UI images
+        run: >
+          uv run python scripts/verify_approved_uix_assets.py
+          dist/Flow-Otomatis/approved_ui
 
       - name: Portable smoke
         run: uv run python scripts/smoke_portable.py dist/Flow-Otomatis
@@ -142,5 +163,185 @@ jobs:
           path: |
             dist/Flow-Otomatis-portable-win-x64.zip
             dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+
+  offline-simulator-windows:
+    needs: quality
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          architecture: "x64"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check "uv==0.12.23"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --all-groups
+
+      - name: Exercise synthetic offline allocation CLI
+        shell: pwsh
+        run: |
+          uv run python scripts/offline_credit_simulator.py docs/examples/OFFLINE_SIMULATOR_DEMO.json --output offline-demo-result.json
+          if ($LASTEXITCODE -ne 0) { throw "Offline simulator returned nonzero" }
+          $data = Get-Content offline-demo-result.json -Raw | ConvertFrom-Json
+          if ($data.mode -ne 'OFFLINE_SIMULATION' -or $data.live_dispatch_allowed -ne $false) {
+            throw "Offline-only dispatch invariant failed"
+          }
+          if ($data.total_simulated_credits -ne 27 -or $data.assigned.Count -ne 2 -or $data.blocked.Count -ne 1) {
+            throw "Synthetic sample results changed unexpectedly"
+          }
+
+      - name: Package separate standalone simulator GUI
+        run: >
+          uv run python -m PyInstaller
+          --noconfirm --clean --onefile --windowed
+          --name Flow-Otomatis-Offline-Simulator
+          --distpath dist/offline-simulator
+          --workpath build/offline-simulator
+          --specpath build/offline-simulator-spec
+          scripts/offline_credit_simulator_ui.py
+
+      - name: Verify executable and report presence
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/offline-simulator/Flow-Otomatis-Offline-Simulator.exe")) {
+            throw "Standalone offline simulator Windows EXE missing"
+          }
+          if (!(Test-Path "offline-demo-result.json")) { throw "Synthetic output missing" }
+
+      - name: Upload new standalone Windows simulator
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-OFFLINE-Simulator-Win11-x64
+          path: |
+            dist/offline-simulator/Flow-Otomatis-Offline-Simulator.exe
+            offline-demo-result.json
+            docs/examples/OFFLINE_SIMULATOR_DEMO.json
+          if-no-files-found: error
+          retention-days: 14
+
+
+  uix22-qt-windows:
+    needs: quality
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          architecture: "x64"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check "uv==0.12.23"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --all-groups
+
+      - name: Render all 22 real Qt states
+        run: uv run python scripts/capture_credit_uix.py artifacts/e12_uix22
+
+      - name: Capture 22 screenshots INSIDE the integrated application shell
+        run: uv run python scripts/capture_embedded_uix.py artifacts/e12_uix22_main_shell
+
+      - name: Capture 22 integrated UI screens at laptop resolution
+        run: >
+          uv run python scripts/capture_embedded_uix.py
+          artifacts/e12_uix22_main_shell_1366x768
+          --width 1366 --height 768
+
+      - name: Capture empty Workspace and Hasil in real desktop app
+        run: uv run python scripts/capture_empty_project.py artifacts/empty_project_1920x1080
+
+      - name: Capture empty Workspace and Hasil at laptop resolution
+        run: >
+          uv run python scripts/capture_empty_project.py
+          artifacts/empty_project_1366x768
+          --width 1366 --height 768
+
+      - name: Verify 4 empty-project navigation screenshot files
+        shell: pwsh
+        run: |
+          foreach ($folder in @("artifacts/empty_project_1920x1080", "artifacts/empty_project_1366x768")) {
+            $screens = @(Get-ChildItem -Path $folder -Filter 'EMPTY-*.png')
+            if ($screens.Count -ne 2) { throw "Expected empty Workspace and Hasil screenshots in $folder" }
+          }
+
+      - name: Verify 44 integrated desktop and laptop screenshots
+        shell: pwsh
+        run: |
+          foreach ($folder in @("artifacts/e12_uix22_main_shell", "artifacts/e12_uix22_main_shell_1366x768")) {
+            $screens = @(Get-ChildItem -Path $folder -Filter 'UIX-*.png')
+            if ($screens.Count -ne 22) { throw "Expected 22 integrated UI renders in $folder" }
+          }
+
+      - name: Verify 22 screenshot files
+        shell: pwsh
+        run: |
+          $screens = @(Get-ChildItem -Path artifacts/e12_uix22 -Filter 'UIX-*.png')
+          if ($screens.Count -ne 22) { throw "Expected exactly 22 UI renders" }
+
+      - name: Fetch 22 approved frozen PNGs for read-only comparison
+        shell: pwsh
+        run: |
+          git fetch --depth=1 origin refs/heads/docs/e12-02-uix-prompt-only-20261008
+          if ($LASTEXITCODE -ne 0) { throw "Cannot fetch approved reference branch" }
+          git worktree add --detach .ci-approved-ui FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Cannot checkout read-only reference worktree" }
+
+      - name: Verify 22 immutable owner-approved image checksums
+        run: >
+          uv run python scripts/verify_approved_uix_assets.py
+          .ci-approved-ui/docs/ui/final/assets
+
+      - name: Make 22 side-by-side visual QA sheets
+        run: >
+          uv run python scripts/audit_credit_uix_visual.py
+          .ci-approved-ui/docs/ui/final/assets
+          artifacts/e12_uix22
+          artifacts/uix_review
+
+      - name: Build separate UI preview EXE with absolute approved PNG path
+        shell: pwsh
+        run: |
+          $approved = (Resolve-Path ".ci-approved-ui/docs/ui/final/assets").Path
+          uv run python -m PyInstaller --noconfirm --clean --onefile --windowed --name Flow-Otomatis-UIX22-Offline-Preview --distpath dist/uix22 --workpath build/uix22 --specpath build/uix22-spec --add-data "${approved};approved_ui" scripts/credit_uix_preview.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed to bundle approved UI references" }
+
+      - name: Smoke-check all 22 approved PNGs inside frozen EXE
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe" -ArgumentList "--verify-approved-images" -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "EXE approved-reference integrity check failed" }
+
+      - name: Check UI preview EXE
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe")) {
+            throw "UIX22 Windows EXE missing"
+          }
+
+      - name: Upload UI preview executable and captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-UIX22-Offline-Win11-x64
+          path: |
+            dist/uix22/Flow-Otomatis-UIX22-Offline-Preview.exe
+            artifacts/e12_uix22
+            artifacts/e12_uix22_main_shell
+            artifacts/e12_uix22_main_shell_1366x768
+            artifacts/empty_project_1920x1080
+            artifacts/empty_project_1366x768
+            artifacts/uix_review
           if-no-files-found: error
           retention-days: 14

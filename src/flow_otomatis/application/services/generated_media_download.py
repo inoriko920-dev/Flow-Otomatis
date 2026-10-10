@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
+from glob import escape as glob_escape
 from pathlib import Path
+from typing import NoReturn
 
-from flow_otomatis.application.file_integrity import is_available_output
+from flow_otomatis.application.file_integrity import is_available_output, verified_output_identity
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
+    GeneratedMediaDownloadResult,
+    MediaDownloadAmbiguousError,
+    MediaDownloadAuthenticationRequiredError,
+    MediaDownloadCancelledError,
     MediaDownloadProviderError,
 )
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
+from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
+from flow_otomatis.application.services.scene_source_integrity import (
+    matches_current_generated_scene,
+)
 from flow_otomatis.domain.errors import InternalInvariantError
-from flow_otomatis.domain.job import GenerationJobState
+from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
@@ -27,11 +39,18 @@ class GeneratedMediaDownloadService:
         download_repository: DownloadResultRepositoryPort,
         provider: GeneratedMediaDownloadProviderPort,
         projects_root: Path,
+        *,
+        workspace_repository: WorkspaceRepositoryPort | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
     ) -> None:
         self._job_repository = job_repository
         self._download_repository = download_repository
         self._provider = provider
         self._projects_root = projects_root
+        if (workspace_repository is None) != (image_verifier is None):
+            raise ValueError("Source integrity requires both Workspace and image verifier")
+        self._workspace_repository = workspace_repository
+        self._image_verifier = image_verifier
 
     def download_scene(
         self,
@@ -45,17 +64,13 @@ class GeneratedMediaDownloadService:
         self._validate_segment("episode_id", episode_id)
         self._validate_segment("scene_id", scene_id)
         normalized_take = max(int(take), 1)
+        # Validate the project output root even on an idempotent read. A
+        # historical DOWNLOADED row must not bypass redirected-folder checks.
+        destination = self._destination_path(episode_id, scene_id, normalized_take)
 
-        existing = self._download_repository.get(episode_id, scene_id)
-        if (
-            existing is not None
-            and existing.state == DownloadState.DOWNLOADED
-            and existing.output_path is not None
-        ):
-            existing_path = Path(existing.output_path)
-            if is_available_output(str(existing_path)):
-                return existing
-
+        # A historical MP4/SQLite DOWNLOADED row alone cannot authorize
+        # reuse. Recheck the current Generate state before any idempotent
+        # return, including when the remote job has since been invalidated.
         jobs = {job.scene_id: job for job in self._job_repository.list_for_episode(episode_id)}
         job = jobs.get(scene_id)
         if job is None:
@@ -64,21 +79,142 @@ class GeneratedMediaDownloadService:
             raise InternalInvariantError(
                 "Download requires a confirmed GENERATED job and never starts Generate implicitly."
             )
-
         remote_result_id = (job.remote_result_id or "").strip()
         if not remote_result_id:
             raise InternalInvariantError(
                 "Download requires a stable remote result identifier from Generate."
             )
+        # Verify real source bytes BEFORE cached MP4 reuse or provider traffic.
+        self._require_current_source(episode_id, scene_id, job)
 
-        destination = self._destination_path(episode_id, scene_id, normalized_take)
+        existing = self._download_repository.get(episode_id, scene_id)
+        if existing is not None and existing.state == DownloadState.ATTENTION_REQUIRED:
+            raise InternalInvariantError(
+                "Prior Download outcome is ambiguous; manual reconciliation required "
+                "before another provider attempt."
+            )
+        if (
+            existing is not None
+            and existing.state == DownloadState.DOWNLOADED
+            and existing.output_path is not None
+        ):
+            existing_path = Path(existing.output_path).expanduser().absolute()
+            if (
+                existing.take == normalized_take
+                and existing.generation_remote_result_id == remote_result_id
+                and existing_path == destination
+                and is_available_output(str(existing_path))
+            ):
+                before_cached_mp4 = verified_output_identity(existing_path, destination)
+                if (
+                    before_cached_mp4 is None
+                    or not self._download_repository.matches_current_generated_download(
+                        existing, expected_generation=job
+                    )
+                ):
+                    raise InternalInvariantError(
+                        "Cached Download no longer matches current Generate, MP4 and persisted "
+                        "Download identity; manual reconciliation required."
+                    )
+                # The source and bytes may change between the initial read,
+                # the SQLite identity check, and the cached-row return.
+                self._require_current_source(episode_id, scene_id, job)
+                if verified_output_identity(existing_path, destination) != before_cached_mp4:
+                    raise InternalInvariantError(
+                        "Cached Download MP4 changed during reuse; manual reconciliation required."
+                    )
+                return existing
+
         destination.parent.mkdir(parents=True, exist_ok=True)
+        # Recheck after directory creation: a redirected parent cannot be
+        # accepted as the published result folder even if it appeared late.
+        if self._destination_path(episode_id, scene_id, normalized_take) != destination:
+            raise InternalInvariantError("Project download destination changed unexpectedly.")
         if destination.is_symlink() or destination.exists():
             raise InternalInvariantError(
                 "Download destination already exists and will not be overwritten; "
                 f"manual reconciliation required: {destination.name}"
             )
 
+        # A crash/forced termination may have left a browser-owned .part
+        # without any ATTENTION_REQUIRED SQLite row. The absence of a ledger
+        # entry does not prove the previous transfer never started. Never
+        # silently launch a second provider attempt over that evidence.
+        try:
+            interrupted_partial_exists = os.path.lexists(
+                destination.with_name(f"{destination.name}.part")
+            ) or any(destination.parent.glob(f"{glob_escape(destination.name)}.*.part"))
+        except OSError, RuntimeError, ValueError:
+            raise InternalInvariantError(
+                "Prior Download partial evidence cannot be inspected; "
+                "manual reconciliation required."
+            ) from None
+        if interrupted_partial_exists and (
+            existing is None or existing.state != DownloadState.FAILED
+        ):
+            raise InternalInvariantError(
+                "Prior Download partial file exists without a confirmed result; "
+                "manual reconciliation required before another attempt."
+            )
+
+        # Folder creation and prior Download-row lookup are separate I/O.
+        # Re-read source bytes immediately before the provider boundary so
+        # a changed input cannot begin a new download unnoticed.
+        self._require_current_source(episode_id, scene_id, job)
+        reviewed_download: DownloadRecord | None = None
+        if existing is not None and existing.state == DownloadState.FAILED:
+            # A prior operator review can approve ONE attempt only. Claim it
+            # under the SQLite write lock before any provider invocation;
+            # a crash must not make that same approval reusable forever.
+            review_claim = self._download_repository.claim_reviewed_retry_if_present(
+                existing, expected_generation=job
+            )
+            if review_claim is False:
+                raise InternalInvariantError(
+                    "Prior reviewed Download retry was consumed or changed; "
+                    "manual reconciliation required."
+                )
+            if interrupted_partial_exists and review_claim is not True:
+                raise InternalInvariantError(
+                    "Prior Download partial file exists without a confirmed result; "
+                    "manual reconciliation required before another attempt."
+                )
+            if review_claim is True:
+                # A reviewed retry is irrevocably consumed before any browser
+                # contact. If the Generate revision or original image changes
+                # after that commit, fail closed instead of dispatching a
+                # stale request. Retain the claim for crash-safe recovery.
+                current_jobs = {
+                    item.scene_id: item
+                    for item in self._job_repository.list_for_episode(episode_id)
+                }
+                if current_jobs.get(scene_id) != job:
+                    raise InternalInvariantError(
+                        "Generate revision changed after reviewed Download retry claim; "
+                        "manual reconciliation required."
+                    )
+                self._require_current_source(episode_id, scene_id, job)
+                if self._download_repository.get(episode_id, scene_id) != existing:
+                    raise InternalInvariantError(
+                        "Download history changed after reviewed retry claim; "
+                        "manual reconciliation required."
+                    )
+                # Carry the claimed revision to the final SQLite success
+                # transaction. A later race must not overwrite a changed
+                # FAILED row, rival success, or new ambiguity.
+                reviewed_download = existing
+        # Recheck the complete persisted Generate revision immediately before
+        # entering the provider boundary. A concurrent worker can replace the
+        # job (even with the same remote ID) after the original Source check.
+        # A stale job must not cause another browser Download attempt.
+        before_provider_jobs = {
+            item.scene_id: item for item in self._job_repository.list_for_episode(episode_id)
+        }
+        if before_provider_jobs.get(scene_id) != job:
+            raise InternalInvariantError(
+                "Generate revision changed before Download provider call; "
+                "manual reconciliation required."
+            )
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -88,26 +224,174 @@ class GeneratedMediaDownloadService:
         try:
             result = self._provider.download(request)
         except MediaDownloadProviderError as exc:
+            # A provider can report a nominally safe error after another
+            # process (or the provider itself) has already written the final
+            # path. Treat any such local evidence as uncertain, preserving it
+            # for review rather than authorizing a future silent retry.
+            final_appeared = os.path.lexists(destination)
+            # An alternate provider may have used the same attempt-owned
+            # .part convention before returning an apparently safe failure.
+            # Partial bytes are evidence of an uncertain transfer, just as
+            # a published final MP4 is. Never authorize retry in that case.
+            try:
+                partial_appeared = any(
+                    destination.parent.glob(f"{glob_escape(destination.name)}.*.part")
+                )
+            except OSError, RuntimeError, ValueError:
+                # An unreadable download folder cannot prove that no bytes
+                # were written by the provider, so fail closed.
+                partial_appeared = True
+            ambiguous = (
+                isinstance(exc, MediaDownloadAmbiguousError) or final_appeared or partial_appeared
+            )
+            # Providers and browser drivers may include session URLs, tokens
+            # or filesystem paths in their error text. Persist only our
+            # fixed classification, never untrusted exception messages.
+            if ambiguous:
+                safe_error = "Download outcome uncertain; manual reconciliation required."
+            elif isinstance(exc, MediaDownloadAuthenticationRequiredError):
+                safe_error = "Google session requires manual login."
+            elif isinstance(exc, MediaDownloadCancelledError):
+                safe_error = "Download was cancelled before a confirmed local file existed."
+            else:
+                safe_error = "Google Flow download failed; review the provider before retry."
             record = DownloadRecord(
                 episode_id=episode_id,
                 scene_id=scene_id,
-                state=DownloadState.FAILED,
+                state=DownloadState.ATTENTION_REQUIRED if ambiguous else DownloadState.FAILED,
                 updated_at=datetime.now(UTC),
                 take=normalized_take,
-                error_message=str(exc)[:500],
+                error_message=safe_error,
+                generation_remote_result_id=remote_result_id,
             )
-            # A losing concurrent attempt must not erase a successful download.
-            self._download_repository.save_failure_if_unconfirmed(record)
+            # Ambiguity is sticky: do not silently re-attempt a possibly
+            # completed browser download or erase a successful rival record.
+            if record.state == DownloadState.ATTENTION_REQUIRED:
+                self._download_repository.save_attention_if_unconfirmed(
+                    record, expected_remote_result_id=remote_result_id
+                )
+            else:
+                self._download_repository.save_failure_if_unconfirmed(
+                    record, expected_remote_result_id=remote_result_id
+                )
+            if final_appeared or (
+                partial_appeared and not isinstance(exc, MediaDownloadAmbiguousError)
+            ):
+                raise MediaDownloadAmbiguousError(
+                    "Download file evidence appeared during a failed provider attempt; "
+                    "manual reconciliation required."
+                ) from None
             raise
+        except Exception:
+            # A provider outside the Google Flow adapter can fail unexpectedly
+            # after starting a remote request or writing local bytes. The
+            # outcome is unknown, even if no partial is currently visible.
+            # Never persist its raw exception text or authorize silent retry.
+            self._download_repository.save_attention_if_unconfirmed(
+                DownloadRecord(
+                    episode_id=episode_id,
+                    scene_id=scene_id,
+                    state=DownloadState.ATTENTION_REQUIRED,
+                    updated_at=datetime.now(UTC),
+                    take=normalized_take,
+                    error_message=(
+                        "Download provider stopped unexpectedly; manual reconciliation required."
+                    ),
+                    generation_remote_result_id=remote_result_id,
+                ),
+                expected_remote_result_id=remote_result_id,
+            )
+            raise MediaDownloadAmbiguousError(
+                "Download provider stopped unexpectedly; manual reconciliation required."
+            ) from None
 
-        output = Path(result.output_path).expanduser().resolve()
-        if output != destination.resolve():
-            raise InternalInvariantError("Download provider returned an unexpected output path.")
-        if not is_available_output(str(output)):
-            raise InternalInvariantError(
-                "Download provider did not produce a readable nonempty regular file."
+        # Providers are untrusted at runtime despite the typed port. An
+        # unverified "success" may already have written MP4 bytes, so it must
+        # be sticky and require review before another browser attempt.
+        if (
+            not isinstance(result, GeneratedMediaDownloadResult)
+            or not isinstance(result.output_path, str)
+            or not result.output_path.strip()
+            or "\0" in result.output_path
+        ):
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned invalid success evidence; "
+                "manual reconciliation required.",
             )
 
+        try:
+            # Validate the original published path; never resolve a symlink
+            # that could mask unrelated content as our own successful MP4.
+            output = Path(result.output_path).expanduser().absolute()
+        except OSError, RuntimeError, ValueError:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned an unsafe output path; manual reconciliation required.",
+            )
+        try:
+            # The folder may have become redirected during the browser attempt.
+            same_destination = (
+                self._destination_path(episode_id, scene_id, normalized_take) == destination
+            )
+        except InternalInvariantError:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download destination changed during the attempt; manual reconciliation required.",
+            )
+        if not same_destination or output != destination:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned a mismatched output path; "
+                "manual reconciliation required.",
+            )
+        if not is_available_output(str(output)):
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download provider returned an unavailable or redirected MP4; "
+                "manual reconciliation required.",
+            )
+        before_commit_mp4 = verified_output_identity(output, destination)
+        if before_commit_mp4 is None:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download MP4 changed before persistence; manual reconciliation required.",
+            )
+        # The Generate job may be invalidated while the browser worker is
+        # downloading. A completed MP4 is not authorization to persist an old
+        # remote result after its job has been requeued or changed.
+        current_jobs = {
+            item.scene_id: item for item in self._job_repository.list_for_episode(episode_id)
+        }
+        current_job = current_jobs.get(scene_id)
+        if current_job is None or current_job != job:
+            # Never delete an MP4 that was already published: recovery is an
+            # explicit operator reconciliation, not an automatic retry.
+            raise InternalInvariantError(
+                "Generate result changed during Download; local video needs reconciliation."
+            )
+
+        # Source bytes can change while a browser worker runs, even when
+        # the saved Scene name and Generate ID remain identical.
+        self._require_current_source(episode_id, scene_id, current_job)
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -115,15 +399,193 @@ class GeneratedMediaDownloadService:
             updated_at=datetime.now(UTC),
             output_path=str(output),
             take=normalized_take,
+            generation_remote_result_id=remote_result_id,
         )
-        self._download_repository.save(record)
+        saved = (
+            self._download_repository.save_if_current_generate(record, remote_result_id)
+            if reviewed_download is None
+            else self._download_repository.save_if_current_generate(
+                record, remote_result_id, expected_reviewed_download=reviewed_download
+            )
+        )
+        if not saved:
+            # The Generate result or the reviewed Download revision changed
+            # after our reads. Keep MP4 bytes and SQLite history intact.
+            raise InternalInvariantError(
+                "Generate or Download revision changed during atomic Download save; "
+                "local video needs reconciliation."
+            )
+        # SQLite may have accepted this write before another process changes
+        # Download history or replaces the published MP4. Never return the
+        # in-memory success until both the current persisted revision and the
+        # file itself still agree. Preserve all bytes/history for reconciliation.
+        if (
+            not self._download_repository.matches_current_generated_download(
+                record, expected_generation=current_job
+            )
+            or verified_output_identity(output, destination) != before_commit_mp4
+        ):
+            raise InternalInvariantError(
+                "Download history or MP4 changed after atomic save; "
+                "local video needs reconciliation."
+            )
+        # A changed source during the SQLite commit must not be returned as
+        # verified success. Keep both MP4 bytes and the historical SQLite row
+        # for read-only Handoff reconciliation instead of deleting evidence.
+        self._require_current_source(episode_id, scene_id, current_job)
         return record
 
+    def _require_current_source(self, episode_id: str, scene_id: str, job: GenerationJob) -> None:
+        """Fail closed for a configured canonical source verifier.
+
+        Legacy offline-only callers may omit the pair of source dependencies;
+        real Download composition must supply both.
+        """
+
+        if self._workspace_repository is None or self._image_verifier is None:
+            return
+        workspace = self._workspace_repository.load(episode_id)
+        scene = (
+            next(
+                (candidate for candidate in workspace.scenes if candidate.scene_id == scene_id),
+                None,
+            )
+            if workspace is not None
+            else None
+        )
+        if (
+            workspace is None
+            or scene is None
+            or not matches_current_generated_scene(
+                job, scene, workspace.source_package_path, self._image_verifier
+            )
+        ):
+            raise InternalInvariantError(
+                "Download source image or prepared Generate revision no longer matches; "
+                "manual reconciliation required."
+            )
+
+    def _reject_unverified_success(
+        self,
+        episode_id: str,
+        scene_id: str,
+        take: int,
+        remote_result_id: str,
+        reason: str,
+    ) -> NoReturn:
+        """Preserve uncertain success evidence without retrying or exposing provider data."""
+
+        self._download_repository.save_attention_if_unconfirmed(
+            DownloadRecord(
+                episode_id=episode_id,
+                scene_id=scene_id,
+                state=DownloadState.ATTENTION_REQUIRED,
+                updated_at=datetime.now(UTC),
+                take=take,
+                error_message=reason,
+                generation_remote_result_id=remote_result_id,
+            ),
+            expected_remote_result_id=remote_result_id,
+        )
+        raise MediaDownloadAmbiguousError(reason) from None
+
+    def release_retry_after_manual_review(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+        reviewed_provider_and_local_files: bool,
+    ) -> DownloadRecord:
+        """Explicitly unlock one ambiguous attempt; never retry automatically.
+
+        A reviewer must independently inspect provider outcome, published MP4,
+        and partial files. This method performs only an atomic SQLite transition
+        and audit insertion. It never downloads, moves, deletes or attests MP4.
+        """
+
+        if reviewed_provider_and_local_files is not True:
+            raise InternalInvariantError(
+                "Manual provider and local-file review is required before Download retry."
+            )
+        self._validate_segment("episode_id", episode_id)
+        self._validate_segment("scene_id", scene_id)
+        existing = self._download_repository.get(episode_id, scene_id)
+        if (
+            existing is None
+            or existing.state != DownloadState.ATTENTION_REQUIRED
+            or existing.generation_remote_result_id != expected_remote_result_id
+            or existing.updated_at.isoformat() != expected_updated_at
+            or existing.output_path is not None
+        ):
+            raise InternalInvariantError(
+                "Ambiguous Download evidence changed; review the current result again."
+            )
+        # Never clear ambiguity when a canonical MP4 has already appeared.
+        # It may be the download's missing success evidence and must be
+        # reconciled separately instead of permitting another provider call.
+        destination = self._destination_path(episode_id, scene_id, existing.take)
+        if os.path.lexists(destination):
+            raise InternalInvariantError(
+                "Download destination exists; reconcile the existing MP4 before retry."
+            )
+        if not self._download_repository.reconcile_attention_for_retry(
+            episode_id,
+            scene_id,
+            expected_remote_result_id=expected_remote_result_id,
+            expected_updated_at=expected_updated_at,
+        ):
+            raise InternalInvariantError(
+                "Generate or Download changed during reconciliation; retry is not authorized."
+            )
+        updated = self._download_repository.get(episode_id, scene_id)
+        if updated is None:
+            raise InternalInvariantError("Reconciled Download history is unavailable.")
+        return updated
+
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
-        directory = (self._projects_root / episode_id / "downloads").resolve()
+        # Do not resolve away an existing symlink/junction before checking it.
+        # Otherwise downloads/ -> another folder becomes an apparently valid
+        # canonical destination outside this application's project.
+        root = self._projects_root.expanduser().absolute()
+        project = root / episode_id
+        directory = project / "downloads"
+        try:
+            if any(node.is_symlink() or node.is_junction() for node in (root, project, directory)):
+                raise InternalInvariantError(
+                    "Project download directory is redirected; manual reconciliation required."
+                )
+            canonical_root = root.resolve()
+            if (
+                project.resolve() != canonical_root / episode_id
+                or directory.resolve() != canonical_root / episode_id / "downloads"
+            ):
+                raise InternalInvariantError(
+                    "Project download path escaped its configured project root."
+                )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise InternalInvariantError(
+                "Project download directory cannot be safely verified."
+            ) from exc
         return directory / f"{scene_id}__take_{take:02d}.mp4"
 
     @staticmethod
     def _validate_segment(name: str, value: str) -> None:
-        if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        """Reject path traversal and Windows ADS/device aliases before I/O."""
+
+        forbidden = '<>:"/\\|?*'
+        device = value.split(".", 1)[0].upper()
+        reserved = (
+            {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+            | {f"COM{i}" for i in range(1, 10)}
+            | {f"LPT{i}" for i in range(1, 10)}
+        )
+        if (
+            not value
+            or value in {".", ".."}
+            or value.endswith((".", " "))
+            or any(character in forbidden or ord(character) < 32 for character in value)
+            or device in reserved
+        ):
             raise InternalInvariantError(f"Unsafe {name}: {value!r}")

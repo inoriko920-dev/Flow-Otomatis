@@ -8,6 +8,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
+from flow_otomatis.application.ports.google_flow_preflight import GoogleFlowAccessProbe
+
 
 class GoogleSessionState(StrEnum):
     """Credential-free lifecycle state exposed to the application."""
@@ -87,6 +89,9 @@ class GoogleSessionCommandPort(Protocol):
         profile_ids: tuple[str, ...],
     ) -> Future[tuple[GoogleSessionProfile, ...]]:
         """Schedule serial authorization probes on the Browser Worker owner."""
+
+    def submit_check_flow(self, profile_id: str) -> Future[GoogleFlowAccessProbe]:
+        """Queue read-only Flow preflight on the session owner's single thread."""
 
     def submit_cancel_profile(self, profile_id: str) -> Future[None]:
         """Schedule profile browser shutdown without transferring runtime ownership."""

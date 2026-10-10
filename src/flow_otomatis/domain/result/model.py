@@ -14,6 +14,7 @@ class DownloadState(str):
     NOT_DOWNLOADED = "NOT_DOWNLOADED"
     DOWNLOADED = "DOWNLOADED"
     FAILED = "FAILED"
+    ATTENTION_REQUIRED = "ATTENTION_REQUIRED"
     UNAVAILABLE = "UNAVAILABLE"
 
 
@@ -28,6 +29,7 @@ class DownloadRecord:
     output_path: str | None = None
     take: int = 1
     error_message: str | None = None
+    generation_remote_result_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +46,7 @@ class SceneResult:
     output_path: str | None
     take: int
     updated_at: datetime | None
+    download_generation_result_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +73,22 @@ class ProjectResults:
         return sum(
             scene.generate_state
             in {GenerationJobState.FAILED, GenerationJobState.ATTENTION_REQUIRED}
-            or scene.download_state in {DownloadState.FAILED, DownloadState.UNAVAILABLE}
+            or scene.download_state
+            in {
+                DownloadState.FAILED,
+                DownloadState.UNAVAILABLE,
+                DownloadState.ATTENTION_REQUIRED,
+            }
             for scene in self.scenes
         )
 
     @property
     def handoff_ready(self) -> bool:
-        return bool(self.scenes) and self.downloaded_count == len(self.scenes)
+        # A persisted DOWNLOAD alone is insufficient evidence of a completed
+        # Generate. Corrupt/out-of-order historical rows must never authorize
+        # handoff to an editor without both confirmed stages for every Scene.
+        return (
+            bool(self.scenes)
+            and self.generated_count == len(self.scenes)
+            and self.downloaded_count == len(self.scenes)
+        )

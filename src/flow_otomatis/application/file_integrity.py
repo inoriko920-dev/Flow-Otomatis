@@ -16,8 +16,65 @@ def is_available_output(output_path: str | None) -> bool:
     if not candidate.is_absolute():
         return False
     try:
+        # A symbolic link can redirect a stored result to an unrelated file.
+        # Reject it before reading, including after a previously valid output
+        # is replaced while the application is running.
+        if candidate.is_symlink():
+            return False
+        # The file itself can be a regular MP4 while an ancestor directory
+        # was later replaced with an NTFS junction or a symlink. A persisted
+        # success must not silently attest to bytes at a redirected location.
+        canonical = candidate.resolve(strict=True)
+        expected = Path(os.path.abspath(candidate))
+        if os.path.normcase(str(canonical)) != os.path.normcase(str(expected)):
+            return False
         with candidate.open("rb") as stream:
             info = os.fstat(stream.fileno())
-            return stat.S_ISREG(info.st_mode) and info.st_size > 0 and bool(stream.read(1))
-    except OSError, ValueError:
+            if not stat.S_ISREG(info.st_mode) or info.st_size <= 0:
+                return False
+            prefix = stream.read(512)
+            if not prefix:
+                return False
+            # A browser can save its login page or an API error response
+            # under a .mp4 filename. These are demonstrably not video bytes
+            # and must never be attested as a downloaded result. This is a
+            # narrow negative check, not a complete MP4 decoder.
+            # Some server error pages begin with an HTML comment or are
+            # encoded as UTF-16 instead of UTF-8. Neither can be accepted as
+            # MP4 just because the browser named it .mp4.
+            signatures = ("<!doctype html", "<html", "<?xml", "<!--", "{", "[")
+            leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+            if leading.startswith(tuple(sig.encode("ascii") for sig in signatures)):
+                return False
+
+            # Login/error responses can arrive in UTF-16/UTF-32 without a
+            # byte-order mark, and UTF-32 LE also begins with UTF-16's BOM.
+            # Decode just the small prefix to recognize obvious text errors
+            # without requiring a full video codec or modifying the file.
+            for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"):
+                decoded = prefix.decode(encoding, errors="ignore").lstrip("\ufeff \t\r\n").lower()
+                if decoded.startswith(signatures):
+                    return False
+            return True
+    except OSError, RuntimeError, ValueError:
         return False
+
+
+def verified_output_identity(path: Path, canonical: Path) -> tuple[int, int, int, int, int] | None:
+    """Read-only fingerprint for an unchanged, canonical output file.
+
+    Checking availability again detects late symlink/junction replacement,
+    while file identity/size/timestamps detect same-size and in-place rewrites.
+    This is a race guard, not a long-lived video content checksum.
+    """
+
+    if not is_available_output(str(path)):
+        return None
+    try:
+        current = path.resolve(strict=True)
+        if os.path.normcase(str(current)) != os.path.normcase(str(canonical)):
+            return None
+        info = os.stat(path, follow_symlinks=False)
+    except OSError, RuntimeError, ValueError:
+        return None
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)

@@ -7,6 +7,9 @@ from pathlib import Path
 from PySide6.QtWidgets import QLabel, QTableWidget
 
 from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.application.services.local_scene_preflight import (
+    prepare_local_scene_preflight,
+)
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
 from flow_otomatis.presentation.main_window import MainWindow
@@ -99,3 +102,104 @@ def test_real_package_validation_and_workspace_render_without_redesign(
         assert (tmp_path / "projects" / "EP010_TEST" / "project.sqlite3").is_file()
     finally:
         window.close()
+
+
+def test_canonical_zip_reader_verifies_original_image_bytes_and_blocks_missing_source(
+    tmp_path: Path,
+) -> None:
+    reader = EpisodePackageReader()
+    repo = SqliteWorkspaceRepository(tmp_path / "projects_for_image_check")
+    package = _package(tmp_path / "package_for_digest.zip")
+    workspace = EpisodeImportService(reader, repo).import_package(package)
+
+    verified = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert verified["image_integrity_check"] == "LOCAL_SOURCE_BYTES_READ"
+    assert verified["verified_image_count"] == 1
+    assert verified["unreadable_image_count"] == 0
+    assert verified["image_bytes_verified"] is True
+    assert verified["held"][0]["image_evidence"] == "BYTE TERBACA"
+
+    package.unlink()
+    missing = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert missing["verified_image_count"] == 0
+    assert missing["unreadable_image_count"] == 1
+    assert missing["image_bytes_verified"] is False
+    assert "BYTE GAMBAR TIDAK TERBACA" in missing["held"][0]["issues"]
+    assert str(tmp_path) not in json.dumps(missing)
+    assert missing["live_dispatch_allowed"] is False
+
+
+def test_real_project_hub_exposes_new_uix22_without_import(qtbot, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QPushButton
+
+    class LocalLibrary:
+        def scan_recent(self):
+            return SimpleNamespace(workspaces=(), issues=())
+
+    window = MainWindow(project_library_service=LocalLibrary())
+    qtbot.addWidget(window)
+    opened: list[str] = []
+    monkeypatch.setattr(window, "open_credit_uix_preview", lambda: opened.append("UIX22"))
+    window.show_project_hub()
+
+    preview = window.findChild(QPushButton, "ProjectHubUix22Preview")
+    assert preview is not None
+    assert preview.isEnabled()
+    assert window.fixture_code == "REAL_PROJECT_HUB"
+    preview.click()
+    assert opened == ["UIX22"]
+    window.close()
+
+
+def test_real_shell_does_not_mislabel_unverified_flow_as_online(qtbot) -> None:
+    from types import SimpleNamespace
+
+    class LocalLibrary:
+        def scan_recent(self):
+            return SimpleNamespace(workspaces=(), issues=())
+
+    window = MainWindow(project_library_service=LocalLibrary())
+    qtbot.addWidget(window)
+    window.show_project_hub()
+    assert "Mode Lokal" in window._connection_badge.text()
+    assert window._sidebar_connection_badge.text() == "●  Mode Lokal"
+    assert "Flow belum terverifikasi" in window._sidebar_connection_badge.toolTip()
+    assert "Data Lokal" in window._saved_badge.text()
+    assert "Generate Flow belum aktif" in window._runtime_status.text()
+
+    window.show_fixture("UI-IMG-001A")
+    assert "Online" in window._connection_badge.text()
+    assert window._sidebar_connection_badge.text() == "●  ●  Online"
+    assert "Tersimpan" in window._saved_badge.text()
+    assert window._runtime_status.text() == "Siap digunakan"
+    window.close()
+
+
+def test_production_navigation_never_reports_fake_online_or_autosave(qtbot) -> None:
+    """Frozen routes are still reachable, but their mock status is not real."""
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    # Exact screenshot/reference mode is preserved until production launch.
+    assert "Online" in window._connection_badge.text()
+    assert window._autosave_label.text() == "Autosave aktif"
+
+    window.configure_production_shell()
+    for route in ("UI-IMG-001A", "UI-IMG-003A", "UI-IMG-007A", "UI-IMG-008A"):
+        window.show_fixture(route)
+        assert window.fixture_code == route
+        assert window._connection_badge.text() == "●  Mode Lokal"
+        assert window._sidebar_connection_badge.text() == "●  Mode Lokal"
+        assert "Flow belum terverifikasi" in window._sidebar_connection_badge.toolTip()
+        assert window._saved_badge.text() == "●  Data Lokal"
+        assert window._autosave_label.text() == "Penyimpanan lokal"
+        assert "Generate Flow belum aktif" in window._runtime_status.text()
+        assert "Layar contoh" in window._runtime_status.text()
+        assert window._status_project.text() == "DATA CONTOH"
+        assert "Pratinjau" in window._project_label.text()
+        assert "CONTOH" in window._project_state_label.text()
+
+    window.close()

@@ -214,7 +214,7 @@ def table_widget(
     for row_index, row in enumerate(rows):
         for column_index, value in enumerate(row):
             item = QTableWidgetItem(value)
-            item.setTextAlignment(int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft))
+            item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             table.setItem(row_index, column_index, item)
 
     header = table.horizontalHeader()

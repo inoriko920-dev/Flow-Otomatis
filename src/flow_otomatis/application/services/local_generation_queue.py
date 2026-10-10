@@ -15,6 +15,8 @@ from flow_otomatis.application.ports.generation_provider import (
     GenerationCancelledError,
     GenerationProviderPort,
     GenerationRequest,
+    GenerationRequestValidationError,
+    GenerationSafeFailureError,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
@@ -144,10 +146,10 @@ class LocalGenerationQueueService:
 
         try:
             scene = self._scene(workspace.scenes, job.scene_id)
-        except InternalInvariantError as exc:
+        except InternalInvariantError:
             return self._job_repository.mark_attention(
                 job.job_id,
-                str(exc)[:500],
+                "Queued Scene no longer exists; recheck the local Scene list.",
                 GenerationAttentionCode.REQUEST_STALE,
                 self._owner_id,
             )
@@ -180,30 +182,42 @@ class LocalGenerationQueueService:
         )
         try:
             result = self._provider.generate(request)
-        except GenerationSubmissionAmbiguousError as exc:
+        except GenerationSafeFailureError:
+            return self._job_repository.mark_failed(
+                job.job_id,
+                "Provider rejected Generate before acceptance; explicit re-prepare required.",
+                self._owner_id,
+            )
+        except GenerationRequestValidationError:
+            return self._job_repository.mark_failed(
+                job.job_id,
+                "Generation request failed local validation; correct the Scene before re-prepare.",
+                self._owner_id,
+            )
+        except GenerationSubmissionAmbiguousError:
             return self._job_repository.mark_attention(
                 job.job_id,
-                str(exc)[:500],
+                "Provider submit outcome is uncertain; automatic retry is forbidden.",
                 GenerationAttentionCode.SUBMIT_AMBIGUOUS,
                 self._owner_id,
             )
-        except GenerationAuthenticationRequiredError as exc:
+        except GenerationAuthenticationRequiredError:
             return self._job_repository.mark_attention(
                 job.job_id,
-                str(exc)[:500],
+                "Google session requires manual authorization; automatic retry is disabled.",
                 GenerationAttentionCode.AUTH_REQUIRED,
                 self._owner_id,
             )
-        except GenerationCancelledError as exc:
+        except GenerationCancelledError:
             return self._job_repository.mark_failed(
                 job.job_id,
-                f"Cancelled: {str(exc)[:480]}",
+                "Generation was cancelled; no confirmed result was recorded.",
                 self._owner_id,
             )
-        except Exception as exc:
+        except Exception:
             return self._job_repository.mark_attention(
                 job.job_id,
-                f"Provider outcome uncertain after submit boundary: {str(exc)[:430]}",
+                "Provider outcome uncertain after submit boundary; automatic retry is forbidden.",
                 GenerationAttentionCode.SUBMIT_AMBIGUOUS,
                 self._owner_id,
             )
@@ -287,9 +301,18 @@ class LocalGenerationQueueService:
 
         if self._image_verifier is None:
             raise InternalInvariantError("Generation input verifier is not configured")
-        return self._image_verifier.image_digest(
+        digest = self._image_verifier.image_digest(
             Path(source_package_path), scene.scene_id, scene.image_file
         )
+        pinned = scene.image_sha256_imported
+        if pinned is not None and digest != pinned:
+            # Reject tampering between import and queue preparation, even if the
+            # current file is still readable and its pathname has not changed.
+            raise PackageValidationError(
+                "Source image changed since import; Scene requires operator review",
+                code="IMAGE_CHANGED_SINCE_IMPORT",
+            )
+        return digest
 
     def _scene(
         self,

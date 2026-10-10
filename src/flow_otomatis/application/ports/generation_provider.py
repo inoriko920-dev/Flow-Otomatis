@@ -10,6 +10,10 @@ class GenerationProviderError(RuntimeError):
     """Base error for a provider outcome that is safe to surface to the queue."""
 
 
+class GenerationSafeFailureError(GenerationProviderError):
+    """Proven rejection before provider acceptance; reprepare only by explicit command."""
+
+
 class GenerationSubmissionAmbiguousError(GenerationProviderError):
     """The provider may have accepted a mutating submit; automatic retry is forbidden."""
 

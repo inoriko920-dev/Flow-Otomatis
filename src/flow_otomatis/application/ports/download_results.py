@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from flow_otomatis.domain.job import GenerationJob
 from flow_otomatis.domain.result import DownloadRecord
 
 
@@ -14,8 +15,78 @@ class DownloadResultRepositoryPort(Protocol):
         """Upsert one local download outcome."""
         ...
 
-    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Keep any confirmed DOWNLOADED evidence even if a rival attempt fails."""
+    def save_if_current_generate(
+        self,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
+        *,
+        expected_reviewed_download: DownloadRecord | None = None,
+    ) -> bool:
+        """Atomically certify Generate and the claimed Download revision.
+
+        A reviewed retry must also match the exact previously approved FAILED
+        row and its consumed claim audit within the same SQLite write lock.
+        Legacy first attempts continue to use the existing Generate guard.
+        """
+        ...
+
+    def save_failure_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Never replace success/ambiguity; optionally verify browser Generate identity."""
+        ...
+
+    def save_attention_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Keep sticky ambiguity; optionally verify browser Generate identity."""
+        ...
+
+    def matches_current_generated_download(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob | None = None
+    ) -> bool:
+        """Read-only snapshot proving Download and Generate agree.
+
+        When supplied, the expected Generate revision is also checked under
+        the same SQLite read snapshot to prevent stale Hasil/manifest claims.
+        """
+        ...
+
+    def has_confirmed_manual_retry_authorization(self, record: DownloadRecord) -> bool:
+        """Read-only proof that the current FAILED revision came from operator review.
+
+        A leftover .part may coexist with a deliberately reviewed retry.
+        Mere FAILED status or free-form error text is not authorization.
+        """
+        ...
+
+    def claim_reviewed_retry_if_present(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
+        """Atomically consume the current operator review for one Download attempt.
+
+        Return True when the review was consumed, None for an ordinary FAILED
+        record without a review, or False when a previously reviewed revision
+        was already claimed or changed. Match the exact Generate request
+        fingerprint/revision and current Scene inside the same write lock.
+        A spent review must require renewed reconciliation after crashes.
+        """
+        ...
+
+    def reconcile_attention_for_retry(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+    ) -> bool:
+        """Atomically release one manually reviewed ambiguous Download.
+
+        Implementations must match the current Generate identity and the exact
+        ATTENTION_REQUIRED row revision, and append an audit entry. No file
+        operations or browser retries are permitted here.
+        """
         ...
 
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:

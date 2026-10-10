@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
+from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
@@ -23,14 +25,28 @@ class SqliteDownloadResultRepository:
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
-                        output_path, take, error_message
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (episode_id, scene_id) DO UPDATE SET
                         state = excluded.state,
                         updated_at = excluded.updated_at,
                         output_path = excluded.output_path,
                         take = excluded.take,
-                        error_message = excluded.error_message
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN ('DOWNLOADED', 'ATTENTION_REQUIRED')
+                       OR (
+                           download_results.state = 'DOWNLOADED'
+                           AND excluded.state = 'DOWNLOADED'
+                           AND download_results.output_path IS excluded.output_path
+                           AND download_results.take = excluded.take
+                           AND (
+                               download_results.generation_remote_result_id IS
+                                   excluded.generation_remote_result_id
+                               OR download_results.generation_remote_result_id IS NULL
+                           )
+                       )
                     """,
                     (
                         record.episode_id,
@@ -40,14 +56,189 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.error_message,
+                        record.generation_remote_result_id,
                     ),
                 )
                 connection.commit()
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download result: {exc}") from exc
 
-    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Store a failure only when no prior successful history exists.
+    def save_if_current_generate(
+        self,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
+        *,
+        expected_reviewed_download: DownloadRecord | None = None,
+    ) -> bool:
+        """Compare current Generate and persist Download in one SQLite write lock.
+
+        The BEGIN IMMEDIATE transaction serializes this check against
+        Generate changes. For reviewed retries, the previously approved
+        Download row and its consumed audit must match in that same lock.
+        A stale result is rejected without changing the stored history.
+        """
+
+        if record.state != DownloadState.DOWNLOADED:
+            raise ValueError("Only DOWNLOADED records can use guarded success persistence")
+        remote_id = expected_remote_result_id.strip()
+        if not remote_id:
+            raise ValueError("Expected Generate remote ID must not be blank")
+        # A caller must not ask this adapter to certify bytes as belonging to
+        # a different Generate result. Validate before opening the database.
+        if record.generation_remote_result_id != remote_id:
+            raise ValueError("Download record Generate identity does not match expected ID")
+        try:
+            with self._connect(record.episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                if expected_reviewed_download is not None:
+                    # Do not let a reviewed attempt overwrite a newly
+                    # confirmed outcome, a changed FAILED revision, or a
+                    # concurrent operator action. Compare the complete
+                    # approved row and one-shot audit while holding the same
+                    # write lock used to persist the resulting MP4 record.
+                    expected = expected_reviewed_download
+                    if (
+                        expected.episode_id != record.episode_id
+                        or expected.scene_id != record.scene_id
+                        or expected.state != DownloadState.FAILED
+                        or expected.output_path is not None
+                        or expected.take != record.take
+                        or expected.generation_remote_result_id != remote_id
+                        or expected.error_message
+                        != "Manual review completed; retry requires a separate explicit action."
+                    ):
+                        connection.rollback()
+                        return False
+                    previous = connection.execute(
+                        """
+                        SELECT state, updated_at, output_path, take,
+                               error_message, generation_remote_result_id
+                        FROM download_results
+                        WHERE episode_id = ? AND scene_id = ?
+                        """,
+                        (record.episode_id, record.scene_id),
+                    ).fetchone()
+                    if previous != (
+                        expected.state,
+                        expected.updated_at.isoformat(),
+                        expected.output_path,
+                        expected.take,
+                        expected.error_message,
+                        expected.generation_remote_result_id,
+                    ):
+                        connection.rollback()
+                        return False
+                    audit_table = connection.execute(
+                        """
+                        SELECT 1 FROM sqlite_master
+                        WHERE type = 'table' AND name = 'download_reconciliation_audit'
+                        """
+                    ).fetchone()
+                    if audit_table is None:
+                        connection.rollback()
+                        return False
+                    claim = connection.execute(
+                        """
+                        SELECT 1 FROM download_reconciliation_audit
+                        WHERE episode_id = ? AND scene_id = ?
+                          AND generation_remote_result_id = ? AND take = ?
+                          AND prior_updated_at = ?
+                          AND action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                        LIMIT 1
+                        """,
+                        (
+                            expected.episode_id,
+                            expected.scene_id,
+                            remote_id,
+                            expected.take,
+                            expected.updated_at.isoformat(),
+                        ),
+                    ).fetchone()
+                    if claim is None:
+                        connection.rollback()
+                        return False
+                current = connection.execute(
+                    """
+                    SELECT 1 FROM generation_jobs AS g
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
+                    WHERE g.episode_id = ? AND g.scene_id = ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.request_fingerprint IS NOT NULL
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
+                    LIMIT 1
+                    """,
+                    (record.episode_id, record.scene_id, remote_id),
+                ).fetchone()
+                if current is None:
+                    connection.rollback()
+                    return False
+                cursor = connection.execute(
+                    """
+                    INSERT INTO download_results (
+                        episode_id, scene_id, state, updated_at,
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (episode_id, scene_id) DO UPDATE SET
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        output_path = excluded.output_path,
+                        take = excluded.take,
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN ('DOWNLOADED', 'ATTENTION_REQUIRED')
+                       OR (
+                           download_results.state = 'DOWNLOADED'
+                           AND download_results.generation_remote_result_id =
+                               excluded.generation_remote_result_id
+                           AND (
+                               (
+                                   download_results.take = excluded.take
+                                   AND download_results.output_path IS excluded.output_path
+                               )
+                               OR (
+                                   download_results.take != excluded.take
+                                   AND download_results.output_path IS NOT excluded.output_path
+                               )
+                           )
+                       )
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.state,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.error_message,
+                        remote_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    # Never replace the only surviving evidence of a different
+                    # Generate result, including legacy records with no remote ID.
+                    # Its MP4 and stored history require explicit reconciliation.
+                    connection.rollback()
+                    return False
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError("Could not atomically verify and save Download result") from exc
+
+    def save_failure_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Store a failure only when no success or unresolved ambiguity exists.
 
         The conditional upsert is atomic across competing SQLite connections.
         """
@@ -57,19 +248,29 @@ class SqliteDownloadResultRepository:
         try:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                if expected_remote_result_id is not None and not self._failure_generate_is_current(
+                    connection, record, expected_remote_result_id
+                ):
+                    # The attempt belongs to an old Generate result. Do not
+                    # pollute the new result with a stale failure/ambiguity.
+                    connection.rollback()
+                    return
                 connection.execute(
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
-                        output_path, take, error_message
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (episode_id, scene_id) DO UPDATE SET
                         state = excluded.state,
                         updated_at = excluded.updated_at,
                         output_path = excluded.output_path,
                         take = excluded.take,
-                        error_message = excluded.error_message
-                    WHERE download_results.state <> ?
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN (?, ?)
                     """,
                     (
                         record.episode_id,
@@ -79,12 +280,583 @@ class SqliteDownloadResultRepository:
                         record.output_path,
                         record.take,
                         record.error_message,
+                        record.generation_remote_result_id,
                         DownloadState.DOWNLOADED,
+                        DownloadState.ATTENTION_REQUIRED,
                     ),
                 )
                 connection.commit()
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download failure: {exc}") from exc
+
+    def save_attention_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Record sticky ambiguity only if no success or prior ambiguity exists.
+
+        The conditional upsert is atomic across competing SQLite connections.
+        """
+
+        if record.state != DownloadState.ATTENTION_REQUIRED:
+            raise ValueError("Only ATTENTION_REQUIRED records may use ambiguous persistence")
+        try:
+            with self._connect(record.episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                if expected_remote_result_id is not None and not self._failure_generate_is_current(
+                    connection, record, expected_remote_result_id
+                ):
+                    # The attempt belongs to an old Generate result. Do not
+                    # pollute the new result with a stale failure/ambiguity.
+                    connection.rollback()
+                    return
+                connection.execute(
+                    """
+                    INSERT INTO download_results (
+                        episode_id, scene_id, state, updated_at,
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (episode_id, scene_id) DO UPDATE SET
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        output_path = excluded.output_path,
+                        take = excluded.take,
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN (?, ?)
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.state,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.error_message,
+                        record.generation_remote_result_id,
+                        DownloadState.DOWNLOADED,
+                        DownloadState.ATTENTION_REQUIRED,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"Could not save ambiguous download outcome: {exc}") from exc
+
+    @staticmethod
+    def _failure_generate_is_current(
+        connection: sqlite3.Connection,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
+    ) -> bool:
+        """Reject stale browser outcomes under the same SQLite write lock.
+
+        Only browser-originated outcomes opt into Generate identity checks.
+        Legacy local history writers retain their existing behavior.
+        """
+
+        remote_id = expected_remote_result_id
+        if (
+            not remote_id
+            or remote_id != remote_id.strip()
+            or record.generation_remote_result_id != remote_id
+        ):
+            return False
+        return (
+            connection.execute(
+                """
+                SELECT 1 FROM generation_jobs
+                WHERE episode_id = ? AND scene_id = ?
+                  AND state = 'GENERATED'
+                  AND TRIM(COALESCE(remote_result_id, '')) = ?
+                LIMIT 1
+                """,
+                (record.episode_id, record.scene_id, remote_id),
+            ).fetchone()
+            is not None
+        )
+
+    def matches_current_generated_download(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob | None = None
+    ) -> bool:
+        """Revalidate stored Download and Generate in one read-only SQLite query.
+
+        Never initialize legacy tables, migrate schema, or update history
+        merely to reuse a previously downloaded local MP4.
+        """
+
+        if (
+            record.state != DownloadState.DOWNLOADED
+            or not record.generation_remote_result_id
+            or record.output_path is None
+        ):
+            return False
+        if expected_generation is not None and (
+            expected_generation.episode_id != record.episode_id
+            or expected_generation.scene_id != record.scene_id
+        ):
+            return False
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect_readonly(db_path) as connection:
+                if not self._has_download_results_table(connection):
+                    return False
+                columns = {
+                    str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")
+                }
+                if "generation_remote_result_id" not in columns:
+                    return False
+                matching = connection.execute(
+                    """
+                    SELECT 1
+                    FROM download_results AS d
+                    JOIN generation_jobs AS g
+                      ON d.episode_id = g.episode_id AND d.scene_id = g.scene_id
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
+                    WHERE d.episode_id = ? AND d.scene_id = ?
+                      AND d.state = 'DOWNLOADED'
+                      AND d.updated_at = ?
+                      AND d.output_path = ?
+                      AND d.take = ?
+                      AND d.generation_remote_result_id = ?
+                      AND d.error_message IS ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.request_fingerprint IS NOT NULL
+                      AND (? IS NULL OR (
+                          g.job_id = ?
+                          AND g.updated_at = ?
+                          AND g.request_fingerprint = ?
+                          AND g.image_file = ?
+                          AND g.motion_prompt = ?
+                          AND g.model = ?
+                          AND g.resolution = ?
+                          AND g.aspect_ratio = ?
+                      ))
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.generation_remote_result_id,
+                        record.error_message,
+                        record.generation_remote_result_id,
+                        expected_generation.job_id if expected_generation else None,
+                        expected_generation.job_id if expected_generation else None,
+                        (
+                            expected_generation.updated_at.isoformat()
+                            if expected_generation
+                            else None
+                        ),
+                        expected_generation.request_fingerprint if expected_generation else None,
+                        expected_generation.image_file if expected_generation else None,
+                        expected_generation.motion_prompt if expected_generation else None,
+                        expected_generation.model if expected_generation else None,
+                        expected_generation.resolution if expected_generation else None,
+                        expected_generation.aspect_ratio if expected_generation else None,
+                    ),
+                ).fetchone()
+                return matching is not None
+        except sqlite3.Error as exc:
+            raise StorageError("Could not verify cached Download against current Generate") from exc
+
+    def has_confirmed_manual_retry_authorization(self, record: DownloadRecord) -> bool:
+        """Prove reviewed retry using the exact persisted row and SQLite audit.
+
+        This is an identity-bound read-only check. Neither a FAILED row nor a
+        copied error message can authorize ignoring crash-left .part files.
+        """
+
+        if (
+            record.state != DownloadState.FAILED
+            or record.output_path is not None
+            or not record.generation_remote_result_id
+        ):
+            return False
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect_readonly(db_path) as connection:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+                if not {"download_results", "download_reconciliation_audit"} <= tables:
+                    return False
+                return (
+                    connection.execute(
+                        """
+                        SELECT 1
+                        FROM download_results AS d
+                        JOIN download_reconciliation_audit AS a
+                          ON a.episode_id = d.episode_id
+                         AND a.scene_id = d.scene_id
+                         AND a.generation_remote_result_id =
+                             d.generation_remote_result_id
+                         AND a.take = d.take
+                         AND a.resolved_at = d.updated_at
+                        WHERE d.episode_id = ? AND d.scene_id = ?
+                          AND d.state = 'FAILED'
+                          AND d.updated_at = ?
+                          AND d.take = ?
+                          AND d.generation_remote_result_id = ?
+                          AND d.output_path IS NULL
+                          AND d.error_message =
+                              'Manual review completed; retry requires a separate explicit action.'
+                          AND a.action = 'OPERATOR_REVIEWED_RETRY'
+                          AND NOT EXISTS (
+                              SELECT 1 FROM download_reconciliation_audit AS claimed
+                              WHERE claimed.episode_id = d.episode_id
+                                AND claimed.scene_id = d.scene_id
+                                AND claimed.generation_remote_result_id =
+                                    d.generation_remote_result_id
+                                AND claimed.take = d.take
+                                AND claimed.prior_updated_at = d.updated_at
+                                AND claimed.action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                          )
+                        LIMIT 1
+                        """,
+                        (
+                            record.episode_id,
+                            record.scene_id,
+                            record.updated_at.isoformat(),
+                            record.take,
+                            record.generation_remote_result_id,
+                        ),
+                    ).fetchone()
+                    is not None
+                )
+        except sqlite3.Error as exc:
+            raise StorageError(
+                "Could not verify manually reconciled Download retry authorization"
+            ) from exc
+
+    def claim_reviewed_retry_if_present(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
+        """Consume exactly one reviewed retry using an SQLite BEGIN IMMEDIATE lock.
+
+        A claim is committed before any browser attempt, so power loss cannot
+        silently reuse an already approved attempt. Exhausted approvals become
+        ATTENTION_REQUIRED, allowing the existing operator-review workflow
+        to decide on any subsequent attempt.
+        """
+
+        if record.state != DownloadState.FAILED:
+            return None
+        if (
+            expected_generation.episode_id != record.episode_id
+            or expected_generation.scene_id != record.scene_id
+            or expected_generation.state is not GenerationJobState.GENERATED
+            or not expected_generation.has_verified_request_snapshot
+            or (expected_generation.remote_result_id or "").strip()
+            != record.generation_remote_result_id
+        ):
+            return False
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect(record.episode_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = connection.execute(
+                    """
+                    SELECT state, updated_at, output_path, take,
+                           error_message, generation_remote_result_id
+                    FROM download_results
+                    WHERE episode_id = ? AND scene_id = ?
+                    """,
+                    (record.episode_id, record.scene_id),
+                ).fetchone()
+                if current != (
+                    record.state,
+                    record.updated_at.isoformat(),
+                    record.output_path,
+                    record.take,
+                    record.error_message,
+                    record.generation_remote_result_id,
+                ):
+                    connection.rollback()
+                    return False
+                audit_exists = connection.execute(
+                    """
+                    SELECT 1 FROM sqlite_master
+                    WHERE type = 'table' AND name = 'download_reconciliation_audit'
+                    """
+                ).fetchone()
+                if audit_exists is None:
+                    connection.rollback()
+                    return None
+                review = connection.execute(
+                    """
+                    SELECT 1 FROM download_reconciliation_audit
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND generation_remote_result_id = ? AND take = ?
+                      AND resolved_at = ? AND action = 'OPERATOR_REVIEWED_RETRY'
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.take,
+                        record.updated_at.isoformat(),
+                    ),
+                ).fetchone()
+                if review is None:
+                    connection.rollback()
+                    return None
+                # A forged FAILED row must never gain authority merely because
+                # it happens to share the reviewed row's timestamp or ID.
+                if (
+                    record.output_path is not None
+                    or record.error_message
+                    != "Manual review completed; retry requires a separate explicit action."
+                ):
+                    connection.rollback()
+                    return False
+                claimed = connection.execute(
+                    """
+                    SELECT 1 FROM download_reconciliation_audit
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND generation_remote_result_id = ? AND take = ?
+                      AND prior_updated_at = ?
+                      AND action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.take,
+                        record.updated_at.isoformat(),
+                    ),
+                ).fetchone()
+                if claimed is not None:
+                    # The previous attempt may have been terminated before
+                    # SQLite recorded its outcome. Preserve files and audit;
+                    # make renewed manual reconciliation possible.
+                    connection.execute(
+                        """
+                        UPDATE download_results
+                        SET state = 'ATTENTION_REQUIRED', updated_at = ?,
+                            error_message = ?
+                        WHERE episode_id = ? AND scene_id = ?
+                          AND state = 'FAILED' AND updated_at = ?
+                        """,
+                        (
+                            datetime.now(UTC).isoformat(),
+                            "Prior reviewed Download retry may have been interrupted; "
+                            "manual reconciliation required.",
+                            record.episode_id,
+                            record.scene_id,
+                            record.updated_at.isoformat(),
+                        ),
+                    )
+                    connection.commit()
+                    return False
+                # The row and its Generate revision must be coherent under
+                # the SAME write lock. A matching remote ID alone does not
+                # prove that the prepared request or Scene stayed unchanged.
+                coherent = connection.execute(
+                    """
+                    SELECT 1
+                    FROM generation_jobs AS g
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
+                    WHERE g.episode_id = ? AND g.scene_id = ?
+                      AND g.job_id = ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.updated_at = ?
+                      AND g.request_fingerprint = ?
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        expected_generation.job_id,
+                        record.generation_remote_result_id,
+                        expected_generation.updated_at.isoformat(),
+                        expected_generation.request_fingerprint,
+                    ),
+                ).fetchone()
+                if coherent is None:
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO download_reconciliation_audit (
+                        episode_id, scene_id, generation_remote_result_id,
+                        prior_updated_at, prior_error_message, take,
+                        action, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.updated_at.isoformat(),
+                        record.error_message,
+                        record.take,
+                        "OPERATOR_REVIEWED_RETRY_CLAIMED",
+                        datetime.now(UTC).isoformat(),
+                    ),
+                )
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError(
+                "Could not atomically claim manually reviewed Download retry"
+            ) from exc
+
+    def reconcile_attention_for_retry(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+    ) -> bool:
+        """Release an operator-reviewed ambiguity with audit and optimistic locking.
+
+        This is not a Download success assertion. It only permits a new,
+        separately initiated attempt; no remote request or local file mutation
+        occurs. An older observer cannot unlock a newer ambiguous outcome.
+        """
+
+        if (
+            not expected_remote_result_id
+            or not expected_remote_result_id.strip()
+            or expected_remote_result_id != expected_remote_result_id.strip()
+            or not expected_updated_at
+        ):
+            raise ValueError("Reconciliation needs exact Generate ID and Download revision")
+        try:
+            with self._connect(episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                previous = connection.execute(
+                    """
+                    SELECT state, updated_at, generation_remote_result_id,
+                           output_path, error_message, take
+                    FROM download_results
+                    WHERE episode_id = ? AND scene_id = ?
+                    """,
+                    (episode_id, scene_id),
+                ).fetchone()
+                current = connection.execute(
+                    """
+                    SELECT 1 FROM generation_jobs
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND state = 'GENERATED'
+                      AND TRIM(COALESCE(remote_result_id, '')) = ?
+                    LIMIT 1
+                    """,
+                    (episode_id, scene_id, expected_remote_result_id),
+                ).fetchone()
+                if (
+                    previous is None
+                    or previous[0] != DownloadState.ATTENTION_REQUIRED
+                    or previous[1] != expected_updated_at
+                    or previous[2] != expected_remote_result_id
+                    or previous[3] is not None
+                    or current is None
+                ):
+                    connection.rollback()
+                    return False
+
+                # Created only in a real, explicitly requested reconciliation
+                # write, never from read-only result inspection.
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS download_reconciliation_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        episode_id TEXT NOT NULL,
+                        scene_id TEXT NOT NULL,
+                        generation_remote_result_id TEXT NOT NULL,
+                        prior_updated_at TEXT NOT NULL,
+                        prior_error_message TEXT,
+                        take INTEGER NOT NULL,
+                        action TEXT NOT NULL,
+                        resolved_at TEXT NOT NULL
+                    )
+                    """
+                )
+                from datetime import UTC, datetime
+
+                resolved_at = datetime.now(UTC).isoformat()
+                connection.execute(
+                    """
+                    INSERT INTO download_reconciliation_audit (
+                        episode_id, scene_id, generation_remote_result_id,
+                        prior_updated_at, prior_error_message, take,
+                        action, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        episode_id,
+                        scene_id,
+                        expected_remote_result_id,
+                        previous[1],
+                        previous[4],
+                        previous[5],
+                        "OPERATOR_REVIEWED_RETRY",
+                        resolved_at,
+                    ),
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE download_results
+                    SET state = ?, updated_at = ?, error_message = ?
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND state = ? AND updated_at = ?
+                      AND generation_remote_result_id = ?
+                      AND output_path IS NULL
+                    """,
+                    (
+                        DownloadState.FAILED,
+                        resolved_at,
+                        "Manual review completed; retry requires a separate explicit action.",
+                        episode_id,
+                        scene_id,
+                        DownloadState.ATTENTION_REQUIRED,
+                        expected_updated_at,
+                        expected_remote_result_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    connection.rollback()
+                    return False
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError("Could not atomically reconcile ambiguous Download") from exc
 
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         db_path = self._db_path(episode_id)
@@ -160,7 +932,37 @@ class SqliteDownloadResultRepository:
         )
 
     def _db_path(self, episode_id: str) -> Path:
-        return self._projects_root / episode_id / "project.sqlite3"
+        # DB reads and failure writes can be called without the browser
+        # Download service. Reject traversal/Windows aliases at this boundary,
+        # before any filesystem access, including SQLite mode=ro reads.
+        forbidden = '<>:"/\\|?*'
+        reserved = (
+            {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+            | {f"COM{i}" for i in range(1, 10)}
+            | {f"LPT{i}" for i in range(1, 10)}
+        )
+        if (
+            not isinstance(episode_id, str)
+            or not episode_id
+            or episode_id in {".", ".."}
+            or episode_id.endswith((".", " "))
+            or any(char in forbidden or ord(char) < 32 for char in episode_id)
+            or episode_id.split(".", 1)[0].upper() in reserved
+        ):
+            raise StorageError("Unsafe project episode identifier")
+        db_path = self._projects_root / episode_id / "project.sqlite3"
+        try:
+            # A harmless-looking episode ID may refer to a redirected project
+            # directory (Windows junction, symlink) or a linked database file.
+            # Never read or write through such paths, even in read-only views.
+            if any(
+                node.is_symlink() or node.is_junction()
+                for node in (self._projects_root, db_path.parent, db_path)
+            ):
+                raise StorageError("Project database path is redirected")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise StorageError("Project database path cannot be safely verified") from exc
+        return db_path
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
         connection.execute(
@@ -173,14 +975,23 @@ class SqliteDownloadResultRepository:
                 output_path TEXT,
                 take INTEGER NOT NULL,
                 error_message TEXT,
+                generation_remote_result_id TEXT,
                 PRIMARY KEY (episode_id, scene_id)
             )
             """
         )
+        # A legacy schema is only migrated on a real write, not on get/list.
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")}
+        if "generation_remote_result_id" not in columns:
+            connection.execute(
+                "ALTER TABLE download_results ADD COLUMN generation_remote_result_id TEXT"
+            )
 
     def _row_to_record(self, row: sqlite3.Row) -> DownloadRecord:
         from datetime import datetime
 
+        # sqlite3.Row membership checks values, not column names.
+        columns = row.keys()
         return DownloadRecord(
             episode_id=str(row["episode_id"]),
             scene_id=str(row["scene_id"]),
@@ -189,4 +1000,10 @@ class SqliteDownloadResultRepository:
             output_path=(str(row["output_path"]) if row["output_path"] is not None else None),
             take=int(row["take"]),
             error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
+            generation_remote_result_id=(
+                str(row["generation_remote_result_id"])
+                if "generation_remote_result_id" in columns
+                and row["generation_remote_result_id"] is not None
+                else None
+            ),
         )

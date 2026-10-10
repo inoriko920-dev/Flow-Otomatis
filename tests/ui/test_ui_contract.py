@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import warnings
+
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel, QPushButton, QTableWidget
 
 from flow_otomatis.presentation.fixtures import FIXTURE_CODES, NAV_ITEMS
 from flow_otomatis.presentation.main_window import MainWindow
+from flow_otomatis.presentation.widgets import table_widget
 
 
 def _visible_text(window: MainWindow) -> str:
@@ -156,3 +159,28 @@ def test_navigation_control_accepts_keyboard_focus(qtbot: object) -> None:
         assert diagnostics.hasFocus()
     finally:
         window.close()
+
+
+def test_canonical_table_alignment_uses_supported_qt_flags_without_deprecation(
+    qtbot: object,
+) -> None:
+    """Keep approved alignment while avoiding thousands of Qt warnings."""
+
+    del qtbot
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        table = table_widget(("Scene", "Status"), (("SCENE_001", "Generated"),))
+    try:
+        item = table.item(0, 0)
+        assert item is not None
+        alignment = item.textAlignment()
+        assert alignment & Qt.AlignmentFlag.AlignVCenter
+        assert alignment & Qt.AlignmentFlag.AlignLeft
+        assert not [
+            warning
+            for warning in caught
+            if issubclass(warning.category, DeprecationWarning)
+            and "setTextAlignment" in str(warning.message)
+        ]
+    finally:
+        table.close()

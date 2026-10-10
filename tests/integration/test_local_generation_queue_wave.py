@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import zipfile
@@ -10,12 +11,14 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.application.ports import (
+    GenerationAuthenticationRequiredError,
+    GenerationCancelledError,
     GenerationProviderResult,
     GenerationRequest,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.services import LocalGenerationQueueService
-from flow_otomatis.domain.errors import StorageError
+from flow_otomatis.domain.errors import PackageValidationError, StorageError
 from flow_otomatis.domain.job import (
     GenerationAttentionCode,
     GenerationJobState,
@@ -26,6 +29,11 @@ from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
 from flow_otomatis.infrastructure.persistence import (
     SqliteGenerationJobRepository,
     SqliteWorkspaceRepository,
+)
+from flow_otomatis.workers.browser import (
+    GoogleFlowGenerationProvider,
+    GoogleFlowSubmitEvidence,
+    GoogleFlowSubmitState,
 )
 
 
@@ -237,7 +245,7 @@ def test_ambiguous_submit_blocks_queue_and_prevents_automatic_resubmit(tmp_path:
     ]
     assert jobs[0].attention_code is GenerationAttentionCode.SUBMIT_AMBIGUOUS
     assert jobs[0].submit_started_at is not None
-    assert "Timeout after submit" in (jobs[0].error_message or "")
+    assert "automatic retry is forbidden" in (jobs[0].error_message or "")
 
     service.prepare_queue("EP300_QUEUE")
     still_blocked = service.list_jobs("EP300_QUEUE")
@@ -428,6 +436,12 @@ def test_legacy_unverified_queue_is_parked_until_explicit_reprepare(tmp_path: Pa
     _create_legacy_job_table(db_path)
 
     job_repo = SqliteGenerationJobRepository(projects_root)
+    legacy_snapshot = job_repo.list_for_episode("EP300_QUEUE")
+    assert legacy_snapshot[0].state is GenerationJobState.QUEUED
+    assert legacy_snapshot[0].request_fingerprint is None
+    # Read-only History must not perform this migration. Explicit recovery
+    # is the canonical write operation which parks legacy queued jobs.
+    job_repo.recover_expired("EP300_QUEUE")
     migrated = job_repo.list_for_episode("EP300_QUEUE")
 
     assert migrated[0].state is GenerationJobState.ATTENTION_REQUIRED
@@ -467,8 +481,11 @@ def test_failed_schema_migration_rolls_back_all_added_columns(tmp_path: Path) ->
         connection.commit()
 
     job_repo = SqliteGenerationJobRepository(projects_root)
+    # Viewing legacy history is read-only. Migration and its injected failure
+    # happen only on an explicit mutating recovery action.
+    assert job_repo.list_for_episode("EP300_QUEUE")[0].state is GenerationJobState.QUEUED
     with pytest.raises(StorageError):
-        job_repo.list_for_episode("EP300_QUEUE")
+        job_repo.recover_expired("EP300_QUEUE")
 
     with sqlite3.connect(db_path) as connection:
         columns = {
@@ -647,3 +664,225 @@ def test_prepare_requires_canonical_verifier(tmp_path: Path) -> None:
     with pytest.raises(Exception, match="verifier"):
         service.prepare_queue("EP300_QUEUE")
     assert jobs.list_for_episode("EP300_QUEUE") == ()
+
+
+def test_import_pinned_image_change_blocks_queue_before_job_persistence(
+    tmp_path: Path,
+) -> None:
+    _root, workspace_repo, job_repo, provider, service = _setup(tmp_path)
+    current = workspace_repo.load("EP300_QUEUE")
+    assert current is not None
+    pinned = hashlib.sha256(b"image-bytes-SCENE_001").hexdigest()
+    first = replace(current.scenes[0], image_sha256_imported=pinned)
+    workspace_repo.update(replace(current, scenes=(first, current.scenes[1])))
+
+    source = Path(current.source_package_path).parent / "SCENE_001.png"
+    source.write_bytes(b"tampered-after-import")
+    with pytest.raises(PackageValidationError) as error:
+        service.prepare_queue("EP300_QUEUE")
+    assert error.value.code == "IMAGE_CHANGED_SINCE_IMPORT"
+    assert job_repo.list_for_episode("EP300_QUEUE") == ()
+    assert provider.calls == []
+
+
+def test_import_pinned_image_change_after_queue_prepare_never_submits(
+    tmp_path: Path,
+) -> None:
+    _root, workspace_repo, _job_repo, provider, service = _setup(tmp_path)
+    current = workspace_repo.load("EP300_QUEUE")
+    assert current is not None
+    pinned = hashlib.sha256(b"image-bytes-SCENE_001").hexdigest()
+    first = replace(current.scenes[0], image_sha256_imported=pinned)
+    workspace_repo.update(replace(current, scenes=(first, current.scenes[1])))
+    service.prepare_queue("EP300_QUEUE")
+
+    source = Path(current.source_package_path).parent / "SCENE_001.png"
+    source.write_bytes(b"modified-after-queued")
+    blocked = service.run_next("EP300_QUEUE")
+    assert blocked is not None
+    assert blocked.state is GenerationJobState.ATTENTION_REQUIRED
+    assert blocked.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize(
+    ("exception_type", "expected_state", "expected_attention"),
+    [
+        (
+            RuntimeError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.SUBMIT_AMBIGUOUS,
+        ),
+        (
+            GenerationSubmissionAmbiguousError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.SUBMIT_AMBIGUOUS,
+        ),
+        (
+            GenerationAuthenticationRequiredError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.AUTH_REQUIRED,
+        ),
+        (GenerationCancelledError, GenerationJobState.FAILED, None),
+    ],
+)
+def test_t05_t07_generate_provider_errors_never_persist_raw_details(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    exception_type: type[Exception],
+    expected_state: GenerationJobState,
+    expected_attention: GenerationAttentionCode | None,
+) -> None:
+    root, workspace_repo, jobs, _, _ = _setup(tmp_path)
+    marker = (
+        "Authorization: Bearer SYNTHETIC_SECRET_NOT_REAL\\n"
+        "https://example.invalid/video?signature=fake-signed-marker " + "private-path/" * 100
+    )
+
+    class FailingProvider:
+        calls = 0
+
+        def generate(self, request: GenerationRequest) -> GenerationProviderResult:
+            self.calls += 1
+            raise exception_type(marker)
+
+    provider = FailingProvider()
+    queue = LocalGenerationQueueService(
+        workspace_repo,
+        jobs,
+        provider,
+        image_verifier=EpisodePackageReader(),
+        owner_id="secret-regression-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.state is expected_state
+    assert outcome.attention_code is expected_attention
+    assert provider.calls == 1
+    persisted = root / "EP300_QUEUE" / "project.sqlite3"
+    with sqlite3.connect(persisted) as connection:
+        raw = connection.execute(
+            "SELECT error_message FROM generation_jobs WHERE scene_id='SCENE_001'"
+        ).fetchone()
+    assert raw is not None and raw[0] == outcome.error_message
+    for secret_fragment in ("SYNTHETIC_SECRET_NOT_REAL", "fake-signed-marker", "private-path"):
+        assert secret_fragment not in (outcome.error_message or "")
+        assert secret_fragment not in (raw[0] or "")
+        assert secret_fragment not in caplog.text
+    if expected_attention is not None:
+        assert queue.run_next("EP300_QUEUE") is None
+    assert provider.calls == 1
+
+
+def test_t11_google_safe_failure_queue_requires_explicit_reprepare(tmp_path: Path) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+
+    class SafeDriver:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.SAFE_FAILURE,
+                detail="Rejected before acceptance: FAKE_SECRET_UNTRUSTED",
+            )
+
+    driver = SafeDriver()
+    queue = LocalGenerationQueueService(
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="safe-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    failed = queue.run_next("EP300_QUEUE")
+    assert failed is not None
+    assert failed.state is GenerationJobState.FAILED
+    assert failed.attention_code is None
+    assert "FAKE_SECRET_UNTRUSTED" not in (failed.error_message or "")
+    assert driver.calls == 1
+    # Only an explicit command may reset this proven preacceptance failure.
+    queue.prepare_queue("EP300_QUEUE")
+    assert jobs.list_for_episode("EP300_QUEUE")[0].state is GenerationJobState.QUEUED
+    assert driver.calls == 1
+    queue.run_next("EP300_QUEUE")
+    assert driver.calls == 2
+
+
+def test_t12_invalid_generation_request_never_invokes_browser_driver(
+    tmp_path: Path,
+) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+    original = workspace_repo.load("EP300_QUEUE")
+    assert original is not None
+    invalid = replace(
+        original,
+        scenes=(
+            replace(original.scenes[0], model="unapproved-model"),
+            original.scenes[1],
+        ),
+    )
+    workspace_repo.update(invalid, expected_workspace=original)
+
+    class ShouldNeverSubmit:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.ACCEPTED,
+                detail="unexpected",
+                remote_result_id="unexpected",
+            )
+
+    driver = ShouldNeverSubmit()
+    queue = LocalGenerationQueueService(
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="precheck-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None and outcome.state is GenerationJobState.FAILED
+    assert outcome.attention_code is None
+    assert driver.calls == 0
+
+
+def test_t12_accepted_without_id_stays_ambiguous_after_reprepare(tmp_path: Path) -> None:
+    _, workspace_repo, jobs, _, _ = _setup(tmp_path)
+
+    class MissingIdDriver:
+        calls = 0
+
+        def submit_one(
+            self, profile_id: str, request: GenerationRequest, *, timeout_ms: int
+        ) -> GoogleFlowSubmitEvidence:
+            self.calls += 1
+            return GoogleFlowSubmitEvidence(
+                state=GoogleFlowSubmitState.ACCEPTED,
+                detail="Accepted but no identifier",
+            )
+
+    driver = MissingIdDriver()
+    queue = LocalGenerationQueueService(
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="unknown-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.attention_code is GenerationAttentionCode.SUBMIT_AMBIGUOUS
+    queue.prepare_queue("EP300_QUEUE")
+    assert queue.run_next("EP300_QUEUE") is None
+    assert driver.calls == 1

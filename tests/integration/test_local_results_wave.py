@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sqlite3
+import zipfile
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from flow_otomatis.application.services import LocalResultsService
+from flow_otomatis.application.services.local_generation_queue import _scene_fingerprint
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
-from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
+from flow_otomatis.infrastructure.filesystem import EpisodePackageReader, ResultManifestWriter
 from flow_otomatis.infrastructure.persistence import (
     SqliteDownloadResultRepository,
     SqliteGenerationJobRepository,
@@ -211,7 +216,8 @@ def test_migration_preserves_generated_result_and_existing_download(tmp_path: Pa
     assert migrated[0].created_at == now
     assert migrated[0].updated_at == now
     assert snapshot.generated_count == 1
-    assert snapshot.downloaded_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.scenes[0].download_state == DownloadState.UNAVAILABLE
     assert snapshot.scenes[0].remote_result_id == "remote:kept"
     assert snapshot.scenes[0].output_path == str(output.resolve())
 
@@ -342,12 +348,40 @@ def test_local_download_failure_without_success_is_persisted(
     failed = service.record_download_failed("EP400_RESULTS", "SCENE_001", "network error")
     repository = SqliteDownloadResultRepository(tmp_path / "projects")
     assert failed.state == DownloadState.FAILED
-    assert failed.error_message == "network error"
+    assert failed.error_message == "Local Download failed; no confirmed MP4 was recorded."
     assert repository.get("EP400_RESULTS", "SCENE_001") == failed
     snapshot = service.snapshot("EP400_RESULTS")
     assert snapshot.downloaded_count == 0
     assert snapshot.handoff_ready is False
     assert snapshot.scenes[0].download_state == DownloadState.FAILED
+
+
+@pytest.mark.parametrize(
+    "unsafe_message",
+    [
+        "https://flow.example.invalid/download?access_token=DO_NOT_PERSIST",
+        "Cookie: auth_session=DO_NOT_PERSIST",
+        "C:\\Users\\private\\AppData\\Local\\DO_NOT_PERSIST",
+        "network failure\\nAuthorization: Bearer DO_NOT_PERSIST",
+    ],
+)
+def test_local_failure_text_never_leaks_into_sqlite_or_exported_manifest(
+    tmp_path: Path,
+    unsafe_message: str,
+) -> None:
+    """Direct local failure recording must redact caller-supplied private data."""
+
+    service, _jobs = _service(tmp_path)
+    saved = service.record_download_failed("EP400_RESULTS", "SCENE_001", unsafe_message)
+    assert saved.state == DownloadState.FAILED
+    assert saved.error_message == "Local Download failed; no confirmed MP4 was recorded."
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    assert repository.get("EP400_RESULTS", "SCENE_001") == saved
+    assert "DO_NOT_PERSIST" not in str(saved)
+    database = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    assert b"DO_NOT_PERSIST" not in database.read_bytes()
+    manifest = service.export_manifest("EP400_RESULTS")
+    assert "DO_NOT_PERSIST" not in manifest.read_text(encoding="utf-8")
 
 
 def test_local_failure_from_second_service_cannot_clobber_success(
@@ -384,3 +418,1061 @@ def test_local_failure_from_second_service_cannot_clobber_success(
     stored = SqliteDownloadResultRepository(projects_root).get("EP400_RESULTS", "SCENE_001")
     assert stored == recorded
     assert service.snapshot("EP400_RESULTS").handoff_ready is True
+
+
+@pytest.mark.parametrize("unsafe_kind", ["relative", "wrong_extension", "symlink"])
+def test_record_downloaded_never_certifies_invalid_or_linked_mp4(
+    tmp_path: Path, unsafe_kind: str
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "symlink-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:proof", "symlink-owner")
+
+    real = tmp_path / "verified.mp4"
+    real.write_bytes(b"example-mp4-bytes")
+    if unsafe_kind == "relative":
+        path = "relative.mp4"
+    elif unsafe_kind == "wrong_extension":
+        wrong = tmp_path / "not-an-mp4.txt"
+        wrong.write_bytes(b"example-mp4-bytes")
+        path = str(wrong)
+    else:
+        shortcut = tmp_path / "shortcut.mp4"
+        try:
+            shortcut.symlink_to(real)
+        except OSError, NotImplementedError:
+            pytest.skip("Creating symbolic links is not supported by this Windows runner")
+        path = str(shortcut)
+
+    with pytest.raises(InternalInvariantError):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", path)
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.generated_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    assert repository.get("EP400_RESULTS", "SCENE_001") is None
+
+
+def test_recorded_mp4_replaced_by_symlink_fails_closed_in_results_and_manifest(
+    tmp_path: Path,
+) -> None:
+    service, output = _generated_result_with_file(tmp_path)
+    moved = tmp_path / "old-original.mp4"
+    output.rename(moved)
+    try:
+        output.symlink_to(moved)
+    except OSError, NotImplementedError:
+        pytest.skip("Creating symbolic links is not supported by this Windows runner")
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.generated_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.attention_count == 1
+    assert snapshot.handoff_ready is False
+    assert snapshot.scenes[0].download_state == DownloadState.UNAVAILABLE
+    # The manifest must not convert the redirected file to a success even
+    # though its target still contains readable bytes.
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+    persisted = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert persisted is not None
+    assert persisted.state == DownloadState.DOWNLOADED
+
+
+@pytest.mark.parametrize(
+    ("stale_job_state", "stale_remote_id"),
+    [
+        ("QUEUED", "remote:R03"),
+        ("FAILED", "remote:R03"),
+        ("ATTENTION_REQUIRED", "remote:R03"),
+        ("GENERATED", ""),
+    ],
+)
+def test_download_history_does_not_claim_success_after_generate_becomes_stale(
+    tmp_path: Path, stale_job_state: str, stale_remote_id: str
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    episode_id = "EP400_RESULTS"
+    database = tmp_path / "projects" / episode_id / "project.sqlite3"
+    before = service.snapshot(episode_id)
+    assert before.handoff_ready
+    assert before.scenes[0].download_state == DownloadState.DOWNLOADED
+
+    # Simulate older persisted job revisions/failed jobs without deleting
+    # the MP4 that the operator may still want to inspect manually.
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET state = ?, remote_result_id = ? WHERE scene_id = ?",
+            (stale_job_state, stale_remote_id, "SCENE_001"),
+        )
+        connection.commit()
+
+    current = service.snapshot(episode_id)
+    assert current.downloaded_count == 0
+    assert current.handoff_ready is False
+    assert current.attention_count >= 1
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert current.scenes[0].output_path == str(video.resolve())
+    assert video.read_bytes() == b"real-local-test-video"
+
+    manifest = json.loads(service.export_manifest(episode_id).read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+
+    # Historical records are intentionally preserved for manual reconciliation.
+    old = SqliteDownloadResultRepository(tmp_path / "projects").get(episode_id, "SCENE_001")
+    assert old is not None
+    assert old.state == DownloadState.DOWNLOADED
+    assert old.output_path == str(video.resolve())
+
+    with pytest.raises(InternalInvariantError):
+        service.record_downloaded(episode_id, "SCENE_001", str(video))
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_download_history_without_any_current_generate_job_is_unavailable(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    episode_id = "EP400_RESULTS"
+    database = tmp_path / "projects" / episode_id / "project.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("DELETE FROM generation_jobs WHERE scene_id = ?", ("SCENE_001",))
+        connection.commit()
+
+    after = service.snapshot(episode_id)
+    assert after.scenes[0].generate_state is None
+    assert after.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert after.downloaded_count == 0
+    assert not after.handoff_ready
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+@pytest.mark.parametrize(
+    ("state", "remote"),
+    [
+        (None, "remote:old"),
+        (GenerationJobState.FAILED, "remote:old"),
+        (GenerationJobState.GENERATED, ""),
+    ],
+)
+def test_direct_manifest_writer_reconciles_inconsistent_cached_snapshot(
+    tmp_path: Path, state: GenerationJobState | None, remote: str
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    cached = replace(
+        original,
+        scenes=(replace(original.scenes[0], generate_state=state, remote_result_id=remote),),
+    )
+    output = ResultManifestWriter(tmp_path / "projects").write(cached)
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert payload["scenes"][0]["generate_status"] == (
+        state.value if state is not None else "NOT_QUEUED"
+    )
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_direct_local_result_record_rejects_generate_change_during_atomic_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, job_repo = _service(tmp_path)
+    job = _queue_one(job_repo)
+    claimed = job_repo.claim_next("EP400_RESULTS", "results-owner", lease_seconds=60)
+    assert claimed is not None
+    job_repo.mark_generated(job.job_id, "fake:SCENE_001", "results-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"synthetic-video")
+
+    repository = service._download_repository
+    original = repository.save_if_current_generate
+    db = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+
+    def invalidate_before_commit(record, remote_result_id):
+        with sqlite3.connect(db) as connection:
+            connection.execute(
+                "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+                ("fake:REPLACED", record.scene_id),
+            )
+            connection.commit()
+        return original(record, remote_result_id)
+
+    monkeypatch.setattr(repository, "save_if_current_generate", invalidate_before_commit)
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+
+    assert video.read_bytes() == b"synthetic-video"
+    assert repository.get("EP400_RESULTS", "SCENE_001") is None
+
+
+def test_new_generated_id_never_reattests_old_download_or_exports_mp4(tmp_path: Path) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    assert original.scenes[0].download_generation_result_id == "remote:R03"
+
+    with sqlite3.connect(tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3") as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:NEW_GENERATED", "SCENE_001"),
+        )
+        db.commit()
+    latest = service.snapshot("EP400_RESULTS")
+    assert latest.scenes[0].generate_state is GenerationJobState.GENERATED
+    assert latest.scenes[0].remote_result_id == "remote:NEW_GENERATED"
+    assert latest.scenes[0].download_generation_result_id == "remote:R03"
+    assert latest.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert not latest.handoff_ready
+    payload = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert video.read_bytes() == b"real-local-test-video"
+
+
+def test_manifest_rejects_changed_generated_id_even_when_download_exists(
+    tmp_path: Path,
+) -> None:
+    service, _video = _generated_result_with_file(tmp_path)
+    original = service.snapshot("EP400_RESULTS")
+    assert original.handoff_ready
+    tampered = replace(
+        original,
+        scenes=(replace(original.scenes[0], remote_result_id="remote:NEW_GENERATED"),),
+    )
+    path = ResultManifestWriter(tmp_path / "projects").write(tampered)
+    assert json.loads(path.read_text(encoding="utf-8"))["scenes"][0]["download_status"] == (
+        "UNAVAILABLE"
+    )
+
+
+def test_local_recording_cannot_replace_download_from_earlier_generate_identity(
+    tmp_path: Path,
+) -> None:
+    """A direct local confirmation must not overwrite the original successful row."""
+
+    service, original_video = _generated_result_with_file(tmp_path)
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    old = repository.get("EP400_RESULTS", "SCENE_001")
+    assert old is not None and old.generation_remote_result_id == "remote:R03"
+
+    new_video = tmp_path / "second-result.mp4"
+    new_video.write_bytes(b"new-result-untouched")
+    db_path = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:SECOND", "SCENE_001"),
+        )
+        db.commit()
+
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(new_video))
+
+    assert repository.get("EP400_RESULTS", "SCENE_001") == old
+    assert original_video.read_bytes() == b"real-local-test-video"
+    assert new_video.read_bytes() == b"new-result-untouched"
+    status = service.snapshot("EP400_RESULTS")
+    assert status.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert status.handoff_ready is False
+
+
+def test_ambiguous_download_is_visible_in_results_and_cannot_be_downgraded(
+    tmp_path: Path,
+) -> None:
+    """Hasil and manifest must surface the unresolved attempt, not 'Gagal'."""
+
+    service, _jobs = _service(tmp_path)
+    repo = SqliteDownloadResultRepository(tmp_path / "projects")
+    ambiguous = DownloadRecord(
+        episode_id="EP400_RESULTS",
+        scene_id="SCENE_001",
+        state=DownloadState.ATTENTION_REQUIRED,
+        updated_at=datetime.now(UTC),
+        take=1,
+        error_message="browser result uncertain",
+        generation_remote_result_id="remote:unverified",
+    )
+    repo.save_attention_if_unconfirmed(ambiguous)
+    assert (
+        service.record_download_failed("EP400_RESULTS", "SCENE_001", "late safe failure")
+        == ambiguous
+    )
+    assert repo.get("EP400_RESULTS", "SCENE_001") == ambiguous
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.scenes[0].download_state == DownloadState.ATTENTION_REQUIRED
+    assert snapshot.attention_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+    exported = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert exported["scenes"][0]["download_status"] == DownloadState.ATTENTION_REQUIRED
+
+
+def test_t08_changed_duration_makes_historical_download_unavailable(tmp_path: Path) -> None:
+    service, path = _generated_result_with_file(tmp_path)
+    root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(root)
+    original = workspace_repo.load("EP400_RESULTS")
+    assert original is not None
+    changed = replace(
+        original,
+        scenes=(replace(original.scenes[0], selected_flow_duration_s=6),),
+    )
+    workspace_repo.update(changed, expected_workspace=original)
+    after = service.snapshot("EP400_RESULTS")
+    assert after.handoff_ready is False
+    assert after.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert after.scenes[0].generate_state is GenerationJobState.GENERATED
+    assert path.read_bytes() == b"real-local-test-video"
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(path))
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    ("field", "changed_value"),
+    [
+        ("image_file", "new-image.png"),
+        ("image_exists", False),
+        ("readiness", SceneReadiness.MISSING_IMAGE),
+        ("motion_prompt", "Different prompt"),
+        ("model", "Unrelated model"),
+        ("resolution", "1080p"),
+        ("aspect_ratio", "9:16"),
+        ("target_duration_s", 3.2),
+    ],
+)
+def test_t09_changed_request_snapshot_never_reuses_old_result(
+    tmp_path: Path, field: str, changed_value: object
+) -> None:
+    service, path = _generated_result_with_file(tmp_path)
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    old = repo.load("EP400_RESULTS")
+    assert old is not None
+    changes = {field: changed_value}
+    if field == "target_duration_s":
+        changes["trim_target_s"] = changed_value
+    updated = replace(old.scenes[0], **changes)
+    repo.update(replace(old, scenes=(updated,)), expected_workspace=old)
+    current = service.snapshot("EP400_RESULTS")
+    assert not current.handoff_ready
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert path.exists()
+
+
+def test_t10_scene_edit_during_download_commit_is_rejected_without_deleting_video(
+    tmp_path: Path,
+) -> None:
+    service, jobs = _service(tmp_path)
+    queued = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "race-owner", lease_seconds=60)
+    jobs.mark_generated(queued.job_id, "remote:race", "race-owner")
+    root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(root)
+    video = tmp_path / "race.mp4"
+    video.write_bytes(b"synthetic-video-evidence")
+
+    class ConcurrentEditDownloadRepository(SqliteDownloadResultRepository):
+        def save_if_current_generate(
+            self, record: DownloadRecord, expected_remote_result_id: str
+        ) -> bool:
+            old = workspace_repo.load(record.episode_id)
+            assert old is not None
+            newer = replace(
+                old,
+                scenes=(replace(old.scenes[0], selected_flow_duration_s=6),),
+            )
+            workspace_repo.update(newer, expected_workspace=old)
+            return super().save_if_current_generate(record, expected_remote_result_id)
+
+    downloads = ConcurrentEditDownloadRepository(root)
+    racing_service = LocalResultsService(
+        workspace_repo, jobs, downloads, ResultManifestWriter(root)
+    )
+    with pytest.raises(InternalInvariantError, match="changed during atomic Download save"):
+        racing_service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert video.read_bytes() == b"synthetic-video-evidence"
+    assert downloads.get("EP400_RESULTS", "SCENE_001") is None
+    assert racing_service.snapshot("EP400_RESULTS").handoff_ready is False
+
+
+@pytest.mark.parametrize(
+    "scene_change",
+    [
+        {"image_exists": False, "readiness": SceneReadiness.MISSING_IMAGE},
+        {"readiness": SceneReadiness.MISSING_PROMPT},
+    ],
+)
+def test_f03_not_ready_scene_refuses_new_download_certificate_and_keeps_bytes(
+    tmp_path: Path, scene_change: dict[str, object]
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "ready-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:READY", "ready-owner")
+    output = tmp_path / "existing-approved-result.mp4"
+    output.write_bytes(b"preserved-older-mp4")
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    original = repo.load("EP400_RESULTS")
+    assert original is not None
+    changed = replace(original.scenes[0], **scene_change)
+    repo.update(replace(original, scenes=(changed,)), expected_workspace=original)
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
+    assert output.read_bytes() == b"preserved-older-mp4"
+    assert SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001") is None
+    assert not service.snapshot("EP400_RESULTS").handoff_ready
+
+
+def test_f03_atomic_download_rejects_missing_image_after_initial_service_check(
+    tmp_path: Path,
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "atomic-ready-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:ATOMIC", "atomic-ready-owner")
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    output = tmp_path / "accepted-old-result.mp4"
+    output.write_bytes(b"keep-when-scene-lost-image")
+
+    class ImageDisappearsBeforeCommit(SqliteDownloadResultRepository):
+        def save_if_current_generate(
+            self, record: DownloadRecord, expected_remote_result_id: str
+        ) -> bool:
+            workspace = repo.load(record.episode_id)
+            assert workspace is not None
+            changed = replace(
+                workspace,
+                scenes=(
+                    replace(
+                        workspace.scenes[0],
+                        image_exists=False,
+                        readiness=SceneReadiness.MISSING_IMAGE,
+                    ),
+                ),
+            )
+            repo.update(changed, expected_workspace=workspace)
+            return super().save_if_current_generate(record, expected_remote_result_id)
+
+    guarded = LocalResultsService(
+        repo, jobs, ImageDisappearsBeforeCommit(root), ResultManifestWriter(root)
+    )
+    with pytest.raises(InternalInvariantError, match="changed during atomic Download save"):
+        guarded.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
+    assert output.read_bytes() == b"keep-when-scene-lost-image"
+    assert SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001") is None
+
+
+def _verified_image_source_and_result(
+    tmp_path: Path, *, zip_source: bool, imported_baseline: bool = True
+) -> tuple[LocalResultsService, Path, Path, SqliteDownloadResultRepository]:
+    """Use a real local package and the actual SHA-256 verifier; no provider calls."""
+    workspace = _workspace()
+    scene = workspace.scenes[0]
+    image_bytes = b"original-approved-illustration"
+    original_sha = hashlib.sha256(image_bytes).hexdigest()
+    manifest = {
+        "schema_version": "1.0",
+        "episode_id": workspace.episode_id,
+        "project_name": workspace.project_name,
+        "production_profile": {
+            "model": workspace.model,
+            "resolution": workspace.resolution,
+            "aspect_ratio": workspace.aspect_ratio,
+        },
+        "scene_count": 1,
+        "scenes": [
+            {
+                "scene_id": scene.scene_id,
+                "image_file": scene.image_file,
+                "motion_prompt": scene.motion_prompt,
+                "target_duration_s": scene.target_duration_s,
+                "recommended_flow_duration_s": scene.recommended_flow_duration_s,
+                "selected_flow_duration_s": scene.selected_flow_duration_s,
+                "trim_target_s": scene.trim_target_s,
+                "model": scene.model,
+                "resolution": scene.resolution,
+                "aspect_ratio": scene.aspect_ratio,
+                "status": "READY",
+            }
+        ],
+        "created_at": workspace.created_at.isoformat(),
+        "source_versions": {},
+    }
+    if zip_source:
+        source = tmp_path / "verified_source.zip"
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("FLOW_OTOMATIS_IMPORT.json", json.dumps(manifest))
+            archive.writestr(scene.image_file, image_bytes)
+        image_path = source
+    else:
+        source = tmp_path / "verified_source"
+        source.mkdir()
+        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(json.dumps(manifest), encoding="utf-8")
+        image_path = source / scene.image_file
+        image_path.write_bytes(image_bytes)
+
+    updated_scene = replace(
+        scene, image_sha256_imported=original_sha if imported_baseline else None
+    )
+    workspace = replace(
+        workspace,
+        source_package_path=str(source),
+        scenes=(updated_scene,),
+    )
+    root = tmp_path / "projects"
+    workspaces = SqliteWorkspaceRepository(root)
+    workspaces.save(workspace)
+    jobs = SqliteGenerationJobRepository(root)
+    initial = _queue_one(jobs)
+    # ensure_jobs on a queued job does not rewrite its immutable request;
+    # explicitly prepare a coherent offline fingerprint before the claim.
+    with sqlite3.connect(root / workspace.episode_id / "project.sqlite3") as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE job_id = ?",
+            (
+                _scene_fingerprint(workspace.episode_id, updated_scene, original_sha),
+                initial.job_id,
+            ),
+        )
+    assert jobs.claim_next(workspace.episode_id, "verified-source-owner", lease_seconds=60)
+    jobs.mark_generated(initial.job_id, "remote:verified-source", "verified-source-owner")
+    downloads = SqliteDownloadResultRepository(root)
+    service = LocalResultsService(
+        workspaces,
+        jobs,
+        downloads,
+        ResultManifestWriter(root),
+        image_verifier=EpisodePackageReader(),
+    )
+    video = tmp_path / "verified-result.mp4"
+    video.write_bytes(b"existing-confirmed-local-video")
+    service.record_downloaded(workspace.episode_id, scene.scene_id, str(video))
+    assert service.snapshot(workspace.episode_id).handoff_ready
+    return service, image_path, video, downloads
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+@pytest.mark.parametrize("imported_baseline", [False, True])
+def test_sol08_changed_image_bytes_without_renaming_never_certifies_handoff(
+    tmp_path: Path, zip_source: bool, imported_baseline: bool
+) -> None:
+    service, image_source, video, downloads = _verified_image_source_and_result(
+        tmp_path, zip_source=zip_source, imported_baseline=imported_baseline
+    )
+    old = downloads.get("EP400_RESULTS", "SCENE_001")
+    assert old is not None
+    if zip_source:
+        with zipfile.ZipFile(image_source) as archive:
+            original_manifest = archive.read("FLOW_OTOMATIS_IMPORT.json")
+        with zipfile.ZipFile(image_source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("FLOW_OTOMATIS_IMPORT.json", original_manifest)
+            archive.writestr("SCENE_001.png", b"tampered-image-unchanged-name")
+    else:
+        image_source.write_bytes(b"tampered-image-unchanged-name")
+
+    result = service.snapshot("EP400_RESULTS")
+    assert result.handoff_ready is False
+    assert result.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert result.downloaded_count == 0
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert downloads.get("EP400_RESULTS", "SCENE_001") == old
+    assert video.read_bytes() == b"existing-confirmed-local-video"
+
+
+def test_sol08_missing_source_image_fails_closed_despite_stale_ready_metadata(
+    tmp_path: Path,
+) -> None:
+    service, image_source, video, downloads = _verified_image_source_and_result(
+        tmp_path, zip_source=False
+    )
+    image_source.unlink()
+    current = service.snapshot("EP400_RESULTS")
+    assert not current.handoff_ready
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert downloads.get("EP400_RESULTS", "SCENE_001") is not None
+    assert video.read_bytes() == b"existing-confirmed-local-video"
+
+
+@pytest.mark.parametrize("reader", ["hasil", "manifest"])
+@pytest.mark.parametrize(
+    "concurrent_change",
+    [
+        "download_state",
+        "download_revision",
+        "download_error",
+        "generate_state",
+        "generate_id",
+        "generate_revision",
+        "generate_fingerprint",
+    ],
+)
+def test_sol17_hasil_manifest_reject_history_changed_after_list_read(
+    tmp_path: Path, reader: str, concurrent_change: str
+) -> None:
+    """A SQLite revision committed after list_for_episode invalidates a stale success."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    assert service.snapshot("EP400_RESULTS").handoff_ready
+    root = tmp_path / "projects"
+    database = root / "EP400_RESULTS" / "project.sqlite3"
+    original = SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001")
+    assert original is not None
+    sql, parameters = {
+        "download_state": (
+            "UPDATE download_results SET state = 'ATTENTION_REQUIRED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_revision": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "download_error": (
+            "UPDATE download_results SET error_message = ? WHERE scene_id = ?",
+            ("competing revision", "SCENE_001"),
+        ),
+        "generate_state": (
+            "UPDATE generation_jobs SET state = 'QUEUED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "generate_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:new-result", "SCENE_001"),
+        ),
+        "generate_revision": (
+            "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_fingerprint": (
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+            ("different-prepared-request", "SCENE_001"),
+        ),
+    }[concurrent_change]
+
+    class RaceAfterList(SqliteDownloadResultRepository):
+        def __init__(self, projects_root: Path) -> None:
+            super().__init__(projects_root)
+            self.changed = False
+
+        def list_for_episode(self, episode_id: str) -> tuple[DownloadRecord, ...]:
+            previous = super().list_for_episode(episode_id)
+            if not self.changed:
+                self.changed = True
+                with sqlite3.connect(database) as conn:
+                    conn.execute(sql, parameters)
+                    conn.commit()
+            return previous
+
+    downloads = RaceAfterList(root)
+    guarded = LocalResultsService(
+        SqliteWorkspaceRepository(root),
+        SqliteGenerationJobRepository(root),
+        downloads,
+        ResultManifestWriter(root),
+    )
+    if reader == "hasil":
+        result = guarded.snapshot("EP400_RESULTS")
+        assert not result.handoff_ready
+        assert result.downloaded_count == 0
+        state = result.scenes[0].download_state
+        output = result.scenes[0].output_path
+    else:
+        exported = guarded.export_manifest("EP400_RESULTS")
+        payload = json.loads(exported.read_text(encoding="utf-8"))
+        state = payload["scenes"][0]["download_status"]
+        output = payload["scenes"][0]["output_path"]
+    assert downloads.changed
+    assert state == DownloadState.UNAVAILABLE
+    assert output == str(video.resolve())
+    assert video.read_bytes() == b"real-local-test-video"
+
+    actual = SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001")
+    assert actual is not None
+    if concurrent_change.startswith("generate_"):
+        assert actual == original
+    elif concurrent_change == "download_state":
+        assert actual.state == DownloadState.ATTENTION_REQUIRED
+    elif concurrent_change == "download_revision":
+        assert actual.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
+    else:
+        assert actual.error_message == "competing revision"
+
+
+@pytest.mark.parametrize(
+    "database_change",
+    [
+        "download_attention",
+        "download_revision",
+        "generate_revision",
+        "generate_fingerprint",
+        "generate_remote_id",
+    ],
+)
+def test_sol18_export_detects_db_change_after_staged_manifest_before_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_change: str
+) -> None:
+    """A committed SQLite revision must never certify stale staged JSON."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    previous_manifest = service.export_manifest("EP400_RESULTS")
+    original_bytes = previous_manifest.read_bytes()
+    assert json.loads(original_bytes)["scenes"][0]["download_status"] == "DOWNLOADED"
+
+    db = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    changes = {
+        "download_attention": (
+            "UPDATE download_results SET state = 'ATTENTION_REQUIRED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_revision": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_revision": (
+            "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_fingerprint": (
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+            ("rival-generate-fingerprint", "SCENE_001"),
+        ),
+        "generate_remote_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:rival-result", "SCENE_001"),
+        ),
+    }
+    sql, arguments = changes[database_change]
+    writer = service._manifest_writer
+    previous_check = writer._verified_export_directory
+    checks = 0
+
+    def change_after_tempfile_sync(episode_id: str) -> Path:
+        nonlocal checks
+        checks += 1
+        if checks == 2:
+            with sqlite3.connect(db) as connection:
+                connection.execute(sql, arguments)
+                connection.commit()
+        return previous_check(episode_id)
+
+    monkeypatch.setattr(writer, "_verified_export_directory", change_after_tempfile_sync)
+    with pytest.raises(InternalInvariantError, match="history changed during manifest export"):
+        service.export_manifest("EP400_RESULTS")
+
+    assert checks == 2
+    assert previous_manifest.read_bytes() == original_bytes
+    assert video.read_bytes() == b"real-local-test-video"
+    assert not list(previous_manifest.parent.glob("*.tmp"))
+    with sqlite3.connect(db) as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM download_results WHERE scene_id = ?",
+                ("SCENE_001",),
+            ).fetchone()[0]
+            == 1
+        )
+
+
+@pytest.mark.parametrize("mp4_change", ["removed", "empty", "html", "other_mp4"])
+def test_sol18_export_detects_mp4_changed_while_manifest_is_being_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mp4_change: str
+) -> None:
+    """A live MP4 must retain its identity and validity through publication."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    prior = service.export_manifest("EP400_RESULTS")
+    previous_bytes = prior.read_bytes()
+    writer = service._manifest_writer
+    original_check = writer._verified_export_directory
+    changed = False
+
+    def replace_mp4_after_stage(episode_id: str) -> Path:
+        nonlocal changed
+        if not changed:
+            # The first call is before staging, the second after fsync.
+            changed = True
+            return original_check(episode_id)
+        if mp4_change == "removed":
+            video.unlink()
+        elif mp4_change == "empty":
+            video.write_bytes(b"")
+        elif mp4_change == "html":
+            video.write_bytes(b"<!DOCTYPE html><html>login expired</html>")
+        else:
+            video.write_bytes(b"different-valid-nonempty-video-content")
+        return original_check(episode_id)
+
+    monkeypatch.setattr(writer, "_verified_export_directory", replace_mp4_after_stage)
+    with pytest.raises(
+        InternalInvariantError,
+        match="history changed during manifest export|MP4 changed during export",
+    ):
+        service.export_manifest("EP400_RESULTS")
+
+    assert prior.read_bytes() == previous_bytes
+    assert not list(prior.parent.glob("*.tmp"))
+    recorded = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    if mp4_change == "other_mp4":
+        assert video.read_bytes() == b"different-valid-nonempty-video-content"
+
+
+def test_sol18_manifest_with_unchanged_history_and_mp4_still_publishes(
+    tmp_path: Path,
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    output = service.export_manifest("EP400_RESULTS")
+    payload = json.loads(output.read_text(encoding="utf-8"))
+
+    assert payload["schema_version"] == "1.0"
+    assert payload["scenes"][0]["download_status"] == DownloadState.DOWNLOADED
+    assert payload["scenes"][0]["output_path"] == str(video.resolve())
+    assert service.snapshot("EP400_RESULTS").handoff_ready
+    assert not list(output.parent.glob("*.tmp"))
+
+
+@pytest.mark.parametrize(
+    "late_mutation",
+    [
+        "download_attention",
+        "download_failed",
+        "download_updated_at",
+        "generate_queued",
+        "generate_result_id",
+        "generate_fingerprint",
+        "generate_updated_at",
+        "scene_prompt",
+    ],
+)
+def test_sol19_record_local_mp4_rejects_sqlite_change_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    late_mutation: str,
+) -> None:
+    """Record Download must never return stale success after the save lock."""
+
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol19-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol19", "sol19-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"real-local-test-video")
+    db = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    sql, args = {
+        "download_attention": (
+            "UPDATE download_results SET state = 'ATTENTION_REQUIRED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_failed": (
+            "UPDATE download_results SET state = 'FAILED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_updated_at": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_queued": (
+            "UPDATE generation_jobs SET state = 'QUEUED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "generate_result_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:other-result", "SCENE_001"),
+        ),
+        "generate_fingerprint": (
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+            ("other-prepared-request", "SCENE_001"),
+        ),
+        "generate_updated_at": (
+            "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "scene_prompt": (
+            "UPDATE scenes SET motion_prompt = ? WHERE scene_id = ?",
+            ("Changed scene after persistence", "SCENE_001"),
+        ),
+    }[late_mutation]
+    repository = service._download_repository
+    guarded_save = repository.save_if_current_generate
+    changed = False
+
+    def commit_then_change(record: DownloadRecord, remote_id: str) -> bool:
+        nonlocal changed
+        success = guarded_save(record, remote_id)
+        if success:
+            with sqlite3.connect(db) as conn:
+                conn.execute(sql, args)
+                conn.commit()
+            changed = True
+        return success
+
+    monkeypatch.setattr(repository, "save_if_current_generate", commit_then_change)
+    with pytest.raises(InternalInvariantError, match="changed after atomic save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert changed
+    assert video.read_bytes() == b"real-local-test-video"
+    current = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert current is not None
+    if late_mutation == "download_attention":
+        assert current.state == DownloadState.ATTENTION_REQUIRED
+    elif late_mutation == "download_failed":
+        assert current.state == DownloadState.FAILED
+    else:
+        assert current.state == DownloadState.DOWNLOADED
+
+
+@pytest.mark.parametrize("corruption", ["empty", "html", "removed"])
+def test_sol19_record_local_mp4_rejects_file_changed_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol19-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol19", "sol19-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"original-local-video")
+    repository = service._download_repository
+    guarded_save = repository.save_if_current_generate
+
+    def corrupt_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        success = guarded_save(record, remote_id)
+        if success:
+            if corruption == "empty":
+                video.write_bytes(b"")
+            elif corruption == "html":
+                video.write_bytes(b"<!doctype html><html>login expired</html>")
+            else:
+                video.unlink()
+        return success
+
+    monkeypatch.setattr(repository, "save_if_current_generate", corrupt_after_commit)
+    with pytest.raises(InternalInvariantError, match="history or MP4 changed after atomic save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    row = SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
+    assert row is not None and row.state == DownloadState.DOWNLOADED
+    assert service.snapshot("EP400_RESULTS").handoff_ready is False
+    if corruption == "empty":
+        assert video.read_bytes() == b""
+    elif corruption == "html":
+        assert video.read_bytes() == b"<!doctype html><html>login expired</html>"
+    else:
+        assert not video.exists()
+
+
+def test_sol19_unchanged_local_download_record_still_succeeds_and_exports_manifest(
+    tmp_path: Path,
+) -> None:
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol19-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol19", "sol19-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"real-local-test-video")
+    recorded = service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert recorded.output_path == str(video.resolve())
+    assert service.snapshot("EP400_RESULTS").handoff_ready
+    manifest = service.export_manifest("EP400_RESULTS")
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["scenes"][0]["download_status"] == DownloadState.DOWNLOADED
+
+
+@pytest.mark.parametrize("mutation", ["same_size_replacement", "in_place_rewrite"])
+def test_sol20_local_record_rejects_valid_mp4_replaced_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """A different readable MP4 must not be certified as the saved file."""
+
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol20-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol20", "sol20-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    original_bytes = b"original-local-video"
+    replacement_bytes = b"R" * len(original_bytes)
+    video.write_bytes(original_bytes)
+    repository = service._download_repository
+    guarded_save = repository.save_if_current_generate
+
+    def change_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        success = guarded_save(record, remote_id)
+        if success:
+            if mutation == "same_size_replacement":
+                other = tmp_path / "same-size-valid.mp4"
+                other.write_bytes(replacement_bytes)
+                other.replace(video)
+            else:
+                original_stat = video.stat()
+                video.write_bytes(replacement_bytes)
+                os.utime(
+                    video,
+                    ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns + 2_000_000_000),
+                )
+        return success
+
+    monkeypatch.setattr(repository, "save_if_current_generate", change_after_commit)
+    with pytest.raises(InternalInvariantError, match="MP4 changed after atomic save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert video.read_bytes() == replacement_bytes
+    row = SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
+    assert row is not None and row.state == DownloadState.DOWNLOADED
+
+
+def test_sol20_local_record_rejects_path_redirect_during_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An MP4 swapped for a symlink mid-check cannot redirect its certification."""
+
+    from flow_otomatis.application.services import local_results as results_module
+
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol20-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol20", "sol20-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"original-local-video")
+    unrelated = tmp_path / "unrelated.mp4"
+    unrelated.write_bytes(b"another-valid-video")
+    verified_before_swap = results_module.is_available_output
+    swapped = False
+
+    def swap_after_initial_read(path: str | None) -> bool:
+        nonlocal swapped
+        result = verified_before_swap(path)
+        if path == str(video) and result and not swapped:
+            video.unlink()
+            try:
+                video.symlink_to(unrelated)
+            except OSError:
+                pytest.skip("Symlink creation is not available on this platform")
+            swapped = True
+        return result
+
+    monkeypatch.setattr(results_module, "is_available_output", swap_after_initial_read)
+    with pytest.raises(InternalInvariantError, match="redirected during verification"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert swapped
+    assert unrelated.read_bytes() == b"another-valid-video"
+    assert (
+        SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
+        is None
+    )

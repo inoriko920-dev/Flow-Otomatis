@@ -7,10 +7,15 @@ from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from threading import Lock
 from typing import TypeVar
 
+from flow_otomatis.application.ports.google_flow_preflight import (
+    GoogleFlowAccessProbe,
+    GoogleFlowPreflightPort,
+)
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionCommandPort,
     GoogleSessionPort,
     GoogleSessionProfile,
+    GoogleSessionState,
 )
 from flow_otomatis.domain.errors import FlowOtomatisError
 
@@ -20,8 +25,14 @@ _T = TypeVar("_T")
 class ThreadedGoogleSessionCommands(GoogleSessionCommandPort):
     """Own every browser-touching Google session command on one worker thread."""
 
-    def __init__(self, sessions: GoogleSessionPort) -> None:
+    def __init__(
+        self,
+        sessions: GoogleSessionPort,
+        *,
+        flow_preflight: GoogleFlowPreflightPort | None = None,
+    ) -> None:
         self._sessions = sessions
+        self._flow_preflight = flow_preflight
         self._executor = ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="flow-browser-worker",
@@ -53,6 +64,22 @@ class ThreadedGoogleSessionCommands(GoogleSessionCommandPort):
             unique_ids,
             lambda: tuple(self._sessions.check_profile(profile_id) for profile_id in unique_ids),
         )
+
+    def submit_check_flow(self, profile_id: str) -> Future[GoogleFlowAccessProbe]:
+        """Run Flow checks on the same thread as the session's CDP pool."""
+
+        if self._flow_preflight is None:
+            return self._failed_future("Pemeriksaan Flow belum dikonfigurasi.")
+        return self._submit((profile_id,), lambda: self._checked_flow_probe(profile_id))
+
+    def _checked_flow_probe(self, profile_id: str) -> GoogleFlowAccessProbe:
+        # Read gate on the Browser Worker to reject logout/recheck races.
+        gate = self._sessions.get_restart_gate(profile_id)
+        if gate.current_state is not GoogleSessionState.READY:
+            raise FlowOtomatisError("Periksa ulang sesi Google sebelum cek akses Flow.")
+        if self._flow_preflight is None:
+            raise FlowOtomatisError("Pemeriksaan Flow belum dikonfigurasi.")
+        return self._flow_preflight.check(profile_id)
 
     def submit_cancel_profile(self, profile_id: str) -> Future[None]:
         return self._submit(

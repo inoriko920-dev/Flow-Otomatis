@@ -7,6 +7,9 @@ import pytest
 from flow_otomatis.application.ports import GoogleFlowAccessState
 from flow_otomatis.domain.errors import FlowOtomatisError
 from flow_otomatis.workers.browser import GoogleFlowPreflightWorker
+from flow_otomatis.workers.browser.google_flow_preflight import (
+    classify_flow_read_only_navigation,
+)
 
 
 class FixturePreflightDriver:
@@ -85,3 +88,46 @@ def test_preflight_refuses_unknown_or_missing_local_profile(tmp_path: Path) -> N
         worker.check("profile-0123456789ab")
 
     assert driver.calls == []
+
+
+@pytest.mark.parametrize(
+    ("url", "http_status", "expected"),
+    [
+        ("https://labs.google/fx/tools/flow", 200, GoogleFlowAccessState.REACHABLE_ONLY),
+        ("https://flow.google.com/", 200, GoogleFlowAccessState.REACHABLE_ONLY),
+        ("https://flow.google.com/project/example", 200, GoogleFlowAccessState.REACHABLE_ONLY),
+        ("https://flow.google.com/onboarding", 200, GoogleFlowAccessState.UNAVAILABLE),
+        ("https://flow.google.com/project/example", 403, GoogleFlowAccessState.UNAVAILABLE),
+        ("http://flow.google.com/project/example", 200, GoogleFlowAccessState.UNKNOWN),
+        ("ftp://labs.google/fx/tools/flow", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:8443/project/example", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:invalid/project", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://user@flow.google.com/project", 200, GoogleFlowAccessState.UNKNOWN),
+        ("https://accounts.google.com:8443/", 401, GoogleFlowAccessState.UNKNOWN),
+        ("https://flow.google.com:443/project", 200, GoogleFlowAccessState.REACHABLE_ONLY),
+        (
+            "https://flow.google.com.evil.example/project/example",
+            200,
+            GoogleFlowAccessState.UNKNOWN,
+        ),
+        (
+            "https://labs.google/fx/tools/flow/onboarding",
+            200,
+            GoogleFlowAccessState.UNAVAILABLE,
+        ),
+        ("https://accounts.google.com/", 200, GoogleFlowAccessState.AUTH_REQUIRED),
+        ("https://labs.google/fx/tools/flow", 403, GoogleFlowAccessState.UNAVAILABLE),
+        ("https://labs.google/fx/tools/flow", 401, GoogleFlowAccessState.AUTH_REQUIRED),
+        ("https://other.example/", None, GoogleFlowAccessState.UNKNOWN),
+    ],
+)
+def test_flow_classifier_never_conflates_public_site_with_authorized_workspace(
+    url: str,
+    http_status: int | None,
+    expected: GoogleFlowAccessState,
+) -> None:
+    state, detail = classify_flow_read_only_navigation(url, http_status)
+    assert state is expected
+    assert state is not GoogleFlowAccessState.ACCESS_VERIFIED
+    assert detail
+    assert "cookie" not in detail.casefold()

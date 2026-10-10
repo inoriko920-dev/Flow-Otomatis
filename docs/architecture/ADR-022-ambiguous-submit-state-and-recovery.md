@@ -32,3 +32,9 @@ Unrecognized state => BLOCKED and diagnostics. No implicit success based on UI p
 8. Shutdown or second running app: prevent new writer/claim, preserve leases and evidence; recover after verified restart.
 
 Acceptance: X04-X10, X13 and original T03/T08/T12/T20/T22/T33 (as applicable). Tests inject crashes at every commit/action boundary using fake provider; no paid provider testing before G1/G6/G7/G8.
+
+## F02/F04 audit safety addendum — 10 October 2026
+- A trusted driver `SAFE_FAILURE` classification with nonempty rejection evidence and without a contradictory remote result ID maps to a new typed `GenerationSafeFailureError`. The existing queue persists `FAILED`, never retries it automatically, and permits only explicit `prepare_queue` to requeue. This does not relax `SUBMIT_AMBIGUOUS` retry prohibition.
+- Local `GenerationRequestValidationError` is a safe `FAILED` result after a zero-browser-call provider precheck.
+- Empty or contradictory failure evidence and `ACCEPTED` without a stable remote result ID remain `SUBMIT_AMBIGUOUS`. Runtime exceptions remain ambiguous.
+- Error strings persisted by the Generation queue are fixed allowlisted messages; raw driver/exception `detail` must never pass to SQLite, UI or logs. Synthetic marker tests are offline; no real credentials or Flow credits were used.
