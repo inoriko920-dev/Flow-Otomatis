@@ -124,7 +124,6 @@ def test_happy_path_validates_recomputes_and_persists_workspace(tmp_path: Path) 
     assert (tmp_path / "projects" / "EP001_STEVE_JOBS" / "project.sqlite3").is_file()
 
 
-
 @pytest.mark.parametrize("timestamp", ["2026-10-10T10:00:00", "2026-10-10 10:00:00"])
 def test_t01_naive_import_timestamp_is_rejected_without_database(
     tmp_path: Path, timestamp: str
@@ -140,10 +139,14 @@ def test_t01_naive_import_timestamp_is_rejected_without_database(
     assert not root.exists()
 
 
-@pytest.mark.parametrize("timestamp", [
-    "2026-10-10T10:00:00Z", "2026-10-10T10:00:00+07:00",
-    "2026-10-10T10:00:00-05:30",
-])
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "2026-10-10T10:00:00Z",
+        "2026-10-10T10:00:00+07:00",
+        "2026-10-10T10:00:00-05:30",
+    ],
+)
 def test_t02_aware_timestamp_roundtrips_without_timezone_shift(
     tmp_path: Path, timestamp: str
 ) -> None:
