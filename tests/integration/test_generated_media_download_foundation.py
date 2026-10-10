@@ -474,6 +474,88 @@ def test_unexpected_provider_crash_does_not_replace_rival_confirmed_download(
 
 
 @pytest.mark.parametrize(
+    "error_type",
+    [
+        MediaDownloadProviderError,
+        MediaDownloadAuthenticationRequiredError,
+        MediaDownloadCancelledError,
+        MediaDownloadAmbiguousError,
+    ],
+)
+def test_typed_provider_error_with_published_mp4_requires_manual_reconciliation(
+    tmp_path: Path,
+    error_type: type[MediaDownloadProviderError],
+) -> None:
+    """Never mark a written MP4 as safely failed, regardless of provider error type."""
+
+    class FailedAfterWritingProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            self.calls += 1
+            destination = Path(request.destination_path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b"published-before-typed-error")
+            raise error_type("private-browser-token=DO_NOT_PERSIST")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    provider = FailedAfterWritingProvider()
+    service._provider = provider  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAmbiguousError, match="reconciliation") as raised:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+    saved = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert saved is not None
+    assert saved.state == DownloadState.ATTENTION_REQUIRED
+    assert saved.output_path is None
+    assert saved.generation_remote_result_id == "remote:SCENE_001"
+    assert "DO_NOT_PERSIST" not in (saved.error_message or "")
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final.read_bytes() == b"published-before-typed-error"
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert provider.calls == 1
+    assert final.read_bytes() == b"published-before-typed-error"
+
+
+def test_typed_provider_error_cannot_override_rival_success_at_same_destination(
+    tmp_path: Path,
+) -> None:
+    """A confirmed rival download remains DOWNLOADED after a typed provider error."""
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+
+    class RacingProvider:
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            destination = Path(request.destination_path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b"rival-confirmed-mp4")
+            rival = DownloadRecord(
+                episode_id=request.episode_id,
+                scene_id=request.scene_id,
+                state=DownloadState.DOWNLOADED,
+                updated_at=datetime.now(UTC),
+                output_path=str(destination),
+                take=1,
+                generation_remote_result_id=request.remote_result_id,
+            )
+            assert downloads.save_if_current_generate(rival, request.remote_result_id)
+            raise MediaDownloadProviderError("private-token=DO_NOT_PERSIST")
+
+    service._provider = RacingProvider()  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAmbiguousError, match="reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    destination = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert recorded.output_path == str(destination)
+    assert destination.read_bytes() == b"rival-confirmed-mp4"
+
+
+@pytest.mark.parametrize(
     ("error_type", "expected_state"),
     [
         (MediaDownloadProviderError, DownloadState.FAILED),
