@@ -39,7 +39,16 @@ def is_available_output(output_path: str | None) -> bool:
             # under a .mp4 filename. These are demonstrably not video bytes
             # and must never be attested as a downloaded result. This is a
             # narrow negative check, not a complete MP4 decoder.
+            # Some server error pages begin with an HTML comment or are
+            # encoded as UTF-16 instead of UTF-8. Neither can be accepted as
+            # MP4 just because the browser named it .mp4.
+            signatures = ("<!doctype html", "<html", "<?xml", "<!--", "{", "[")
+            if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
+                leading_text = prefix.decode("utf-16", errors="ignore").lstrip(
+                    "\ufeff \t\r\n"
+                ).lower()
+                return not leading_text.startswith(signatures)
             leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
-            return not leading.startswith((b"<!doctype html", b"<html", b"<?xml", b"{", b"["))
-    except OSError, ValueError:
+            return not leading.startswith(tuple(sig.encode("ascii") for sig in signatures))
+    except (OSError, RuntimeError, ValueError):
         return False
