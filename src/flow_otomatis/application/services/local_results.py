@@ -231,7 +231,9 @@ class LocalResultsService:
         # An effective Hasil can look identical even when a Generate
         # fingerprint or updated_at changes between reads. Capture full
         # persisted revision snapshots as well as presentation state.
-        def current_revision() -> tuple[ProjectResults, tuple[GenerationJob, ...], tuple[DownloadRecord, ...]]:
+        def current_revision() -> tuple[
+            ProjectResults, tuple[GenerationJob, ...], tuple[DownloadRecord, ...]
+        ]:
             return (
                 self.snapshot(episode_id),
                 self._job_repository.list_for_episode(episode_id),
