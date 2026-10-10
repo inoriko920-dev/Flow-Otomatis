@@ -419,7 +419,7 @@ def test_download_worker_never_publishes_a_linked_partial_even_if_driver_claims_
     with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
     failure = downloads.get("EP500_DOWNLOAD", "SCENE_001")
-    assert failure is not None and failure.state == DownloadState.FAILED
+    assert failure is not None and failure.state == DownloadState.ATTENTION_REQUIRED
     assert failure.output_path is None
     assert not list((tmp_path / "projects").rglob("SCENE_001__take_01.mp4"))
 
@@ -469,7 +469,7 @@ def test_download_worker_rejects_invalid_partial_even_when_symlink_creation_unav
     with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
     failure = downloads.get("EP500_DOWNLOAD", "SCENE_001")
-    assert failure is not None and failure.state == DownloadState.FAILED
+    assert failure is not None and failure.state == DownloadState.ATTENTION_REQUIRED
     assert failure.output_path is None
 
 
