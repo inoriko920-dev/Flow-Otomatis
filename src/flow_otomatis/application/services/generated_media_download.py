@@ -161,9 +161,13 @@ class GeneratedMediaDownloadService:
             # Ambiguity is sticky: do not silently re-attempt a possibly
             # completed browser download or erase a successful rival record.
             if record.state == DownloadState.ATTENTION_REQUIRED:
-                self._download_repository.save_attention_if_unconfirmed(record)
+                self._download_repository.save_attention_if_unconfirmed(
+                    record, expected_remote_result_id=remote_result_id
+                )
             else:
-                self._download_repository.save_failure_if_unconfirmed(record)
+                self._download_repository.save_failure_if_unconfirmed(
+                    record, expected_remote_result_id=remote_result_id
+                )
             if final_appeared or (
                 partial_appeared and not isinstance(exc, MediaDownloadAmbiguousError)
             ):
@@ -188,7 +192,8 @@ class GeneratedMediaDownloadService:
                         "Download provider stopped unexpectedly; manual reconciliation required."
                     ),
                     generation_remote_result_id=remote_result_id,
-                )
+                ),
+                expected_remote_result_id=remote_result_id,
             )
             raise MediaDownloadAmbiguousError(
                 "Download provider stopped unexpectedly; manual reconciliation required."
@@ -310,7 +315,8 @@ class GeneratedMediaDownloadService:
                 take=take,
                 error_message=reason,
                 generation_remote_result_id=remote_result_id,
-            )
+            ),
+            expected_remote_result_id=remote_result_id,
         )
         raise MediaDownloadAmbiguousError(reason) from None
 
