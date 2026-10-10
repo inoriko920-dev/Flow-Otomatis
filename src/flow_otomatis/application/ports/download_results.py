@@ -16,12 +16,17 @@ class DownloadResultRepositoryPort(Protocol):
         ...
 
     def save_if_current_generate(
-        self, record: DownloadRecord, expected_remote_result_id: str
+        self,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
+        *,
+        expected_reviewed_download: DownloadRecord | None = None,
     ) -> bool:
-        """Atomically save DOWNLOADED only if the matching Generate result is current.
+        """Atomically certify Generate and the claimed Download revision.
 
-        The Generate check and Download upsert must run inside one serialized
-        database transaction; a prior read cannot satisfy this contract.
+        A reviewed retry must also match the exact previously approved FAILED
+        row and its consumed claim audit within the same SQLite write lock.
+        Legacy first attempts continue to use the existing Generate guard.
         """
         ...
 
