@@ -748,7 +748,10 @@ def test_t09_changed_request_snapshot_never_reuses_old_result(
     repo = SqliteWorkspaceRepository(root)
     old = repo.load("EP400_RESULTS")
     assert old is not None
-    updated = replace(old.scenes[0], **{field: changed_value})
+    changes = {field: changed_value}
+    if field == "target_duration_s":
+        changes["trim_target_s"] = changed_value
+    updated = replace(old.scenes[0], **changes)
     repo.update(replace(old, scenes=(updated,)), expected_workspace=old)
     current = service.snapshot("EP400_RESULTS")
     assert not current.handoff_ready
