@@ -25,3 +25,8 @@
 - Cache-reuse revision guard was added later at `a34e8de58470b98bacdaadfec8a910f7c8a353e3`. **Do not mark all gates PASS on this code until latest CI for head completes.**
 - Windows CI must independently pass `quality`, `offline-simulator-windows`, `ui-visual`, `uix22-qt-windows`, and `package-windows` on final SHA.
 - Draft PR #34 remains unmerged; live Flow / production-account and G0 E12 gates independently blocked.
+
+## Final verification addendum — 10 October 2026
+- Original code+docs snapshot `5bf069b6fcdd02f2aa4db4816340096827e3cef8`: CI run `38048857517` completed SUCCESS with all five Windows jobs PASS and **703 tests PASS**. All four artifact IDs, byte sizes and GitHub digests are recorded in `docs/planning/audits/SOL_F01_F05_FINAL_ACCEPTANCE_2026-10-10.md`.
+- F01–F05: **CLOSED for automated offline audit acceptance**. Do not call full app finished, issue a public release, or claim live Flow behavior from these tests. Strict G0 and live owner-account / real-provider gates remain distinct and blocked/unverified.
+- This is a documentation-only follow-up commit after the fully tested source head; the next commit itself must be handled as docs-only, not silently described as a separately tested code tree.

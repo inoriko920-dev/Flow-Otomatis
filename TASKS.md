@@ -353,3 +353,12 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [x] SOL06 / code quality: run `38048442995` pada SHA `8d44a43b511cac1784c26d7f8164fa3ac971c2f4` mencatat 702 PASS, ruff format/lint, mypy, guard arsitektur PASS. Tambahan tes cache F03 pada SHA `a34e8de58470b98bacdaadfec8a910f7c8a353e3` memerlukan CI baru.
 - [ ] Gate final: konfirmasi semua job Windows pada SHA final (quality, simulator, screenshot, UI native, portable package) PASS sebelum F01–F05 disebut CLOSED. Tidak ada Google Flow live, kredit, perubahan fitur maupun UI, atau merge.
 - [ ] G0/E12-02/akun/Flow live tetap BLOCKED independen dari bugfix offline ini.
+
+### ASTRA audit F01–F05 — SOL06 FINAL AUTOMATED PASS, 10 October 2026
+- [x] F01–F05 code remediation and synthetic regression; no new feature or UI modifications.
+- [x] Full independent five-job Windows CI SUCCESS for source SHA `5bf069b6fcdd02f2aa4db4816340096827e3cef8`: https://github.com/inoriko920-dev/Flow-Otomatis/actions/runs/38048857517.
+- [x] Quality 703 PASS / mypy 91 / Ruff / architecture; offline simulator, 22-state Qt integration, 30-state visual regression, and portable ZIP/Chromium smoke PASS.
+- [x] Artifact provenance, SHA-256 digests, sizes and expiry recorded in `docs/planning/audits/SOL_F01_F05_FINAL_ACCEPTANCE_2026-10-10.md`.
+- [x] F01–F05 **CLOSED (audited offline acceptance only)**.
+- [ ] Global app release / real Google account session validation / live Flow API/UI checks: NOT PROVEN, not part of this audit. Existing G0 and live gates remain BLOCKED.
+- [ ] PR #34 remains Draft and unmerged; its broader 97-file diff must not be promoted solely on this five-bug signoff.
