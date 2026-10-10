@@ -1127,6 +1127,61 @@ def test_malformed_browser_evidence_never_authorizes_safe_retry(
         assert partials[0].read_bytes() == b"unknown-browser-result"
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"<html><title>Login required</title></html>",
+        b" \n<!DOCTYPE HTML><html>Sign in</html>",
+        b"\xef\xbb\xbf\r\n<html>Authentication expired</html>",
+        b'{"error":"unauthorized"}',
+        b'  [{"message":"generation not ready"}]',
+        b'<?xml version="1.0"?><error>Forbidden</error>',
+    ],
+)
+def test_browser_nonvideo_response_never_becomes_confirmed_mp4(
+    tmp_path: Path,
+    payload: bytes,
+) -> None:
+    """An HTML login page or JSON error with an MP4 suffix is not a Download."""
+
+    class NonvideoDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            Path(destination_path).write_bytes(payload)
+            return evidence
+
+    driver = NonvideoDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="nonempty regular file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    result = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert result is not None
+    assert result.state == DownloadState.ATTENTION_REQUIRED
+    assert result.output_path is None
+    assert result.generation_remote_result_id == "remote:SCENE_001"
+
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    final = directory / "SCENE_001__take_01.mp4"
+    partials = list(directory.glob("SCENE_001__take_01.mp4.*.part"))
+    assert not final.exists()
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == payload
+    assert len(driver.calls) == 1
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+
+
 def test_google_flow_provider_rejects_success_at_wrong_path(tmp_path: Path) -> None:
     class WrongPathDriver(FakeDownloadDriver):
         def download_one(
