@@ -705,3 +705,88 @@ def test_ambiguous_download_is_visible_in_results_and_cannot_be_downgraded(
     assert snapshot.handoff_ready is False
     exported = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
     assert exported["scenes"][0]["download_status"] == DownloadState.ATTENTION_REQUIRED
+
+
+def test_t08_changed_duration_makes_historical_download_unavailable(tmp_path: Path) -> None:
+    service, path = _generated_result_with_file(tmp_path)
+    root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(root)
+    original = workspace_repo.load("EP400_RESULTS")
+    assert original is not None
+    changed = replace(
+        original,
+        scenes=(replace(original.scenes[0], selected_flow_duration_s=6),),
+    )
+    workspace_repo.update(changed, expected_workspace=original)
+    after = service.snapshot("EP400_RESULTS")
+    assert after.handoff_ready is False
+    assert after.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert after.scenes[0].generate_state is GenerationJobState.GENERATED
+    assert path.read_bytes() == b"real-local-test-video"
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(path))
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    ("field", "changed_value"),
+    [
+        ("image_file", "new-image.png"),
+        ("motion_prompt", "Different prompt"),
+        ("model", "Unrelated model"),
+        ("resolution", "1080p"),
+        ("aspect_ratio", "9:16"),
+        ("target_duration_s", 3.2),
+    ],
+)
+def test_t09_changed_request_snapshot_never_reuses_old_result(
+    tmp_path: Path, field: str, changed_value: object
+) -> None:
+    service, path = _generated_result_with_file(tmp_path)
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    old = repo.load("EP400_RESULTS")
+    assert old is not None
+    updated = replace(old.scenes[0], **{field: changed_value})
+    repo.update(replace(old, scenes=(updated,)), expected_workspace=old)
+    current = service.snapshot("EP400_RESULTS")
+    assert not current.handoff_ready
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert path.exists()
+
+
+def test_t10_scene_edit_during_download_commit_is_rejected_without_deleting_video(
+    tmp_path: Path,
+) -> None:
+    service, jobs = _service(tmp_path)
+    queued = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "race-owner", lease_seconds=60)
+    jobs.mark_generated(queued.job_id, "remote:race", "race-owner")
+    root = tmp_path / "projects"
+    workspace_repo = SqliteWorkspaceRepository(root)
+    video = tmp_path / "race.mp4"
+    video.write_bytes(b"synthetic-video-evidence")
+
+    class ConcurrentEditDownloadRepository(SqliteDownloadResultRepository):
+        def save_if_current_generate(
+            self, record: DownloadRecord, expected_remote_result_id: str
+        ) -> bool:
+            old = workspace_repo.load(record.episode_id)
+            assert old is not None
+            newer = replace(
+                old,
+                scenes=(replace(old.scenes[0], selected_flow_duration_s=6),),
+            )
+            workspace_repo.update(newer, expected_workspace=old)
+            return super().save_if_current_generate(record, expected_remote_result_id)
+
+    downloads = ConcurrentEditDownloadRepository(root)
+    racing_service = LocalResultsService(
+        workspace_repo, jobs, downloads, ResultManifestWriter(root)
+    )
+    with pytest.raises(InternalInvariantError, match="changed during atomic Download save"):
+        racing_service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert video.read_bytes() == b"synthetic-video-evidence"
+    assert downloads.get("EP400_RESULTS", "SCENE_001") is None
+    assert racing_service.snapshot("EP400_RESULTS").handoff_ready is False
