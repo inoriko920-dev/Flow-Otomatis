@@ -2398,9 +2398,7 @@ def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
     with sqlite3.connect(database) as conn:
         actions = [
             row[0]
-            for row in conn.execute(
-                "SELECT action FROM download_reconciliation_audit ORDER BY id"
-            )
+            for row in conn.execute("SELECT action FROM download_reconciliation_audit ORDER BY id")
         ]
     assert actions == ["OPERATOR_REVIEWED_RETRY", "OPERATOR_REVIEWED_RETRY_CLAIMED"]
 
