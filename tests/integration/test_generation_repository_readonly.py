@@ -177,7 +177,10 @@ def test_t17_failed_explicit_schema_migration_rolls_back(
         repo.prepare_jobs((_job(),))
 
     with sqlite3.connect(db) as connection:
-        assert connection.execute(
-            "SELECT name FROM sqlite_master WHERE name LIKE 'generation_%'"
-        ).fetchall() == []
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE name LIKE 'generation_%'"
+            ).fetchall()
+            == []
+        )
     assert _digest(db) == before
