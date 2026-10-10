@@ -30,3 +30,9 @@ Flow durations remain 4/6/8/10, Audio/SRT Target remains authoritative, and live
 - Old queued jobs whose digestless request_fingerprint came from earlier code fail the new match and are parked REQUEST_STALE before mark_submit_started, requiring explicit prepare. They are not silently submitted or rewritten.
 - File absent/changed/unreadable results in a pre-submit attention outcome, never an ambiguous submitted claim. Immutable media snapshot is not implemented in R02; any later provider integration must preserve the immediate pre-submit source validation boundary and not claim post-verification immutability.
 - R02 evidence: `../planning/audits/B03_B06_R02_EVIDENCE_2026-10-08.md`. CI PASS; no real Google Flow live proof.
+
+## F03/F05 audit safety addendum — 10 October 2026
+- Historical Generate jobs remain immutable after a Scene duration/prompt/image/profile change. Hasil compares all persisted provider request fields with current Scene planning; mismatches show effective Download `UNAVAILABLE` instead of validating a new handoff.
+- `save_if_current_generate` verifies the matching `scenes` row and immutable job fields in the same `BEGIN IMMEDIATE` transaction before certifying Download. It does not delete MP4 bytes or modify past Generate identity.
+- `list_for_episode` is now a read-only snapshot using SQLite `mode=ro`; it never calls schema creation/migration. Legacy jobs are decoded read-only with absent v2 fields treated as unverified, and future schema markers fail closed.
+- Schema migration is allowed only during explicit write/recovery operations and rejects a schema version above the installed application. No new migration framework or UI state is added.
