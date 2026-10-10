@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -177,6 +178,61 @@ class GeneratedMediaDownloadService:
                 "local video needs reconciliation."
             )
         return record
+
+    def release_retry_after_manual_review(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+        reviewed_provider_and_local_files: bool,
+    ) -> DownloadRecord:
+        """Explicitly unlock one ambiguous attempt; never retry automatically.
+
+        A reviewer must independently inspect provider outcome, published MP4,
+        and partial files. This method performs only an atomic SQLite transition
+        and audit insertion. It never downloads, moves, deletes or attests MP4.
+        """
+
+        if reviewed_provider_and_local_files is not True:
+            raise InternalInvariantError(
+                "Manual provider and local-file review is required before Download retry."
+            )
+        self._validate_segment("episode_id", episode_id)
+        self._validate_segment("scene_id", scene_id)
+        existing = self._download_repository.get(episode_id, scene_id)
+        if (
+            existing is None
+            or existing.state != DownloadState.ATTENTION_REQUIRED
+            or existing.generation_remote_result_id != expected_remote_result_id
+            or existing.updated_at.isoformat() != expected_updated_at
+            or existing.output_path is not None
+        ):
+            raise InternalInvariantError(
+                "Ambiguous Download evidence changed; review the current result again."
+            )
+        # Never clear ambiguity when a canonical MP4 has already appeared.
+        # It may be the download's missing success evidence and must be
+        # reconciled separately instead of permitting another provider call.
+        destination = self._destination_path(episode_id, scene_id, existing.take)
+        if os.path.lexists(destination):
+            raise InternalInvariantError(
+                "Download destination exists; reconcile the existing MP4 before retry."
+            )
+        if not self._download_repository.reconcile_attention_for_retry(
+            episode_id,
+            scene_id,
+            expected_remote_result_id=expected_remote_result_id,
+            expected_updated_at=expected_updated_at,
+        ):
+            raise InternalInvariantError(
+                "Generate or Download changed during reconciliation; retry is not authorized."
+            )
+        updated = self._download_repository.get(episode_id, scene_id)
+        if updated is None:
+            raise InternalInvariantError("Reconciled Download history is unavailable.")
+        return updated
 
     def _destination_path(self, episode_id: str, scene_id: str, take: int) -> Path:
         # Do not resolve away an existing symlink/junction before checking it.
