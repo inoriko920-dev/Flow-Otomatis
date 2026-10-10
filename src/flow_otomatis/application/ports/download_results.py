@@ -52,6 +52,16 @@ class DownloadResultRepositoryPort(Protocol):
         """
         ...
 
+    def claim_reviewed_retry_if_present(self, record: DownloadRecord) -> bool | None:
+        """Atomically consume the current operator review for one Download attempt.
+
+        Return True when the review was consumed, None for an ordinary FAILED
+        record without a review, or False when a previously reviewed revision
+        was already claimed or changed. A spent review must require renewed
+        manual reconciliation, including across crashes and processes.
+        """
+        ...
+
     def reconcile_attention_for_retry(
         self,
         episode_id: str,
