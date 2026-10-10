@@ -43,12 +43,18 @@ def is_available_output(output_path: str | None) -> bool:
             # encoded as UTF-16 instead of UTF-8. Neither can be accepted as
             # MP4 just because the browser named it .mp4.
             signatures = ("<!doctype html", "<html", "<?xml", "<!--", "{", "[")
-            if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
-                leading_text = (
-                    prefix.decode("utf-16", errors="ignore").lstrip("\ufeff \t\r\n").lower()
-                )
-                return not leading_text.startswith(signatures)
             leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
-            return not leading.startswith(tuple(sig.encode("ascii") for sig in signatures))
+            if leading.startswith(tuple(sig.encode("ascii") for sig in signatures)):
+                return False
+
+            # Login/error responses can arrive in UTF-16/UTF-32 without a
+            # byte-order mark, and UTF-32 LE also begins with UTF-16's BOM.
+            # Decode just the small prefix to recognize obvious text errors
+            # without requiring a full video codec or modifying the file.
+            for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"):
+                decoded = prefix.decode(encoding, errors="ignore").lstrip("\ufeff \t\r\n").lower()
+                if decoded.startswith(signatures):
+                    return False
+            return True
     except OSError, RuntimeError, ValueError:
         return False
