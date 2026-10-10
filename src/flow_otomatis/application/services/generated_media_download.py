@@ -140,7 +140,10 @@ class GeneratedMediaDownloadService:
                 "Prior Download partial evidence cannot be inspected; "
                 "manual reconciliation required."
             ) from None
-        if interrupted_partial_exists:
+        if interrupted_partial_exists and (
+            existing is None
+            or not self._download_repository.has_confirmed_manual_retry_authorization(existing)
+        ):
             raise InternalInvariantError(
                 "Prior Download partial file exists without a confirmed result; "
                 "manual reconciliation required before another attempt."
