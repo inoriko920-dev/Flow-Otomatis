@@ -1105,3 +1105,135 @@ def test_sol17_hasil_manifest_reject_history_changed_after_list_read(
         assert actual.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
     else:
         assert actual.error_message == "competing revision"
+
+
+@pytest.mark.parametrize(
+    "database_change",
+    [
+        "download_attention",
+        "download_revision",
+        "generate_revision",
+        "generate_fingerprint",
+        "generate_remote_id",
+    ],
+)
+def test_sol18_export_detects_db_change_after_staged_manifest_before_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_change: str
+) -> None:
+    """A committed SQLite revision must never certify stale staged JSON."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    previous_manifest = service.export_manifest("EP400_RESULTS")
+    original_bytes = previous_manifest.read_bytes()
+    assert json.loads(original_bytes)["scenes"][0]["download_status"] == "DOWNLOADED"
+
+    db = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    changes = {
+        "download_attention": (
+            "UPDATE download_results SET state = 'ATTENTION_REQUIRED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_revision": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_revision": (
+            "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_fingerprint": (
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+            ("rival-generate-fingerprint", "SCENE_001"),
+        ),
+        "generate_remote_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:rival-result", "SCENE_001"),
+        ),
+    }
+    sql, arguments = changes[database_change]
+    writer = service._manifest_writer
+    previous_check = writer._verified_export_directory
+    checks = 0
+
+    def change_after_tempfile_sync(episode_id: str) -> Path:
+        nonlocal checks
+        checks += 1
+        if checks == 2:
+            with sqlite3.connect(db) as connection:
+                connection.execute(sql, arguments)
+                connection.commit()
+        return previous_check(episode_id)
+
+    monkeypatch.setattr(writer, "_verified_export_directory", change_after_tempfile_sync)
+    with pytest.raises(InternalInvariantError, match="history changed during manifest export"):
+        service.export_manifest("EP400_RESULTS")
+
+    assert checks == 2
+    assert previous_manifest.read_bytes() == original_bytes
+    assert video.read_bytes() == b"real-local-test-video"
+    assert not list(previous_manifest.parent.glob("*.tmp"))
+    with sqlite3.connect(db) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM download_results WHERE scene_id = ?",
+            ("SCENE_001",),
+        ).fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("mp4_change", ["removed", "empty", "html", "other_mp4"])
+def test_sol18_export_detects_mp4_changed_while_manifest_is_being_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mp4_change: str
+) -> None:
+    """A live MP4 must retain its identity and validity through publication."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    prior = service.export_manifest("EP400_RESULTS")
+    previous_bytes = prior.read_bytes()
+    writer = service._manifest_writer
+    original_check = writer._verified_export_directory
+    changed = False
+
+    def replace_mp4_after_stage(episode_id: str) -> Path:
+        nonlocal changed
+        if not changed:
+            # The first call is before staging, the second after fsync.
+            changed = True
+            return original_check(episode_id)
+        if mp4_change == "removed":
+            video.unlink()
+        elif mp4_change == "empty":
+            video.write_bytes(b"")
+        elif mp4_change == "html":
+            video.write_bytes(b"<!DOCTYPE html><html>login expired</html>")
+        else:
+            video.write_bytes(b"different-valid-nonempty-video-content")
+        return original_check(episode_id)
+
+    monkeypatch.setattr(writer, "_verified_export_directory", replace_mp4_after_stage)
+    with pytest.raises(
+        InternalInvariantError, match="history changed during manifest export|MP4 changed during export"
+    ):
+        service.export_manifest("EP400_RESULTS")
+
+    assert prior.read_bytes() == previous_bytes
+    assert not list(prior.parent.glob("*.tmp"))
+    recorded = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    if mp4_change == "other_mp4":
+        assert video.read_bytes() == b"different-valid-nonempty-video-content"
+
+
+def test_sol18_manifest_with_unchanged_history_and_mp4_still_publishes(
+    tmp_path: Path,
+) -> None:
+    service, video = _generated_result_with_file(tmp_path)
+    output = service.export_manifest("EP400_RESULTS")
+    payload = json.loads(output.read_text(encoding="utf-8"))
+
+    assert payload["schema_version"] == "1.0"
+    assert payload["scenes"][0]["download_status"] == DownloadState.DOWNLOADED
+    assert payload["scenes"][0]["output_path"] == str(video.resolve())
+    assert service.snapshot("EP400_RESULTS").handoff_ready
+    assert not list(output.parent.glob("*.tmp"))
