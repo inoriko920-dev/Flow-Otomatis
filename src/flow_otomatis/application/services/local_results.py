@@ -257,11 +257,9 @@ class LocalResultsService:
             conservative_scenes: list[SceneResult] = []
             for scene in staged.scenes:
                 previous = initial_scenes.get(scene.scene_id)
-                changed_revision = (
-                    initial_jobs.get(scene.scene_id) != latest_jobs.get(scene.scene_id)
-                    or initial_downloads.get(scene.scene_id)
-                    != latest_downloads.get(scene.scene_id)
-                )
+                changed_revision = initial_jobs.get(scene.scene_id) != latest_jobs.get(
+                    scene.scene_id
+                ) or initial_downloads.get(scene.scene_id) != latest_downloads.get(scene.scene_id)
                 if previous is not None and (
                     previous.download_state == DownloadState.UNAVAILABLE
                     or (
@@ -275,6 +273,4 @@ class LocalResultsService:
                     scene = replace(scene, download_state=DownloadState.UNAVAILABLE)
                 conservative_scenes.append(scene)
             staged = replace(staged, scenes=tuple(conservative_scenes))
-        return self._manifest_writer.write(
-            staged, recheck=lambda: current_revision() == settled
-        )
+        return self._manifest_writer.write(staged, recheck=lambda: current_revision() == settled)
