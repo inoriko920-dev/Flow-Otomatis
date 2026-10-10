@@ -8,7 +8,7 @@ from glob import escape as glob_escape
 from pathlib import Path
 from typing import NoReturn
 
-from flow_otomatis.application.file_integrity import is_available_output
+from flow_otomatis.application.file_integrity import is_available_output, verified_output_identity
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
 from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.ports.generated_media_download import (
@@ -105,15 +105,21 @@ class GeneratedMediaDownloadService:
                 and existing_path == destination
                 and is_available_output(str(existing_path))
             ):
-                if not self._download_repository.matches_current_generated_download(existing):
+                before_cached_mp4 = verified_output_identity(existing_path, destination)
+                if before_cached_mp4 is None or not self._download_repository.matches_current_generated_download(
+                    existing
+                ):
                     raise InternalInvariantError(
-                        "Cached Download no longer matches current Generate and persisted "
+                        "Cached Download no longer matches current Generate, MP4 and persisted "
                         "Download identity; manual reconciliation required."
                     )
-                # The source may change between the initial byte check and
-                # this cached-row identity check. Never return an old MP4 on
-                # the strength of an earlier filesystem read.
+                # The source and bytes may change between the initial read,
+                # the SQLite identity check, and the cached-row return.
                 self._require_current_source(episode_id, scene_id, job)
+                if verified_output_identity(existing_path, destination) != before_cached_mp4:
+                    raise InternalInvariantError(
+                        "Cached Download MP4 changed during reuse; manual reconciliation required."
+                    )
                 return existing
 
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -345,6 +351,15 @@ class GeneratedMediaDownloadService:
                 "Download provider returned an unavailable or redirected MP4; "
                 "manual reconciliation required.",
             )
+        before_commit_mp4 = verified_output_identity(output, destination)
+        if before_commit_mp4 is None:
+            self._reject_unverified_success(
+                episode_id,
+                scene_id,
+                normalized_take,
+                remote_result_id,
+                "Download MP4 changed before persistence; manual reconciliation required.",
+            )
         # The Generate job may be invalidated while the browser worker is
         # downloading. A completed MP4 is not authorization to persist an old
         # remote result after its job has been requeued or changed.
@@ -393,9 +408,10 @@ class GeneratedMediaDownloadService:
         # Download history or replaces the published MP4. Never return the
         # in-memory success until both the current persisted revision and the
         # file itself still agree. Preserve all bytes/history for reconciliation.
-        if not self._download_repository.matches_current_generated_download(
-            record
-        ) or not is_available_output(str(output)):
+        if (
+            not self._download_repository.matches_current_generated_download(record)
+            or verified_output_identity(output, destination) != before_commit_mp4
+        ):
             raise InternalInvariantError(
                 "Download history or MP4 changed after atomic save; "
                 "local video needs reconciliation."

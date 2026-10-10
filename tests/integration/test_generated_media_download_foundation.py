@@ -2640,3 +2640,110 @@ def test_guarded_success_rejects_same_generate_id_but_changed_confirmed_identity
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
     assert Path(original.output_path or "").read_bytes() == b"fake-video"
     assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize("mutation", ["same_size_replacement", "in_place_rewrite"])
+def test_sol21_browser_download_rejects_valid_mp4_changed_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """Browser Download cannot certify a different MP4 after SQLite commit."""
+
+    import os
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    published = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    original = b"fake-video"
+    replacement = b"Z" * len(original)
+    guarded_save = downloads.save_if_current_generate
+
+    def change_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        saved = guarded_save(record, remote_id)
+        if saved:
+            if mutation == "same_size_replacement":
+                alternate = tmp_path / "alternate-video.mp4"
+                alternate.write_bytes(replacement)
+                alternate.replace(published)
+            else:
+                info = published.stat()
+                published.write_bytes(replacement)
+                os.utime(
+                    published,
+                    ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000),
+                )
+        return saved
+
+    monkeypatch.setattr(downloads, "save_if_current_generate", change_after_commit)
+    with pytest.raises(InternalInvariantError, match="MP4 changed after atomic save"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert published.read_bytes() == replacement
+    row = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert row is not None and row.state == DownloadState.DOWNLOADED
+    assert row.output_path == str(published)
+    assert len(driver.calls) == 1
+
+
+def test_sol21_cached_browser_download_rejects_mp4_changed_during_sqlite_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cached Download must not return success after same-size MP4 replacement."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    published = Path(original.output_path or "")
+    expected = b"fake-video"
+    assert published.read_bytes() == expected
+    real_match = downloads.matches_current_generated_download
+
+    def replace_during_identity_check(record: DownloadRecord, **kwargs: object) -> bool:
+        outcome = real_match(record, **kwargs)
+        alternate = root / "alternate-valid.mp4"
+        alternate.write_bytes(b"Y" * len(expected))
+        alternate.replace(published)
+        return outcome
+
+    monkeypatch.setattr(
+        downloads, "matches_current_generated_download", replace_during_identity_check
+    )
+    with pytest.raises(InternalInvariantError, match="MP4 changed during reuse"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert published.read_bytes() == b"Y" * len(expected)
+    assert len(driver.calls) == 1
+
+
+def test_sol21_browser_download_rejects_redirect_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Post-commit symlink swaps preserve the stored row without false success."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    published = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    other = tmp_path / "unrelated-video.mp4"
+    other.write_bytes(b"not-our-video")
+    guarded_save = downloads.save_if_current_generate
+
+    def redirect_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        saved = guarded_save(record, remote_id)
+        if saved:
+            published.unlink()
+            try:
+                published.symlink_to(other)
+            except OSError, NotImplementedError:
+                pytest.skip("Symlinks cannot be created on this Windows runner")
+        return saved
+
+    monkeypatch.setattr(downloads, "save_if_current_generate", redirect_after_commit)
+    with pytest.raises(InternalInvariantError, match="MP4 changed after atomic save"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert published.is_symlink()
+    assert other.read_bytes() == b"not-our-video"
+    row = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert row is not None and row.state == DownloadState.DOWNLOADED
+    assert len(driver.calls) == 1
