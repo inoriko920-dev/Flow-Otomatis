@@ -1113,6 +1113,53 @@ def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
         assert conn.execute("SELECT COUNT(*) FROM download_reconciliation_audit").fetchone()[0] == 1
 
 
+def test_reconciliation_accepts_current_generate_with_historical_whitespace(
+    tmp_path: Path,
+) -> None:
+    """Use the same normalized remote ID as Download's guarded persistence."""
+
+    import sqlite3
+
+    driver = FakeDownloadDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+
+    # Generation rows may have legacy whitespace even though the download
+    # boundary normalizes the ID before storing the ambiguity.
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("  remote:SCENE_001  ", "SCENE_001"),
+        )
+        connection.commit()
+
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    ambiguous = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert ambiguous is not None
+    assert ambiguous.state == DownloadState.ATTENTION_REQUIRED
+    assert ambiguous.generation_remote_result_id == "remote:SCENE_001"
+
+    released = service.release_retry_after_manual_review(
+        "EP500_DOWNLOAD",
+        "SCENE_001",
+        expected_remote_result_id="remote:SCENE_001",
+        expected_updated_at=ambiguous.updated_at.isoformat(),
+        reviewed_provider_and_local_files=True,
+    )
+    assert released.state == DownloadState.FAILED
+    assert released.output_path is None
+    assert len(driver.calls) == 1
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT remote_result_id FROM generation_jobs WHERE scene_id = ?",
+            ("SCENE_001",),
+        ).fetchone()[0] == "  remote:SCENE_001  "
+        assert connection.execute(
+            "SELECT COUNT(*) FROM download_reconciliation_audit"
+        ).fetchone()[0] == 1
+
+
 def test_ambiguous_reconciliation_rejects_stale_generate_and_download_revisions(
     tmp_path: Path,
 ) -> None:
