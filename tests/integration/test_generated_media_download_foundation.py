@@ -1136,6 +1136,10 @@ def test_malformed_browser_evidence_never_authorizes_safe_retry(
         b'{"error":"unauthorized"}',
         b'  [{"message":"generation not ready"}]',
         b'<?xml version="1.0"?><error>Forbidden</error>',
+        b"<!-- browser login redirect --><html>Sign in</html>",
+        "<html>Sign in to Google</html>".encode("utf-16"),
+        b"\xfe\xff" + '{"error":"expired session"}'.encode("utf-16-be"),
+        "<?xml version='1.0'?><error>Session expired</error>".encode("utf-16"),
     ],
 )
 def test_browser_nonvideo_response_never_becomes_confirmed_mp4(
