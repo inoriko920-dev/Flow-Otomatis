@@ -198,7 +198,7 @@ class GeneratedMediaDownloadService:
             # Validate the original published path; never resolve a symlink
             # that could mask unrelated content as our own successful MP4.
             output = Path(result.output_path).expanduser().absolute()
-        except (OSError, RuntimeError, ValueError):
+        except OSError, RuntimeError, ValueError:
             self._reject_unverified_success(
                 episode_id,
                 scene_id,
