@@ -342,3 +342,13 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
 - [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
 - [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.
+
+
+## 2026-10-09 — Official Google Flow G1/G5 research (documentation only)
+- [x] Examine official Google Terms, Flow Help, credits, regional availability and Google Gemini Omni API pricing. Evidence in `docs/planning/audits/E12_G1_G5_GOOGLE_FLOW_OFFICIAL_POLICY_ENTITLEMENT_AND_API_EVIDENCE_2026-10-09.md` (dated source URLs and conflicting eligibility descriptions).
+- [x] Confirm **Indonesia listed as Flow supported region**, but account/model entitlement and provider permission **remain unverified**.
+- [x] Record **50 daily non-subscriber Flow credit public statement**, subscriber bonuses and public Gemini Omni Flash 720p per-output tariff 4s/6s/8s/10s = **7/10/12/15**; do not imply per-account permission/balance/50-free-credit applicability to Omni.
+- [x] Identify **official paid Gemini API** for Omni Flash 1.1, not a free Flow credit substitute; do not silently switch providers or billing.
+- [ ] **G1 UNKNOWN / BLOCKED**: obtain applicable provider guidance for third-party browser/CDP access, automatic Generate/Download, and multiple-account dispatch/credit pooling. Until confirmed, **no live provider automation**, no quota evasion or automatic switching.
+- [ ] **G5 actual current balance/model eligibility/quote UNVERIFIED** for every profile. G6 current-process READY after full restart UNVERIFIED. No credential or cookie submission.
+- [ ] G0 overall integration, new coordinator fake tests (G3/G7/G8/G9) and distinct start-coding/merge approval still NOT PASS. Keep all review PRs draft, no coding/merge/live operations.
