@@ -14,9 +14,9 @@ from typing import Protocol
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
     GenerationCancelledError,
-    GenerationSafeFailureError,
     GenerationProviderResult,
     GenerationRequest,
+    GenerationSafeFailureError,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.workers.browser.google_flow_request_plan import (
