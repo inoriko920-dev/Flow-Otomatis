@@ -277,3 +277,72 @@ def test_atomic_download_rejects_contradictory_generate_binding_before_database_
 
     assert _digest(database) == before
     _assert_history_table_absent(database)
+
+
+@pytest.mark.parametrize("redirect", ["project", "database"])
+def test_download_database_boundary_blocks_real_symlink_escape(
+    tmp_path: Path, redirect: str
+) -> None:
+    """A valid episode name cannot be redirected to an outside SQLite file."""
+
+    external = _database(tmp_path / "external", episode_id="EP_OUTSIDE")
+    before = _digest(external)
+    projects_root = tmp_path / "projects"
+    project = projects_root / "EP_LINK"
+    project.parent.mkdir()
+    if redirect == "project":
+        link = project
+        target = external.parent
+        is_directory = True
+    else:
+        project.mkdir()
+        link = project / "project.sqlite3"
+        target = external
+        is_directory = False
+    try:
+        link.symlink_to(target, target_is_directory=is_directory)
+    except (OSError, NotImplementedError):
+        pytest.skip("Runner cannot create symbolic links")
+
+    repository = SqliteDownloadResultRepository(projects_root)
+    record = DownloadRecord(
+        episode_id="EP_LINK",
+        scene_id="SCENE_001",
+        state=DownloadState.FAILED,
+        updated_at=datetime.now(UTC),
+        error_message="synthetic",
+    )
+    with pytest.raises(StorageError, match="redirected"):
+        repository.get("EP_LINK", "SCENE_001")
+    with pytest.raises(StorageError, match="redirected"):
+        repository.save_failure_if_unconfirmed(record)
+    assert _digest(external) == before
+
+
+def test_download_database_boundary_blocks_windows_junction_without_symlink_privilege(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Model a Windows NTFS junction independently of runner privileges."""
+
+    projects_root = tmp_path / "projects"
+    database = _database(projects_root)
+    original = _digest(database)
+    is_junction = Path.is_junction
+
+    def redirect_project(self: Path) -> bool:
+        return self == database.parent or is_junction(self)
+
+    monkeypatch.setattr(Path, "is_junction", redirect_project)
+    repository = SqliteDownloadResultRepository(projects_root)
+    with pytest.raises(StorageError, match="redirected"):
+        repository.list_for_episode("EP_LEGACY")
+    with pytest.raises(StorageError, match="redirected"):
+        repository.save(
+            DownloadRecord(
+                episode_id="EP_LEGACY",
+                scene_id="SCENE_001",
+                state=DownloadState.FAILED,
+                updated_at=datetime.now(UTC),
+            )
+        )
+    assert _digest(database) == original
