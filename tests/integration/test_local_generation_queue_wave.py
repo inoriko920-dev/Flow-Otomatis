@@ -436,6 +436,12 @@ def test_legacy_unverified_queue_is_parked_until_explicit_reprepare(tmp_path: Pa
     _create_legacy_job_table(db_path)
 
     job_repo = SqliteGenerationJobRepository(projects_root)
+    legacy_snapshot = job_repo.list_for_episode("EP300_QUEUE")
+    assert legacy_snapshot[0].state is GenerationJobState.QUEUED
+    assert legacy_snapshot[0].request_fingerprint is None
+    # Read-only History must not perform this migration. Explicit recovery
+    # is the canonical write operation which parks legacy queued jobs.
+    job_repo.recover_expired("EP300_QUEUE")
     migrated = job_repo.list_for_episode("EP300_QUEUE")
 
     assert migrated[0].state is GenerationJobState.ATTENTION_REQUIRED
@@ -475,8 +481,11 @@ def test_failed_schema_migration_rolls_back_all_added_columns(tmp_path: Path) ->
         connection.commit()
 
     job_repo = SqliteGenerationJobRepository(projects_root)
+    # Viewing legacy history is read-only. Migration and its injected failure
+    # happen only on an explicit mutating recovery action.
+    assert job_repo.list_for_episode("EP300_QUEUE")[0].state is GenerationJobState.QUEUED
     with pytest.raises(StorageError):
-        job_repo.list_for_episode("EP300_QUEUE")
+        job_repo.recover_expired("EP300_QUEUE")
 
     with sqlite3.connect(db_path) as connection:
         columns = {
