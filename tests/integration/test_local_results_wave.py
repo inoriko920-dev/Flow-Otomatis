@@ -914,9 +914,7 @@ def _verified_image_source_and_result(
     else:
         source = tmp_path / "verified_source"
         source.mkdir()
-        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(json.dumps(manifest), encoding="utf-8")
         image_path = source / scene.image_file
         image_path.write_bytes(image_bytes)
 
@@ -947,7 +945,10 @@ def _verified_image_source_and_result(
     jobs.mark_generated(initial.job_id, "remote:verified-source", "verified-source-owner")
     downloads = SqliteDownloadResultRepository(root)
     service = LocalResultsService(
-        workspaces, jobs, downloads, ResultManifestWriter(root),
+        workspaces,
+        jobs,
+        downloads,
+        ResultManifestWriter(root),
         image_verifier=EpisodePackageReader(),
     )
     video = tmp_path / "verified-result.mp4"
@@ -1000,4 +1001,3 @@ def test_sol08_missing_source_image_fails_closed_despite_stale_ready_metadata(
     assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
     assert downloads.get("EP400_RESULTS", "SCENE_001") is not None
     assert video.read_bytes() == b"existing-confirmed-local-video"
-
