@@ -146,6 +146,29 @@ class GeneratedMediaDownloadService:
             else:
                 self._download_repository.save_failure_if_unconfirmed(record)
             raise
+        except Exception:
+            # A provider outside the Google Flow adapter can fail unexpectedly
+            # after starting a remote request or writing local bytes. The
+            # outcome is unknown, even if no partial is currently visible.
+            # Never persist its raw exception text or authorize silent retry.
+            self._download_repository.save_attention_if_unconfirmed(
+                DownloadRecord(
+                    episode_id=episode_id,
+                    scene_id=scene_id,
+                    state=DownloadState.ATTENTION_REQUIRED,
+                    updated_at=datetime.now(UTC),
+                    take=normalized_take,
+                    error_message=(
+                        "Download provider stopped unexpectedly; "
+                        "manual reconciliation required."
+                    ),
+                    generation_remote_result_id=remote_result_id,
+                )
+            )
+            raise MediaDownloadAmbiguousError(
+                "Download provider stopped unexpectedly; "
+                "manual reconciliation required."
+            ) from None
 
         # Validate the exact published file path, not a canonicalized
         # symlink target. The Browser Worker is not a trusted filesystem
