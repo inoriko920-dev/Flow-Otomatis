@@ -30,6 +30,18 @@ def is_available_output(output_path: str | None) -> bool:
             return False
         with candidate.open("rb") as stream:
             info = os.fstat(stream.fileno())
-            return stat.S_ISREG(info.st_mode) and info.st_size > 0 and bool(stream.read(1))
+            if not stat.S_ISREG(info.st_mode) or info.st_size <= 0:
+                return False
+            prefix = stream.read(512)
+            if not prefix:
+                return False
+            # A browser can save its login page or an API error response
+            # under a .mp4 filename. These are demonstrably not video bytes
+            # and must never be attested as a downloaded result. This is a
+            # narrow negative check, not a complete MP4 decoder.
+            leading = prefix.lstrip(b"\\xef\\xbb\\xbf \\t\\r\\n").lower()
+            if leading.startswith((b"<!doctype html", b"<html", b"<?xml", b"{", b"[")):
+                return False
+            return True
     except OSError, ValueError:
         return False
