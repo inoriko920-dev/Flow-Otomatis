@@ -157,14 +157,26 @@ class GoogleFlowDownloadProvider:
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
             # A malformed output path is not authority to publish or to
             # discard the browser attempt's partial bytes.
-            if not isinstance(evidence.output_path, str) or not evidence.output_path.strip():
+            if (
+                not isinstance(evidence.output_path, str)
+                or not evidence.output_path.strip()
+                or "\0" in evidence.output_path
+            ):
                 raise MediaDownloadAmbiguousError(
                     "Flow browser reported success without a valid output path; "
                     "manual reconciliation is required before retry."
                 )
-            # Do not call resolve() before verifying the driver's original
-            # path: a symlink could mask an unrelated file as our partial.
-            reported = Path(evidence.output_path or "").expanduser().absolute()
+            # The browser's path is untrusted at runtime. Windows-invalid
+            # strings or unresolvable tilde expansions must become typed
+            # ambiguity, preserving the attempt's partial for review.
+            # Do not resolve() before comparing: symlinks must not be hidden.
+            try:
+                reported = Path(evidence.output_path).expanduser().absolute()
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise MediaDownloadAmbiguousError(
+                    "Flow browser reported an unsafe Download output path; "
+                    "manual reconciliation is required before retry."
+                ) from None
             if reported != partial_path:
                 raise MediaDownloadAmbiguousError(
                     "Flow reported download success at an unexpected path."
