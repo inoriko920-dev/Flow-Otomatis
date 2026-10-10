@@ -614,3 +614,35 @@ def test_manifest_rejects_changed_generated_id_even_when_download_exists(
     assert json.loads(path.read_text(encoding="utf-8"))["scenes"][0]["download_status"] == (
         "UNAVAILABLE"
     )
+
+
+
+def test_local_recording_cannot_replace_download_from_earlier_generate_identity(
+    tmp_path: Path,
+) -> None:
+    """A direct local confirmation must not overwrite the original successful row."""
+
+    service, original_video = _generated_result_with_file(tmp_path)
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    old = repository.get("EP400_RESULTS", "SCENE_001")
+    assert old is not None and old.generation_remote_result_id == "remote:R03"
+
+    new_video = tmp_path / "second-result.mp4"
+    new_video.write_bytes(b"new-result-untouched")
+    db_path = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:SECOND", "SCENE_001"),
+        )
+        db.commit()
+
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(new_video))
+
+    assert repository.get("EP400_RESULTS", "SCENE_001") == old
+    assert original_video.read_bytes() == b"real-local-test-video"
+    assert new_video.read_bytes() == b"new-result-untouched"
+    status = service.snapshot("EP400_RESULTS")
+    assert status.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert status.handoff_ready is False
