@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import flow_otomatis.infrastructure.filesystem.result_manifest_writer as writer_module
+from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.result import DownloadState, ProjectResults, SceneResult
 from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
 
@@ -136,3 +137,43 @@ def test_failed_tempfile_write_preserves_previous_manifest(
         writer.write(_results("Not published"))
     assert target.read_bytes() == original
     assert _leftovers(tmp_path) == []
+
+def test_export_refuses_replaced_directory_without_overwriting_rival_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A valid replacement exports/ path must not receive an earlier writer's temp."""
+
+    writer = ResultManifestWriter(tmp_path)
+    exports = tmp_path / "EP_EXPORT_RACE" / "exports"
+    relocated = tmp_path / "EP_EXPORT_RACE" / "exports_before_swap"
+    rival_bytes = b'{"owner":"new-directory"}\\n'
+    original_verification = writer._verified_export_directory
+    calls = 0
+
+    def replace_folder_after_temp_write(episode_id: str) -> Path:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            # After the temporary file is closed, another process moves the
+            # original directory and creates a different, ordinary exports
+            # directory at precisely the same path.
+            exports.rename(relocated)
+            exports.mkdir()
+            (exports / "FLOW_OTOMATIS_RESULT.json").write_bytes(rival_bytes)
+        return original_verification(episode_id)
+
+    monkeypatch.setattr(writer, "_verified_export_directory", replace_folder_after_temp_write)
+
+    with pytest.raises(InternalInvariantError, match="identity changed"):
+        writer.write(_results("Must not overwrite another export"))
+
+    assert calls == 2
+    assert (exports / "FLOW_OTOMATIS_RESULT.json").read_bytes() == rival_bytes
+    assert not list(exports.glob("*.tmp"))
+    preserved = list(relocated.glob(".FLOW_OTOMATIS_RESULT.*.json.tmp"))
+    assert len(preserved) == 1
+    assert b"Must not overwrite another export" in preserved[0].read_bytes()
+    assert not (relocated / "FLOW_OTOMATIS_RESULT.json").exists()
+
+
