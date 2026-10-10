@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.application.ports import (
+    GenerationAuthenticationRequiredError,
+    GenerationCancelledError,
     GenerationProviderResult,
     GenerationRequest,
     GenerationSubmissionAmbiguousError,
@@ -238,7 +240,7 @@ def test_ambiguous_submit_blocks_queue_and_prevents_automatic_resubmit(tmp_path:
     ]
     assert jobs[0].attention_code is GenerationAttentionCode.SUBMIT_AMBIGUOUS
     assert jobs[0].submit_started_at is not None
-    assert "Timeout after submit" in (jobs[0].error_message or "")
+    assert "automatic retry is forbidden" in (jobs[0].error_message or "")
 
     service.prepare_queue("EP300_QUEUE")
     still_blocked = service.list_jobs("EP300_QUEUE")
@@ -687,3 +689,60 @@ def test_import_pinned_image_change_after_queue_prepare_never_submits(
     assert blocked.state is GenerationJobState.ATTENTION_REQUIRED
     assert blocked.attention_code is GenerationAttentionCode.REQUEST_STALE
     assert provider.calls == []
+
+@pytest.mark.parametrize(
+    ("exception_type", "expected_state", "expected_attention"),
+    [
+        (RuntimeError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.SUBMIT_AMBIGUOUS),
+        (GenerationSubmissionAmbiguousError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.SUBMIT_AMBIGUOUS),
+        (GenerationAuthenticationRequiredError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.AUTH_REQUIRED),
+        (GenerationCancelledError, GenerationJobState.FAILED, None),
+    ],
+)
+def test_t05_t07_generate_provider_errors_never_persist_raw_details(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    exception_type: type[Exception],
+    expected_state: GenerationJobState,
+    expected_attention: GenerationAttentionCode | None,
+) -> None:
+    root, workspace_repo, jobs, _, _ = _setup(tmp_path)
+    marker = (
+        "Authorization: Bearer SYNTHETIC_SECRET_NOT_REAL\\n"
+        "https://example.invalid/video?signature=fake-signed-marker "
+        + "private-path/" * 100
+    )
+
+    class FailingProvider:
+        calls = 0
+
+        def generate(self, request: GenerationRequest) -> GenerationProviderResult:
+            self.calls += 1
+            raise exception_type(marker)
+
+    provider = FailingProvider()
+    queue = LocalGenerationQueueService(
+        workspace_repo, jobs, provider,
+        image_verifier=EpisodePackageReader(),
+        owner_id="secret-regression-worker",
+    )
+    queue.prepare_queue("EP300_QUEUE")
+    outcome = queue.run_next("EP300_QUEUE")
+    assert outcome is not None
+    assert outcome.state is expected_state
+    assert outcome.attention_code is expected_attention
+    assert provider.calls == 1
+    persisted = root / "EP300_QUEUE" / "project.sqlite3"
+    with sqlite3.connect(persisted) as connection:
+        raw = connection.execute(
+            "SELECT error_message FROM generation_jobs WHERE scene_id='SCENE_001'"
+        ).fetchone()
+    assert raw is not None and raw[0] == outcome.error_message
+    for secret_fragment in ("SYNTHETIC_SECRET_NOT_REAL", "fake-signed-marker", "private-path"):
+        assert secret_fragment not in (outcome.error_message or "")
+        assert secret_fragment not in (raw[0] or "")
+        assert secret_fragment not in caplog.text
+    assert queue.run_next("EP300_QUEUE") is None if expected_attention is not None else True
+    assert provider.calls == 1
+
+
