@@ -88,6 +88,7 @@ class ResultManifestWriter:
             else scene
             for scene in results.scenes
         )
+
         # A published MP4 can be replaced while this manifest is being
         # serialized. The output status alone is not enough: remember its
         # filesystem identity and modification metadata before staging.
