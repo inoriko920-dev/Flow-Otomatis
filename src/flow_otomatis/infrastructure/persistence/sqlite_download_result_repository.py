@@ -251,7 +251,19 @@ class SqliteDownloadResultRepository:
             or episode_id.split(".", 1)[0].upper() in reserved
         ):
             raise StorageError("Unsafe project episode identifier")
-        return self._projects_root / episode_id / "project.sqlite3"
+        db_path = self._projects_root / episode_id / "project.sqlite3"
+        try:
+            # A harmless-looking episode ID may refer to a redirected project
+            # directory (Windows junction, symlink) or a linked database file.
+            # Never read or write through such paths, even in read-only views.
+            if any(
+                node.is_symlink() or node.is_junction()
+                for node in (self._projects_root, db_path.parent, db_path)
+            ):
+                raise StorageError("Project database path is redirected")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise StorageError("Project database path cannot be safely verified") from exc
+        return db_path
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
         connection.execute(
