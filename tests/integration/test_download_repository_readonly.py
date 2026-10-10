@@ -301,7 +301,7 @@ def test_download_database_boundary_blocks_real_symlink_escape(
         is_directory = False
     try:
         link.symlink_to(target, target_is_directory=is_directory)
-    except (OSError, NotImplementedError):
+    except OSError, NotImplementedError:
         pytest.skip("Runner cannot create symbolic links")
 
     repository = SqliteDownloadResultRepository(projects_root)
