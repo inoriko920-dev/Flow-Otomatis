@@ -11,6 +11,7 @@ from flow_otomatis.application.ports.download_results import DownloadResultRepos
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
+    GeneratedMediaDownloadResult,
     MediaDownloadAmbiguousError,
     MediaDownloadAuthenticationRequiredError,
     MediaDownloadCancelledError,
@@ -173,6 +174,34 @@ class GeneratedMediaDownloadService:
             )
             raise MediaDownloadAmbiguousError(
                 "Download provider stopped unexpectedly; manual reconciliation required."
+            ) from None
+
+        # Providers are untrusted at runtime despite the typed port. A
+        # malformed "success" cannot attest to an MP4, even if the browser
+        # has already written final bytes before returning the result.
+        if (
+            not isinstance(result, GeneratedMediaDownloadResult)
+            or not isinstance(result.output_path, str)
+            or not result.output_path.strip()
+            or "\0" in result.output_path
+        ):
+            self._download_repository.save_attention_if_unconfirmed(
+                DownloadRecord(
+                    episode_id=episode_id,
+                    scene_id=scene_id,
+                    state=DownloadState.ATTENTION_REQUIRED,
+                    updated_at=datetime.now(UTC),
+                    take=normalized_take,
+                    error_message=(
+                        "Download provider returned invalid success evidence; "
+                        "manual reconciliation required."
+                    ),
+                    generation_remote_result_id=remote_result_id,
+                )
+            )
+            raise MediaDownloadAmbiguousError(
+                "Download provider returned invalid success evidence; "
+                "manual reconciliation required."
             ) from None
 
         # Validate the exact published file path, not a canonicalized
