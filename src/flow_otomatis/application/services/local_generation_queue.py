@@ -13,6 +13,8 @@ from flow_otomatis.application.ports.generation_jobs import GenerationJobReposit
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
     GenerationCancelledError,
+    GenerationRequestValidationError,
+    GenerationSafeFailureError,
     GenerationProviderPort,
     GenerationRequest,
     GenerationSubmissionAmbiguousError,
@@ -180,6 +182,18 @@ class LocalGenerationQueueService:
         )
         try:
             result = self._provider.generate(request)
+        except GenerationSafeFailureError:
+            return self._job_repository.mark_failed(
+                job.job_id,
+                "Provider rejected Generate before acceptance; explicit re-prepare required.",
+                self._owner_id,
+            )
+        except GenerationRequestValidationError:
+            return self._job_repository.mark_failed(
+                job.job_id,
+                "Generation request failed local validation; correct the Scene before re-prepare.",
+                self._owner_id,
+            )
         except GenerationSubmissionAmbiguousError:
             return self._job_repository.mark_attention(
                 job.job_id,
