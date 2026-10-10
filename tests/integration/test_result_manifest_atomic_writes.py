@@ -138,6 +138,7 @@ def test_failed_tempfile_write_preserves_previous_manifest(
     assert target.read_bytes() == original
     assert _leftovers(tmp_path) == []
 
+
 def test_export_refuses_replaced_directory_without_overwriting_rival_manifest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
