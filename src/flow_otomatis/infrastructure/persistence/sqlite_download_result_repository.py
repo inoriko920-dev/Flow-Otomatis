@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
@@ -415,6 +416,16 @@ class SqliteDownloadResultRepository:
                           AND d.error_message =
                               'Manual review completed; retry requires a separate explicit action.'
                           AND a.action = 'OPERATOR_REVIEWED_RETRY'
+                          AND NOT EXISTS (
+                              SELECT 1 FROM download_reconciliation_audit AS claimed
+                              WHERE claimed.episode_id = d.episode_id
+                                AND claimed.scene_id = d.scene_id
+                                AND claimed.generation_remote_result_id =
+                                    d.generation_remote_result_id
+                                AND claimed.take = d.take
+                                AND claimed.prior_updated_at = d.updated_at
+                                AND claimed.action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                          )
                         LIMIT 1
                         """,
                         (
@@ -430,6 +441,151 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError(
                 "Could not verify manually reconciled Download retry authorization"
+            ) from exc
+
+    def claim_reviewed_retry_if_present(self, record: DownloadRecord) -> bool | None:
+        """Consume exactly one reviewed retry using an SQLite BEGIN IMMEDIATE lock.
+
+        A claim is committed before any browser attempt, so power loss cannot
+        silently reuse an already approved attempt. Exhausted approvals become
+        ATTENTION_REQUIRED, allowing the existing operator-review workflow
+        to decide on any subsequent attempt.
+        """
+
+        if record.state != DownloadState.FAILED:
+            return None
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect(record.episode_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = connection.execute(
+                    """
+                    SELECT state, updated_at, output_path, take,
+                           error_message, generation_remote_result_id
+                    FROM download_results
+                    WHERE episode_id = ? AND scene_id = ?
+                    """,
+                    (record.episode_id, record.scene_id),
+                ).fetchone()
+                if current != (
+                    record.state,
+                    record.updated_at.isoformat(),
+                    record.output_path,
+                    record.take,
+                    record.error_message,
+                    record.generation_remote_result_id,
+                ):
+                    connection.rollback()
+                    return False
+                audit_exists = connection.execute(
+                    """
+                    SELECT 1 FROM sqlite_master
+                    WHERE type = 'table' AND name = 'download_reconciliation_audit'
+                    """
+                ).fetchone()
+                if audit_exists is None:
+                    connection.rollback()
+                    return None
+                review = connection.execute(
+                    """
+                    SELECT 1 FROM download_reconciliation_audit
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND generation_remote_result_id = ? AND take = ?
+                      AND resolved_at = ? AND action = 'OPERATOR_REVIEWED_RETRY'
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.take,
+                        record.updated_at.isoformat(),
+                    ),
+                ).fetchone()
+                if review is None:
+                    connection.rollback()
+                    return None
+                # A forged FAILED row must never gain authority merely because
+                # it happens to share the reviewed row's timestamp or ID.
+                if (
+                    record.output_path is not None
+                    or record.error_message
+                    != "Manual review completed; retry requires a separate explicit action."
+                ):
+                    connection.rollback()
+                    return False
+                claimed = connection.execute(
+                    """
+                    SELECT 1 FROM download_reconciliation_audit
+                    WHERE episode_id = ? AND scene_id = ?
+                      AND generation_remote_result_id = ? AND take = ?
+                      AND prior_updated_at = ?
+                      AND action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.take,
+                        record.updated_at.isoformat(),
+                    ),
+                ).fetchone()
+                if claimed is not None:
+                    # The previous attempt may have been terminated before
+                    # SQLite recorded its outcome. Preserve files and audit;
+                    # make renewed manual reconciliation possible.
+                    connection.execute(
+                        """
+                        UPDATE download_results
+                        SET state = 'ATTENTION_REQUIRED', updated_at = ?,
+                            error_message = ?
+                        WHERE episode_id = ? AND scene_id = ?
+                          AND state = 'FAILED' AND updated_at = ?
+                        """,
+                        (
+                            datetime.now(UTC).isoformat(),
+                            "Prior reviewed Download retry may have been interrupted; "
+                            "manual reconciliation required.",
+                            record.episode_id,
+                            record.scene_id,
+                            record.updated_at.isoformat(),
+                        ),
+                    )
+                    connection.commit()
+                    return False
+                # Do not claim an authorization for a now-stale Generate.
+                if not self._failure_generate_is_current(
+                    connection, record, record.generation_remote_result_id or ""
+                ):
+                    connection.rollback()
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO download_reconciliation_audit (
+                        episode_id, scene_id, generation_remote_result_id,
+                        prior_updated_at, prior_error_message, take,
+                        action, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.generation_remote_result_id,
+                        record.updated_at.isoformat(),
+                        record.error_message,
+                        record.take,
+                        "OPERATOR_REVIEWED_RETRY_CLAIMED",
+                        datetime.now(UTC).isoformat(),
+                    ),
+                )
+                connection.commit()
+                return True
+        except sqlite3.Error as exc:
+            raise StorageError(
+                "Could not atomically claim manually reviewed Download retry"
             ) from exc
 
     def reconcile_attention_for_retry(
