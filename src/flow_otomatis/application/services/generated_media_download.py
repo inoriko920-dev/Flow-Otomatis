@@ -127,17 +127,13 @@ class GeneratedMediaDownloadService:
             # Partial bytes are evidence of an uncertain transfer, just as
             # a published final MP4 is. Never authorize retry in that case.
             try:
-                partial_appeared = any(
-                    destination.parent.glob(f"{destination.name}.*.part")
-                )
-            except (OSError, RuntimeError, ValueError):
+                partial_appeared = any(destination.parent.glob(f"{destination.name}.*.part"))
+            except OSError, RuntimeError, ValueError:
                 # An unreadable download folder cannot prove that no bytes
                 # were written by the provider, so fail closed.
                 partial_appeared = True
             ambiguous = (
-                isinstance(exc, MediaDownloadAmbiguousError)
-                or final_appeared
-                or partial_appeared
+                isinstance(exc, MediaDownloadAmbiguousError) or final_appeared or partial_appeared
             )
             # Providers and browser drivers may include session URLs, tokens
             # or filesystem paths in their error text. Persist only our
