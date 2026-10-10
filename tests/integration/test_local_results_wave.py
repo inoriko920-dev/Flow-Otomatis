@@ -968,9 +968,10 @@ def test_sol08_changed_image_bytes_without_renaming_never_certifies_handoff(
     old = downloads.get("EP400_RESULTS", "SCENE_001")
     assert old is not None
     if zip_source:
-        with zipfile.ZipFile(image_source, "a") as archive:
-            # The last duplicate member is read by zipfile, but the canonical
-            # package reader rejects ambiguous ZIP names before hashing.
+        with zipfile.ZipFile(image_source) as archive:
+            original_manifest = archive.read("FLOW_OTOMATIS_IMPORT.json")
+        with zipfile.ZipFile(image_source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("FLOW_OTOMATIS_IMPORT.json", original_manifest)
             archive.writestr("SCENE_001.png", b"tampered-image-unchanged-name")
     else:
         image_source.write_bytes(b"tampered-image-unchanged-name")
