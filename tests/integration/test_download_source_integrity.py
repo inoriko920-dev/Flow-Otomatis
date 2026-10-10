@@ -602,9 +602,7 @@ def test_sol12_two_connections_cannot_claim_the_same_review(
     def competing_claim() -> bool | None:
         separate = SqliteDownloadResultRepository(rig.root)
         generation = SqliteGenerationJobRepository(rig.root).list_for_episode(_EPISODE)[0]
-        return separate.claim_reviewed_retry_if_present(
-            reviewed, expected_generation=generation
-        )
+        return separate.claim_reviewed_retry_if_present(reviewed, expected_generation=generation)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(competing_claim)
