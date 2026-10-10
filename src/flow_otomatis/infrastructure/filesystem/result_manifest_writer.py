@@ -69,9 +69,7 @@ class ResultManifestWriter:
                 ) from exc
         return exports
 
-    def write(
-        self, results: ProjectResults, *, recheck: Callable[[], bool] | None = None
-    ) -> Path:
+    def write(self, results: ProjectResults, *, recheck: Callable[[], bool] | None = None) -> Path:
         output_dir = self._verified_export_directory(results.episode_id)
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
         if target.is_symlink():
@@ -98,7 +96,7 @@ class ResultManifestWriter:
                 return None
             try:
                 info = os.stat(path, follow_symlinks=False)
-            except (OSError, RuntimeError, ValueError):
+            except OSError, RuntimeError, ValueError:
                 return None
             return (
                 info.st_dev,
