@@ -89,7 +89,7 @@ class LocalResultsService:
                                     (job.remote_result_id if job is not None else None) or ""
                                 ).strip()
                                 or not self._download_repository.matches_current_generated_download(
-                                    download
+                                    download, expected_generation=job
                                 )
                                 or not is_available_output(download.output_path)
                             )
