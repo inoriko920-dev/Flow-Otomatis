@@ -169,6 +169,21 @@ class GeneratedMediaDownloadService:
                     "Prior Download partial file exists without a confirmed result; "
                     "manual reconciliation required before another attempt."
                 )
+            if review_claim is True:
+                # A reviewed retry is irrevocably consumed before any browser
+                # contact. If the Generate revision or original image changes
+                # after that commit, fail closed instead of dispatching a
+                # stale request. Retain the claim for crash-safe recovery.
+                current_jobs = {
+                    item.scene_id: item
+                    for item in self._job_repository.list_for_episode(episode_id)
+                }
+                if current_jobs.get(scene_id) != job:
+                    raise InternalInvariantError(
+                        "Generate revision changed after reviewed Download retry claim; "
+                        "manual reconciliation required."
+                    )
+                self._require_current_source(episode_id, scene_id, job)
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
