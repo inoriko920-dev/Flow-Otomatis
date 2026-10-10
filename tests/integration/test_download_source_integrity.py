@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -460,3 +462,187 @@ def test_sol11_forged_review_message_without_sqlite_audit_cannot_bypass_partial_
     assert rig.provider.calls == 0
     assert rig.downloads.get(_EPISODE, _SCENE) == forged
     assert partial.read_bytes() == b"keep-unreviewed-evidence"
+
+
+def _reviewed_retry(rig: Rig) -> DownloadRecord:
+    ambiguous = DownloadRecord(
+        episode_id=_EPISODE,
+        scene_id=_SCENE,
+        state=DownloadState.ATTENTION_REQUIRED,
+        updated_at=datetime.now(UTC),
+        error_message="Previous browser attempt uncertain; operator review required.",
+        generation_remote_result_id="remote:source-verification",
+    )
+    rig.downloads.save_attention_if_unconfirmed(
+        ambiguous, expected_remote_result_id="remote:source-verification"
+    )
+    released = rig.service.release_retry_after_manual_review(
+        _EPISODE,
+        _SCENE,
+        expected_remote_result_id="remote:source-verification",
+        expected_updated_at=ambiguous.updated_at.isoformat(),
+        reviewed_provider_and_local_files=True,
+    )
+    assert released.state == DownloadState.FAILED
+    return released
+
+
+def test_sol12_review_authorizes_one_retry_and_second_attempt_needs_new_review(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+
+    first_claim = rig.downloads.claim_reviewed_retry_if_present(reviewed)
+    assert first_claim is True
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+
+    second_claim = rig.downloads.claim_reviewed_retry_if_present(reviewed)
+    assert second_claim is False
+    renewed_attention = rig.downloads.get(_EPISODE, _SCENE)
+    assert renewed_attention is not None
+    assert renewed_attention.state == DownloadState.ATTENTION_REQUIRED
+    assert "interrupted" in (renewed_attention.error_message or "")
+
+    refreshed = rig.service.release_retry_after_manual_review(
+        _EPISODE,
+        _SCENE,
+        expected_remote_result_id="remote:source-verification",
+        expected_updated_at=renewed_attention.updated_at.isoformat(),
+        reviewed_provider_and_local_files=True,
+    )
+    assert refreshed.state == DownloadState.FAILED
+    assert refreshed.updated_at != reviewed.updated_at
+    assert rig.downloads.has_confirmed_manual_retry_authorization(refreshed)
+
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as conn:
+        actions = [
+            item[0]
+            for item in conn.execute(
+                "SELECT action FROM download_reconciliation_audit ORDER BY id"
+            )
+        ]
+    assert actions == [
+        "OPERATOR_REVIEWED_RETRY",
+        "OPERATOR_REVIEWED_RETRY_CLAIMED",
+        "OPERATOR_REVIEWED_RETRY",
+    ]
+
+
+@pytest.mark.parametrize("left_partial", [False, True])
+def test_sol12_simulated_crash_after_claim_cannot_replay_review_on_restart(
+    tmp_path: Path, left_partial: bool
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    preserved_partial = (
+        rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4.abandoned.part"
+    )
+
+    class CrashingProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> GeneratedMediaDownloadResult:
+            self.calls += 1
+            if left_partial:
+                preserved_partial.write_bytes(b"original-crashed-browser-evidence")
+            # Simulates an abrupt process termination, bypassing normal
+            # exception handling and leaving SQLite's FAILED row intact.
+            raise SystemExit("simulated abrupt process termination")
+
+    crashing = CrashingProvider()
+    service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        rig.downloads,
+        crashing,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(SystemExit, match="simulated abrupt process termination"):
+        service.download_scene(_EPISODE, _SCENE)
+
+    assert crashing.calls == 1
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    if left_partial:
+        assert preserved_partial.read_bytes() == b"original-crashed-browser-evidence"
+
+    # A separate service/repository instance models a newly started process.
+    new_service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        SqliteDownloadResultRepository(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        new_service.download_scene(_EPISODE, _SCENE)
+    assert rig.provider.calls == 0
+
+    current = rig.downloads.get(_EPISODE, _SCENE)
+    assert current is not None
+    assert current.state == DownloadState.ATTENTION_REQUIRED
+    if left_partial:
+        assert preserved_partial.read_bytes() == b"original-crashed-browser-evidence"
+    assert not (
+        rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
+    ).exists()
+
+
+def test_sol12_two_connections_cannot_claim_the_same_review(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+
+    def competing_claim() -> bool | None:
+        separate = SqliteDownloadResultRepository(rig.root)
+        return separate.claim_reviewed_retry_if_present(reviewed)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(competing_claim)
+        second = pool.submit(competing_claim)
+        outcomes = [first.result(timeout=15), second.result(timeout=15)]
+
+    assert outcomes.count(True) == 1
+    assert outcomes.count(False) == 1
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE).state == DownloadState.ATTENTION_REQUIRED
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as conn:
+        claims = conn.execute(
+            """
+            SELECT COUNT(*) FROM download_reconciliation_audit
+            WHERE action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+            """
+        ).fetchone()[0]
+    assert claims == 1
+
+
+def test_sol12_ordinary_failed_download_does_not_create_manual_retry_claim(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    plain_failure = DownloadRecord(
+        episode_id=_EPISODE,
+        scene_id=_SCENE,
+        state=DownloadState.FAILED,
+        updated_at=datetime.now(UTC),
+        error_message="Safe failure before any provider transfer.",
+        generation_remote_result_id="remote:source-verification",
+    )
+    rig.downloads.save_failure_if_unconfirmed(plain_failure)
+    assert rig.service.download_scene(_EPISODE, _SCENE).state == DownloadState.DOWNLOADED
+    assert rig.provider.calls == 1
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as conn:
+        audit_table = conn.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE name = 'download_reconciliation_audit'
+            """
+        ).fetchone()
+    assert audit_table is None
