@@ -851,7 +851,6 @@ def test_download_does_not_reuse_mp4_from_another_generated_result(tmp_path: Pat
     assert len(driver.calls) == 1
 
 
-
 def test_new_generated_identity_cannot_replace_confirmed_download_history(
     tmp_path: Path,
 ) -> None:
