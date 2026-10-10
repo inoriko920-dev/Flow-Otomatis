@@ -389,14 +389,6 @@ def test_browser_driver_typed_exception_text_never_leaks(
     assert len(driver.calls) == 1
 
 
-@pytest.mark.parametrize(
-    ("error_type", "expected_state"),
-    [
-        (MediaDownloadProviderError, DownloadState.FAILED),
-        (MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
-        (MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
-    ],
-)
 @pytest.mark.parametrize("error_class", [TimeoutError, OSError, RuntimeError])
 @pytest.mark.parametrize("leave_final_mp4", [False, True])
 def test_unexpected_alternate_provider_crash_is_sticky_and_preserves_bytes(
@@ -481,6 +473,14 @@ def test_unexpected_provider_crash_does_not_replace_rival_confirmed_download(
     assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
 
 
+@pytest.mark.parametrize(
+    ("error_type", "expected_state"),
+    [
+        (MediaDownloadProviderError, DownloadState.FAILED),
+        (MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
+        (MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
+    ],
+)
 def test_download_service_redacts_custom_provider_error_on_sqlite_boundary(
     tmp_path: Path,
     error_type: type[MediaDownloadProviderError],
