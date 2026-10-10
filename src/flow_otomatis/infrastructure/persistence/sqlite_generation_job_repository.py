@@ -499,8 +499,7 @@ class SqliteGenerationJobRepository:
         """Reject future schema markers on both read and write, without repair."""
 
         marker = connection.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'generation_job_schema'"
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'generation_job_schema'"
         ).fetchone()
         if marker is None:
             return
@@ -664,17 +663,27 @@ class SqliteGenerationJobRepository:
             created_at=datetime.fromisoformat(str(row["created_at"])),
             updated_at=datetime.fromisoformat(str(row["updated_at"])),
             image_file=str(optional("image_file")) if optional("image_file") is not None else None,
-            motion_prompt=(str(optional("motion_prompt")) if optional("motion_prompt") is not None else None),
+            motion_prompt=(
+                str(optional("motion_prompt")) if optional("motion_prompt") is not None else None
+            ),
             model=str(optional("model")) if optional("model") is not None else None,
             resolution=str(optional("resolution")) if optional("resolution") is not None else None,
-            aspect_ratio=(str(optional("aspect_ratio")) if optional("aspect_ratio") is not None else None),
+            aspect_ratio=(
+                str(optional("aspect_ratio")) if optional("aspect_ratio") is not None else None
+            ),
             request_fingerprint=(
-                str(optional("request_fingerprint")) if optional("request_fingerprint") is not None else None
+                str(optional("request_fingerprint"))
+                if optional("request_fingerprint") is not None
+                else None
             ),
             remote_result_id=(
-                str(optional("remote_result_id")) if optional("remote_result_id") is not None else None
+                str(optional("remote_result_id"))
+                if optional("remote_result_id") is not None
+                else None
             ),
-            error_message=(str(optional("error_message")) if optional("error_message") is not None else None),
+            error_message=(
+                str(optional("error_message")) if optional("error_message") is not None else None
+            ),
             attention_code=(
                 GenerationAttentionCode(str(attention_raw)) if attention_raw is not None else None
             ),
