@@ -108,7 +108,9 @@ class GeneratedMediaDownloadService:
                 before_cached_mp4 = verified_output_identity(existing_path, destination)
                 if (
                     before_cached_mp4 is None
-                    or not self._download_repository.matches_current_generated_download(existing)
+                    or not self._download_repository.matches_current_generated_download(
+                        existing, expected_generation=job
+                    )
                 ):
                     raise InternalInvariantError(
                         "Cached Download no longer matches current Generate, MP4 and persisted "
@@ -410,7 +412,9 @@ class GeneratedMediaDownloadService:
         # in-memory success until both the current persisted revision and the
         # file itself still agree. Preserve all bytes/history for reconciliation.
         if (
-            not self._download_repository.matches_current_generated_download(record)
+            not self._download_repository.matches_current_generated_download(
+                record, expected_generation=current_job
+            )
             or verified_output_identity(output, destination) != before_commit_mp4
         ):
             raise InternalInvariantError(

@@ -2747,3 +2747,76 @@ def test_sol21_browser_download_rejects_redirect_after_commit(
     row = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert row is not None and row.state == DownloadState.DOWNLOADED
     assert len(driver.calls) == 1
+
+
+def test_sol22_cached_download_rejects_same_remote_id_new_generate_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A same-ID Generate revision change is not cached Download authorization."""
+
+    import sqlite3
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(original.output_path or "")
+    old_bytes = video.read_bytes()
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    initial_get = downloads.get
+
+    def bump_generate_revision_after_cached_read(episode_id: str, scene_id: str):
+        cached = initial_get(episode_id, scene_id)
+        with sqlite3.connect(database) as db:
+            db.execute(
+                "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+                ("2041-05-01T00:00:00+00:00", scene_id),
+            )
+            db.commit()
+        return cached
+
+    monkeypatch.setattr(downloads, "get", bump_generate_revision_after_cached_read)
+    with pytest.raises(InternalInvariantError, match="Cached Download no longer matches"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    monkeypatch.setattr(downloads, "get", initial_get)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert video.read_bytes() == old_bytes
+    assert len(driver.calls) == 1
+
+
+def test_sol22_new_download_rejects_same_remote_id_changed_generate_after_save(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a successful SQLite commit, same-ID revisions still require review."""
+
+    import sqlite3
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    guarded_save = downloads.save_if_current_generate
+
+    def bump_generate_revision_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        saved = guarded_save(record, remote_id)
+        if saved:
+            with sqlite3.connect(database) as db:
+                db.execute(
+                    "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+                    ("2041-05-01T00:00:00+00:00", record.scene_id),
+                )
+                db.commit()
+        return saved
+
+    monkeypatch.setattr(downloads, "save_if_current_generate", bump_generate_revision_after_commit)
+    with pytest.raises(InternalInvariantError, match="history or MP4 changed after atomic save"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    video = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert video.read_bytes() == b"fake-video"
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert recorded.output_path == str(video)
+    assert len(driver.calls) == 1
