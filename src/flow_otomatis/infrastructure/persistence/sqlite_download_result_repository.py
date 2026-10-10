@@ -459,7 +459,8 @@ class SqliteDownloadResultRepository:
                         expected_generation.job_id if expected_generation else None,
                         (
                             expected_generation.updated_at.isoformat()
-                            if expected_generation else None
+                            if expected_generation
+                            else None
                         ),
                         expected_generation.request_fingerprint if expected_generation else None,
                         expected_generation.image_file if expected_generation else None,
