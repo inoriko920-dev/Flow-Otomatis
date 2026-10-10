@@ -159,15 +159,13 @@ class GeneratedMediaDownloadService:
                     updated_at=datetime.now(UTC),
                     take=normalized_take,
                     error_message=(
-                        "Download provider stopped unexpectedly; "
-                        "manual reconciliation required."
+                        "Download provider stopped unexpectedly; manual reconciliation required."
                     ),
                     generation_remote_result_id=remote_result_id,
                 )
             )
             raise MediaDownloadAmbiguousError(
-                "Download provider stopped unexpectedly; "
-                "manual reconciliation required."
+                "Download provider stopped unexpectedly; manual reconciliation required."
             ) from None
 
         # Validate the exact published file path, not a canonicalized
