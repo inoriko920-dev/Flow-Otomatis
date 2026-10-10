@@ -228,4 +228,6 @@ class LocalResultsService:
     def export_manifest(self, episode_id: str) -> Path:
         """Write the current credential-free local result snapshot."""
 
-        return self._manifest_writer.write(self.snapshot(episode_id))
+        return self._manifest_writer.write(
+            self.snapshot(episode_id), recheck=lambda: self.snapshot(episode_id)
+        )
