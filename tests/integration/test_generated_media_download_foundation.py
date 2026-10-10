@@ -168,19 +168,25 @@ def test_download_requires_generated_state_and_never_starts_generate(tmp_path: P
 
 
 @pytest.mark.parametrize(
-    ("state", "error_type"),
+    ("state", "error_type", "expected_state"),
     [
         (
             GoogleFlowDownloadState.AUTH_REQUIRED,
             MediaDownloadAuthenticationRequiredError,
+            DownloadState.FAILED,
         ),
-        (GoogleFlowDownloadState.AMBIGUOUS, MediaDownloadAmbiguousError),
+        (
+            GoogleFlowDownloadState.AMBIGUOUS,
+            MediaDownloadAmbiguousError,
+            DownloadState.ATTENTION_REQUIRED,
+        ),
     ],
 )
 def test_controlled_download_failure_records_failure_without_retry(
     tmp_path: Path,
     state: GoogleFlowDownloadState,
     error_type: type[Exception],
+    expected_state: str,
 ) -> None:
     driver = FakeDownloadDriver(state)
     _root, _jobs, downloads, service = _setup(tmp_path, driver)
@@ -191,8 +197,13 @@ def test_controlled_download_failure_records_failure_without_retry(
     assert len(driver.calls) == 1
     record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert record is not None
-    assert record.state == DownloadState.FAILED
+    assert record.state == expected_state
     assert record.output_path is None
+    if state is GoogleFlowDownloadState.AMBIGUOUS:
+        assert record.generation_remote_result_id == "remote:SCENE_001"
+        with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+            service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+        assert len(driver.calls) == 1
 
 
 def test_download_provider_rejects_untracked_existing_final_file(tmp_path: Path) -> None:
@@ -880,3 +891,55 @@ def test_new_generated_identity_cannot_replace_confirmed_download_history(
     assert previous_video.read_bytes() == b"fake-video"
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == previous
     assert len(driver.calls) == 2
+
+
+def test_sticky_ambiguous_record_survives_late_failure_and_success_commit(
+    tmp_path: Path,
+) -> None:
+    """An unresolved provider attempt cannot be silently cleared by a rival."""
+
+    driver = FakeDownloadDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    old = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert old is not None
+    assert old.state == DownloadState.ATTENTION_REQUIRED
+
+    from dataclasses import replace
+
+    failed = replace(old, state=DownloadState.FAILED, error_message="late failure")
+    downloads.save_failure_if_unconfirmed(failed)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == old
+
+    confirmed = replace(
+        old,
+        state=DownloadState.DOWNLOADED,
+        output_path=str(root / "EP500_DOWNLOAD" / "downloads" / "fake.mp4"),
+        error_message=None,
+    )
+    assert downloads.save_if_current_generate(confirmed, "remote:SCENE_001") is False
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == old
+
+
+def test_ambiguous_attempt_does_not_erase_prior_confirmed_result(tmp_path: Path) -> None:
+    """A late uncertain rival leaves the original MP4 and history untouched."""
+
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    video = Path(original.output_path or "")
+    assert video.read_bytes() == b"fake-video"
+
+    from dataclasses import replace
+
+    ambiguous = replace(
+        original,
+        state=DownloadState.ATTENTION_REQUIRED,
+        output_path=None,
+        error_message="rival timed out",
+    )
+    downloads.save_attention_if_unconfirmed(ambiguous)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert video.read_bytes() == b"fake-video"
