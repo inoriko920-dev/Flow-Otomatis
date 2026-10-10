@@ -135,7 +135,10 @@ class SqliteDownloadResultRepository:
                         WHERE type = 'table' AND name = 'download_reconciliation_audit'
                         """
                     ).fetchone()
-                    if audit_table is None or connection.execute(
+                    if audit_table is None:
+                        connection.rollback()
+                        return False
+                    claim = connection.execute(
                         """
                         SELECT 1 FROM download_reconciliation_audit
                         WHERE episode_id = ? AND scene_id = ?
@@ -151,7 +154,8 @@ class SqliteDownloadResultRepository:
                             expected.take,
                             expected.updated_at.isoformat(),
                         ),
-                    ).fetchone() is None:
+                    ).fetchone()
+                    if claim is None:
                         connection.rollback()
                         return False
                 current = connection.execute(
