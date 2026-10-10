@@ -1186,6 +1186,67 @@ def test_browser_nonvideo_response_never_becomes_confirmed_mp4(
     assert len(driver.calls) == 1
 
 
+@pytest.mark.parametrize("malformed_suffix", ["\\x00", "\\x00private-token=DO_NOT_PERSIST"])
+def test_browser_success_path_with_nul_is_ambiguous_and_keeps_partial(
+    tmp_path: Path,
+    malformed_suffix: str,
+) -> None:
+    """A malformed success path never bypasses the Download ambiguity contract."""
+
+    class MalformedPathDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            return GoogleFlowDownloadEvidence(
+                state=GoogleFlowDownloadState.DOWNLOADED,
+                detail="untrusted-browser-result",
+                output_path=destination_path + malformed_suffix,
+            )
+
+    driver = MalformedPathDriver()
+    direct = GoogleFlowDownloadProvider("profile-test", driver)
+    standalone = tmp_path / "standalone.mp4"
+    request = GeneratedMediaDownloadRequest(
+        episode_id="EP500_DOWNLOAD",
+        scene_id="SCENE_001",
+        remote_result_id="remote:SCENE_001",
+        destination_path=str(standalone),
+    )
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation") as raised:
+        direct.download(request)
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+    assert not standalone.exists()
+    temporary = list(tmp_path.glob("standalone.mp4.*.part"))
+    assert len(temporary) == 1
+    assert temporary[0].read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1
+
+    root, _jobs, downloads, service = _setup(tmp_path, MalformedPathDriver())
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.ATTENTION_REQUIRED
+    assert recorded.generation_remote_result_id == "remote:SCENE_001"
+    assert "DO_NOT_PERSIST" not in (recorded.error_message or "")
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
+    folder = root / "EP500_DOWNLOAD" / "downloads"
+    preserved = list(folder.glob("SCENE_001__take_01.mp4.*.part"))
+    assert len(preserved) == 1
+    assert preserved[0].read_bytes() == b"fake-video"
+    assert not (folder / "SCENE_001__take_01.mp4").exists()
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+
 def test_google_flow_provider_rejects_success_at_wrong_path(tmp_path: Path) -> None:
     class WrongPathDriver(FakeDownloadDriver):
         def download_one(
