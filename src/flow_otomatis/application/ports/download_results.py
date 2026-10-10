@@ -44,6 +44,14 @@ class DownloadResultRepositoryPort(Protocol):
         """
         ...
 
+    def has_confirmed_manual_retry_authorization(self, record: DownloadRecord) -> bool:
+        """Read-only proof that the current FAILED revision came from operator review.
+
+        A leftover .part may coexist with a deliberately reviewed retry.
+        Mere FAILED status or free-form error text is not authorization.
+        """
+        ...
+
     def reconcile_attention_for_retry(
         self,
         episode_id: str,
