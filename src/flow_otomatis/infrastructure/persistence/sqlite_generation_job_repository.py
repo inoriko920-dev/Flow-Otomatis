@@ -652,7 +652,7 @@ class SqliteGenerationJobRepository:
         def optional(column: str) -> object | None:
             try:
                 return row[column]
-            except (IndexError, KeyError):
+            except IndexError, KeyError:
                 return None
 
         attention_raw = optional("attention_code")
