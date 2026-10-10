@@ -291,6 +291,92 @@ def test_controlled_download_failure_records_failure_without_retry(
         assert len(driver.calls) == 1
 
 
+@pytest.mark.parametrize(
+    "reported_state",
+    [
+        GoogleFlowDownloadState.SAFE_FAILURE,
+        GoogleFlowDownloadState.CANCELLED,
+        GoogleFlowDownloadState.AUTH_REQUIRED,
+    ],
+)
+def test_driver_cannot_report_safe_outcome_after_leaving_partial(
+    tmp_path: Path,
+    reported_state: GoogleFlowDownloadState,
+) -> None:
+    """Preserve uncertain partial bytes and require review instead of retry."""
+
+    class PartialThenSafeDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            path = Path(destination_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"uncertain-partial-from-browser")
+            return evidence
+
+    driver = PartialThenSafeDriver(reported_state)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="left a partial file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == "remote:SCENE_001"
+    assert stored.output_path is None
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    partials = list(directory.glob("SCENE_001__take_01.mp4.*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"uncertain-partial-from-browser"
+    assert not (directory / "SCENE_001__take_01.mp4").exists()
+
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+    assert partials[0].read_bytes() == b"uncertain-partial-from-browser"
+
+
+def test_driver_exception_with_partial_requires_reconciliation(tmp_path: Path) -> None:
+    """Even a typed safe exception cannot erase proof of a partial transfer."""
+
+    class InterruptedDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            partial = Path(destination_path)
+            partial.parent.mkdir(parents=True, exist_ok=True)
+            partial.write_bytes(b"partial-before-auth-error")
+            raise MediaDownloadProviderError("browser driver interrupted after writing")
+
+    driver = InterruptedDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="left a partial file"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    directory = root / "EP500_DOWNLOAD" / "downloads"
+    partials = list(directory.glob("SCENE_001__take_01.mp4.*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"partial-before-auth-error"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+
+
 def test_download_provider_rejects_untracked_existing_final_file(tmp_path: Path) -> None:
     driver = FakeDownloadDriver()
     _root, _jobs, _downloads, service = _setup(tmp_path, driver)
