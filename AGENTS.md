@@ -12,6 +12,20 @@ Flow-Otomatis is a Windows 11 x64 desktop application distributed as a portable 
 6. docs/adr/
 7. docs/handoff/current/
 
+## ATURAN PEMILIK — FEATURE FREEZE / NO NEW FEATURES (MANDATORY)
+
+**Berlaku untuk ASTRA, SOL, AI coding agent, kontributor, seluruh branch/PR, build, dan rilis.**
+Fitur, fungsi, alur, perilaku, integrasi, serta UI yang telah disepakati **DIKUNCI**. Fokus pekerjaan berikutnya adalah menyelesaikan fitur yang SUDAH disetujui, memperbaiki bug, keamanan, kestabilan, regresi, kesesuaian UI dengan referensi final, dan kesiapan build/packaging. Jangan menambah, menghapus, mengganti, memperluas, atau merancang ulang fitur/UX tanpa instruksi baru yang **spesifik dan eksplisit** dari pemilik.
+
+- DILARANG: fitur baru, menu/tombol/screen/mode/opsi/otomasi/provider baru, perubahan perilaku yang disepakati, perubahan UI tanpa referensi/persetujuan, serta "improvement" spekulatif.
+- BOLEH: perbaikan bug, tes/regresi, refactor tanpa perubahan perilaku pengguna, hardening keamanan dan kompatibilitas, perbaikan implementasi yang sudah disetujui, serta build/rilis untuk diuji. Helper internal baru hanya bila diperlukan untuk perbaikan, bukan perluasan fungsi produk.
+- Perintah **"lanjutkan"**, **"cek bug"**, **"perbaiki"**, **"final"**, atau **"build"** bukan izin menambah fitur. Saran ASTRA/SOL/AI, rencana terdahulu yang belum disetujui, dan asumsi teknis bukan izin.
+- **Satu-satunya pengecualian:** pemilik secara eksplisit meminta fitur/perubahan tertentu; dokumentasikan cakupan persis dan izin tersebut sebelum menerapkannya. Tidak ada izin implisit untuk fitur terkait.
+- Tetap patuhi seluruh gate keamanan, sumber UI/aset resmi, persyaratan file wajib, dan pembatasan penggunaan provider/kredit; feature freeze tidak membolehkan melewati gate.
+- Sebelum commit/PR: verifikasi bahwa setiap perubahan merupakan perbaikan atau realisasi fitur lama yang disetujui. Jika ada ide fitur tambahan, tulis sebagai usulan saja, **jangan diimplementasikan**.
+
+Kebijakan lengkap: `docs/FEATURE_FREEZE_POLICY.md`. **Aturan ini mengungguli usulan fitur di dokumen perencanaan lama, kecuali pemilik memberikan instruksi baru secara eksplisit.**
+
 ## Architecture
 presentation -> application -> domain
 infrastructure -> application ports/domain/contracts
