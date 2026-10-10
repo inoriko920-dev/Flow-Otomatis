@@ -25,7 +25,11 @@ class DownloadResultRepositoryPort(Protocol):
         ...
 
     def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Keep any confirmed DOWNLOADED evidence even if a rival attempt fails."""
+        """Never replace a success or unresolved ambiguous outcome with failure."""
+        ...
+
+    def save_attention_if_unconfirmed(self, record: DownloadRecord) -> None:
+        """Persist a sticky ambiguous outcome without clobbering prior success/attention."""
         ...
 
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
