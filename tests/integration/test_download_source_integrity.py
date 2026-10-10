@@ -866,3 +866,145 @@ def test_sol14_source_bytes_mutated_after_claim_before_provider_blocks_dispatch(
     assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
     assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
+
+
+def _replace_reviewed_download_state(
+    root: Path, *, state: str, output_path: str | None = None
+) -> None:
+    """Simulate a competing process committing a newer Download revision."""
+
+    with sqlite3.connect(root / _EPISODE / "project.sqlite3") as connection:
+        connection.execute(
+            """
+            UPDATE download_results
+            SET state = ?, updated_at = ?, output_path = ?, error_message = ?
+            WHERE episode_id = ? AND scene_id = ?
+            """,
+            (
+                state,
+                "2040-01-01T00:00:00+00:00",
+                output_path,
+                "Competing process outcome; preserve for reconciliation.",
+                _EPISODE,
+                _SCENE,
+            ),
+        )
+        connection.commit()
+
+
+@pytest.mark.parametrize(
+    "rival_state",
+    [DownloadState.FAILED, DownloadState.ATTENTION_REQUIRED, DownloadState.DOWNLOADED],
+)
+def test_sol15_status_changed_after_claim_before_provider_rejects_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rival_state: str
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    original_claim = rig.downloads.claim_reviewed_retry_if_present
+    claimed = False
+
+    def claim_then_commit_rival(
+        record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
+        nonlocal claimed
+        result = original_claim(record, expected_generation=expected_generation)
+        if result is True:
+            claimed = True
+            _replace_reviewed_download_state(rig.root, state=rival_state)
+        return result
+
+    monkeypatch.setattr(
+        rig.downloads, "claim_reviewed_retry_if_present", claim_then_commit_rival
+    )
+    with pytest.raises(InternalInvariantError, match="Download history changed"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert claimed
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE).state == rival_state
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
+        actions = [
+            row[0] for row in connection.execute(
+                "SELECT action FROM download_reconciliation_audit ORDER BY id"
+            )
+        ]
+    assert actions == ["OPERATOR_REVIEWED_RETRY", "OPERATOR_REVIEWED_RETRY_CLAIMED"]
+
+
+@pytest.mark.parametrize(
+    "rival_state",
+    [DownloadState.FAILED, DownloadState.ATTENTION_REQUIRED, DownloadState.DOWNLOADED],
+)
+def test_sol15_rival_status_during_provider_cannot_be_overwritten_by_mp4_save(
+    tmp_path: Path, rival_state: str
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    video = rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
+    rig.provider.on_download = lambda: _replace_reviewed_download_state(
+        rig.root,
+        state=rival_state,
+        output_path=str(video) if rival_state == DownloadState.DOWNLOADED else None,
+    )
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 1
+    assert video.read_bytes() == b"preserved-synthetic-mp4"
+    stored = rig.downloads.get(_EPISODE, _SCENE)
+    assert stored is not None
+    assert stored.state == rival_state
+    assert stored.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
+    assert stored.error_message == "Competing process outcome; preserve for reconciliation."
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
+        claim_count = connection.execute(
+            """
+            SELECT COUNT(*) FROM download_reconciliation_audit
+            WHERE action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+            """
+        ).fetchone()[0]
+    assert claim_count == 1
+
+
+def test_sol15_unmodified_reviewed_retry_can_finish_with_atomic_revision_guard(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+
+    result = rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert result.state == DownloadState.DOWNLOADED
+    assert rig.provider.calls == 1
+    assert rig.downloads.get(_EPISODE, _SCENE) == result
+    assert Path(result.output_path or "").read_bytes() == b"preserved-synthetic-mp4"
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+
+
+def test_sol15_claim_audit_required_even_when_review_row_fields_match(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    job = SqliteGenerationJobRepository(rig.root).list_for_episode(_EPISODE)[0]
+    attempted = DownloadRecord(
+        episode_id=_EPISODE,
+        scene_id=_SCENE,
+        state=DownloadState.DOWNLOADED,
+        updated_at=datetime.now(UTC),
+        output_path=str(rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"),
+        generation_remote_result_id="remote:source-verification",
+    )
+    # A reviewed FAILED row by itself is not enough to fabricate a successful
+    # retry: the matching one-shot claim must have committed first.
+    assert rig.downloads.save_if_current_generate(
+        attempted,
+        "remote:source-verification",
+        expected_reviewed_download=reviewed,
+    ) is False
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+    assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    assert job.state == GenerationJobState.GENERATED
