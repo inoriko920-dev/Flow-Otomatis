@@ -37,7 +37,7 @@ def _mp4_identity(path: Path, canonical: Path) -> tuple[int, int, int, int, int]
         if os.path.normcase(str(current)) != os.path.normcase(str(canonical)):
             return None
         info = os.stat(path, follow_symlinks=False)
-    except (OSError, RuntimeError, ValueError):
+    except OSError, RuntimeError, ValueError:
         return None
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
@@ -227,9 +227,12 @@ class LocalResultsService:
         # transaction commits, or the local MP4 can disappear before this
         # service returns. Match the exact persisted revision and file again
         # so Hasil callers never receive a stale, falsely confirmed result.
-        if not self._download_repository.matches_current_generated_download(
-            record, expected_generation=job
-        ) or _mp4_identity(original, local_output) != before_commit_mp4:
+        if (
+            not self._download_repository.matches_current_generated_download(
+                record, expected_generation=job
+            )
+            or _mp4_identity(original, local_output) != before_commit_mp4
+        ):
             raise InternalInvariantError(
                 "Local Download history or MP4 changed after atomic save; "
                 "local video needs reconciliation."

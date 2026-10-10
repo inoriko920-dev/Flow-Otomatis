@@ -1433,9 +1433,7 @@ def test_sol20_local_record_rejects_valid_mp4_replaced_after_commit(
     with pytest.raises(InternalInvariantError, match="MP4 changed after atomic save"):
         service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
     assert video.read_bytes() == replacement_bytes
-    row = SqliteDownloadResultRepository(tmp_path / "projects").get(
-        "EP400_RESULTS", "SCENE_001"
-    )
+    row = SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
     assert row is not None and row.state == DownloadState.DOWNLOADED
 
 
@@ -1474,6 +1472,7 @@ def test_sol20_local_record_rejects_path_redirect_during_resolution(
         service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
     assert swapped
     assert unrelated.read_bytes() == b"another-valid-video"
-    assert SqliteDownloadResultRepository(tmp_path / "projects").get(
-        "EP400_RESULTS", "SCENE_001"
-    ) is None
+    assert (
+        SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
+        is None
+    )
