@@ -23,17 +23,29 @@ def _setup(tmp_path: Path) -> tuple[Path, SqliteGenerationJobRepository]:
     root = tmp_path / "projects"
     now = datetime.now(UTC)
     scene = WorkspaceScene(
-        scene_id="SCENE_001", image_file="image.png", image_exists=True,
-        motion_prompt="Pan slowly", target_duration_s=3.8,
-        recommended_flow_duration_s=4, selected_flow_duration_s=4,
-        readiness=SceneReadiness.READY, trim_target_s=3.8,
-        model="Omni Flash 1.1", resolution="720p", aspect_ratio="16:9",
+        scene_id="SCENE_001",
+        image_file="image.png",
+        image_exists=True,
+        motion_prompt="Pan slowly",
+        target_duration_s=3.8,
+        recommended_flow_duration_s=4,
+        selected_flow_duration_s=4,
+        readiness=SceneReadiness.READY,
+        trim_target_s=3.8,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
     )
     workspace = WorkspaceState(
-        schema_version="1.0", episode_id="EP800_READ_ONLY",
-        project_name="Historical DB", source_package_path="package.zip",
-        created_at=now, imported_at=now,
-        model="Omni Flash 1.1", resolution="720p", aspect_ratio="16:9",
+        schema_version="1.0",
+        episode_id="EP800_READ_ONLY",
+        project_name="Historical DB",
+        source_package_path="package.zip",
+        created_at=now,
+        imported_at=now,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
         scenes=(scene,),
     )
     SqliteWorkspaceRepository(root).save(workspace)
@@ -48,11 +60,18 @@ def _job() -> GenerationJob:
     now = datetime.now(UTC)
     return GenerationJob(
         job_id="EP800_READ_ONLY:SCENE_001:GENERATE",
-        episode_id="EP800_READ_ONLY", scene_id="SCENE_001",
-        target_duration_s=3.8, flow_duration_s=4,
-        state=GenerationJobState.QUEUED, created_at=now, updated_at=now,
-        image_file="image.png", motion_prompt="Pan slowly",
-        model="Omni Flash 1.1", resolution="720p", aspect_ratio="16:9",
+        episode_id="EP800_READ_ONLY",
+        scene_id="SCENE_001",
+        target_duration_s=3.8,
+        flow_duration_s=4,
+        state=GenerationJobState.QUEUED,
+        created_at=now,
+        updated_at=now,
+        image_file="image.png",
+        motion_prompt="Pan slowly",
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
         request_fingerprint="test-request-revision",
     )
 
@@ -63,9 +82,12 @@ def test_t14_legacy_project_list_does_not_create_schema_or_journal(tmp_path: Pat
     assert repo.list_for_episode("EP800_READ_ONLY") == ()
     assert _digest(db) == before
     with sqlite3.connect(db) as connection:
-        assert connection.execute(
-            "SELECT name FROM sqlite_master WHERE name LIKE 'generation_%'"
-        ).fetchall() == []
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE name LIKE 'generation_%'"
+            ).fetchall()
+            == []
+        )
     assert not Path(str(db) + "-journal").exists()
     assert not Path(str(db) + "-wal").exists()
 
@@ -114,9 +136,15 @@ def test_t17_explicit_write_migrates_legacy_history(tmp_path: Path) -> None:
              state, created_at, updated_at, remote_result_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                job.job_id, job.episode_id, job.scene_id, job.target_duration_s,
-                job.flow_duration_s, "GENERATED", job.created_at.isoformat(),
-                job.updated_at.isoformat(), "remote:historical",
+                job.job_id,
+                job.episode_id,
+                job.scene_id,
+                job.target_duration_s,
+                job.flow_duration_s,
+                "GENERATED",
+                job.created_at.isoformat(),
+                job.updated_at.isoformat(),
+                "remote:historical",
             ),
         )
     before = _digest(db)
