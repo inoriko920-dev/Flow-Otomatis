@@ -2396,7 +2396,13 @@ def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
     assert len(driver.calls) == 2
     assert partials[0].read_bytes() == b"uncertain-original-partial"
     with sqlite3.connect(database) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM download_reconciliation_audit").fetchone()[0] == 1
+        actions = [
+            row[0]
+            for row in conn.execute(
+                "SELECT action FROM download_reconciliation_audit ORDER BY id"
+            )
+        ]
+    assert actions == ["OPERATOR_REVIEWED_RETRY", "OPERATOR_REVIEWED_RETRY_CLAIMED"]
 
 
 def test_reconciliation_accepts_current_generate_with_historical_whitespace(
