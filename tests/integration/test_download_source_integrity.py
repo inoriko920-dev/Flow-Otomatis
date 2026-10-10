@@ -304,3 +304,62 @@ def test_sol09_late_source_change_after_atomic_save_does_not_return_success(
     assert stored.state == DownloadState.DOWNLOADED
     assert Path(stored.output_path or "").read_bytes() == b"preserved-synthetic-mp4"
     assert not rig.results.snapshot(_EPISODE).handoff_ready
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+def test_sol10_cache_image_mutates_during_download_row_lookup_no_false_success(
+    tmp_path: Path, zip_source: bool
+) -> None:
+    rig = _setup(tmp_path, zip_source=zip_source)
+    existing = rig.service.download_scene(_EPISODE, _SCENE)
+    video = Path(existing.output_path or "")
+
+    class ChangeImageDuringRead(SqliteDownloadResultRepository):
+        def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
+            record = super().get(episode_id, scene_id)
+            _change_image(rig.source)
+            return record
+
+    workspaces = SqliteWorkspaceRepository(rig.root)
+    service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        ChangeImageDuringRead(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=workspaces,
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="source image"):
+        service.download_scene(_EPISODE, _SCENE)
+    assert rig.provider.calls == 1
+    assert rig.downloads.get(_EPISODE, _SCENE) == existing
+    assert video.read_bytes() == b"preserved-synthetic-mp4"
+    assert not rig.results.snapshot(_EPISODE).handoff_ready
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+def test_sol10_image_mutates_during_empty_history_lookup_provider_not_called(
+    tmp_path: Path, zip_source: bool
+) -> None:
+    rig = _setup(tmp_path, zip_source=zip_source)
+
+    class ChangeImageDuringRead(SqliteDownloadResultRepository):
+        def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
+            record = super().get(episode_id, scene_id)
+            assert record is None
+            _change_image(rig.source)
+            return record
+
+    service = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        ChangeImageDuringRead(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="source image"):
+        service.download_scene(_EPISODE, _SCENE)
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) is None
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
