@@ -141,8 +141,7 @@ class GeneratedMediaDownloadService:
                 "manual reconciliation required."
             ) from None
         if interrupted_partial_exists and (
-            existing is None
-            or not self._download_repository.has_confirmed_manual_retry_authorization(existing)
+            existing is None or existing.state != DownloadState.FAILED
         ):
             raise InternalInvariantError(
                 "Prior Download partial file exists without a confirmed result; "
@@ -153,6 +152,21 @@ class GeneratedMediaDownloadService:
         # Re-read source bytes immediately before the provider boundary so
         # a changed input cannot begin a new download unnoticed.
         self._require_current_source(episode_id, scene_id, job)
+        if existing is not None and existing.state == DownloadState.FAILED:
+            # A prior operator review can approve ONE attempt only. Claim it
+            # under the SQLite write lock before any provider invocation;
+            # a crash must not make that same approval reusable forever.
+            review_claim = self._download_repository.claim_reviewed_retry_if_present(existing)
+            if review_claim is False:
+                raise InternalInvariantError(
+                    "Prior reviewed Download retry was consumed or changed; "
+                    "manual reconciliation required."
+                )
+            if interrupted_partial_exists and review_claim is not True:
+                raise InternalInvariantError(
+                    "Prior Download partial file exists without a confirmed result; "
+                    "manual reconciliation required before another attempt."
+                )
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
