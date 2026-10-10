@@ -156,7 +156,9 @@ class GeneratedMediaDownloadService:
             # A prior operator review can approve ONE attempt only. Claim it
             # under the SQLite write lock before any provider invocation;
             # a crash must not make that same approval reusable forever.
-            review_claim = self._download_repository.claim_reviewed_retry_if_present(existing)
+            review_claim = self._download_repository.claim_reviewed_retry_if_present(
+                existing, expected_generation=job
+            )
             if review_claim is False:
                 raise InternalInvariantError(
                     "Prior reviewed Download retry was consumed or changed; "
