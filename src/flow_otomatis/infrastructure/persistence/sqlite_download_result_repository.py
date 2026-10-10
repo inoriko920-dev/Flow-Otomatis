@@ -116,8 +116,16 @@ class SqliteDownloadResultRepository:
                            download_results.state = 'DOWNLOADED'
                            AND download_results.generation_remote_result_id =
                                excluded.generation_remote_result_id
-                           AND download_results.output_path IS excluded.output_path
-                           AND download_results.take = excluded.take
+                           AND (
+                               (
+                                   download_results.take = excluded.take
+                                   AND download_results.output_path IS excluded.output_path
+                               )
+                               OR (
+                                   download_results.take != excluded.take
+                                   AND download_results.output_path IS NOT excluded.output_path
+                               )
+                           )
                        )
                     """,
                     (
