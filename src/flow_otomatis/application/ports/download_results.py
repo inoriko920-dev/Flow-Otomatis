@@ -32,6 +32,22 @@ class DownloadResultRepositoryPort(Protocol):
         """Persist a sticky ambiguous outcome without clobbering prior success/attention."""
         ...
 
+    def reconcile_attention_for_retry(
+        self,
+        episode_id: str,
+        scene_id: str,
+        *,
+        expected_remote_result_id: str,
+        expected_updated_at: str,
+    ) -> bool:
+        """Atomically release one manually reviewed ambiguous Download.
+
+        Implementations must match the current Generate identity and the exact
+        ATTENTION_REQUIRED row revision, and append an audit entry. No file
+        operations or browser retries are permitted here.
+        """
+        ...
+
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         """Read one download outcome."""
         ...
