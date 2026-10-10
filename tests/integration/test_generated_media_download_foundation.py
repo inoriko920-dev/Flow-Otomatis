@@ -943,3 +943,159 @@ def test_ambiguous_attempt_does_not_erase_prior_confirmed_result(tmp_path: Path)
     downloads.save_attention_if_unconfirmed(ambiguous)
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
     assert video.read_bytes() == b"fake-video"
+
+
+def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
+    tmp_path: Path,
+) -> None:
+    """Review authorizes a *future* user-initiated attempt, not a hidden retry."""
+
+    import sqlite3
+
+    class PartialAmbiguousDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            if self.state is GoogleFlowDownloadState.AMBIGUOUS:
+                path = Path(destination_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"uncertain-original-partial")
+            return super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+
+    driver = PartialAmbiguousDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    ambiguous = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert ambiguous is not None
+    assert ambiguous.state == DownloadState.ATTENTION_REQUIRED
+    partials = list((root / "EP500_DOWNLOAD" / "downloads").glob("*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"uncertain-original-partial"
+
+    args = {
+        "expected_remote_result_id": "remote:SCENE_001",
+        "expected_updated_at": ambiguous.updated_at.isoformat(),
+    }
+    with pytest.raises(InternalInvariantError, match="Manual provider"):
+        service.release_retry_after_manual_review(
+            "EP500_DOWNLOAD", "SCENE_001",
+            reviewed_provider_and_local_files=False, **args
+        )
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == ambiguous
+    assert len(driver.calls) == 1
+
+    released = service.release_retry_after_manual_review(
+        "EP500_DOWNLOAD", "SCENE_001",
+        reviewed_provider_and_local_files=True, **args
+    )
+    assert released.state == DownloadState.FAILED
+    assert released.generation_remote_result_id == "remote:SCENE_001"
+    assert released.output_path is None
+    assert partials[0].read_bytes() == b"uncertain-original-partial"
+    assert len(driver.calls) == 1  # clearing the gate never calls the provider
+
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    with sqlite3.connect(database) as conn:
+        audit = conn.execute(
+            """SELECT generation_remote_result_id, prior_updated_at,
+                      action, prior_error_message
+               FROM download_reconciliation_audit"""
+        ).fetchall()
+    assert len(audit) == 1
+    assert audit[0][0] == "remote:SCENE_001"
+    assert audit[0][1] == args["expected_updated_at"]
+    assert audit[0][2] == "OPERATOR_REVIEWED_RETRY"
+    assert audit[0][3] is not None
+
+    # The old reviewer revision is no longer valid and cannot release again.
+    with pytest.raises(InternalInvariantError, match="evidence changed"):
+        service.release_retry_after_manual_review(
+            "EP500_DOWNLOAD", "SCENE_001",
+            reviewed_provider_and_local_files=True, **args
+        )
+    driver.state = GoogleFlowDownloadState.DOWNLOADED
+    confirmed = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert confirmed.state == DownloadState.DOWNLOADED
+    assert len(driver.calls) == 2
+    assert partials[0].read_bytes() == b"uncertain-original-partial"
+    with sqlite3.connect(database) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM download_reconciliation_audit").fetchone()[0] == 1
+
+
+def test_ambiguous_reconciliation_rejects_stale_generate_and_download_revisions(
+    tmp_path: Path,
+) -> None:
+    import sqlite3
+
+    driver = FakeDownloadDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    original = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert original is not None
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    expected_time = original.updated_at.isoformat()
+    base = {
+        "expected_remote_result_id": "remote:SCENE_001",
+        "reviewed_provider_and_local_files": True,
+    }
+    with pytest.raises(InternalInvariantError, match="evidence changed"):
+        service.release_retry_after_manual_review(
+            "EP500_DOWNLOAD", "SCENE_001",
+            expected_updated_at="2020-01-01T00:00:00+00:00", **base
+        )
+    with sqlite3.connect(database) as conn:
+        conn.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:replacement", "SCENE_001"),
+        )
+        conn.commit()
+
+    with pytest.raises(InternalInvariantError, match="retry is not authorized"):
+        service.release_retry_after_manual_review(
+            "EP500_DOWNLOAD", "SCENE_001",
+            expected_updated_at=expected_time, **base
+        )
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    with sqlite3.connect(database) as conn:
+        assert conn.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
+        ).fetchone() is None
+    assert len(driver.calls) == 1
+
+
+def test_manual_review_refuses_existing_canonical_mp4_and_keeps_ambiguous_history(
+    tmp_path: Path,
+) -> None:
+    import sqlite3
+
+    driver = FakeDownloadDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    previous = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert previous is not None
+    video = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    video.write_bytes(b"possible-existing-download")
+    with pytest.raises(InternalInvariantError, match="destination exists"):
+        service.release_retry_after_manual_review(
+            "EP500_DOWNLOAD", "SCENE_001",
+            expected_remote_result_id="remote:SCENE_001",
+            expected_updated_at=previous.updated_at.isoformat(),
+            reviewed_provider_and_local_files=True,
+        )
+    assert video.read_bytes() == b"possible-existing-download"
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == previous
+    with sqlite3.connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as conn:
+        assert conn.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
+        ).fetchone() is None
