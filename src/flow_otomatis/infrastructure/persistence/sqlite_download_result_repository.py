@@ -368,6 +368,70 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError("Could not verify cached Download against current Generate") from exc
 
+    def has_confirmed_manual_retry_authorization(self, record: DownloadRecord) -> bool:
+        """Prove reviewed retry using the exact persisted row and SQLite audit.
+
+        This is an identity-bound read-only check. Neither a FAILED row nor a
+        copied error message can authorize ignoring crash-left .part files.
+        """
+
+        if (
+            record.state != DownloadState.FAILED
+            or record.output_path is not None
+            or not record.generation_remote_result_id
+        ):
+            return False
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect_readonly(db_path) as connection:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+                if not {"download_results", "download_reconciliation_audit"} <= tables:
+                    return False
+                return (
+                    connection.execute(
+                        """
+                        SELECT 1
+                        FROM download_results AS d
+                        JOIN download_reconciliation_audit AS a
+                          ON a.episode_id = d.episode_id
+                         AND a.scene_id = d.scene_id
+                         AND a.generation_remote_result_id =
+                             d.generation_remote_result_id
+                         AND a.take = d.take
+                         AND a.resolved_at = d.updated_at
+                        WHERE d.episode_id = ? AND d.scene_id = ?
+                          AND d.state = 'FAILED'
+                          AND d.updated_at = ?
+                          AND d.take = ?
+                          AND d.generation_remote_result_id = ?
+                          AND d.output_path IS NULL
+                          AND d.error_message =
+                              'Manual review completed; retry requires a separate explicit action.'
+                          AND a.action = 'OPERATOR_REVIEWED_RETRY'
+                        LIMIT 1
+                        """,
+                        (
+                            record.episode_id,
+                            record.scene_id,
+                            record.updated_at.isoformat(),
+                            record.take,
+                            record.generation_remote_result_id,
+                        ),
+                    ).fetchone()
+                    is not None
+                )
+        except sqlite3.Error as exc:
+            raise StorageError(
+                "Could not verify manually reconciled Download retry authorization"
+            ) from exc
+
     def reconcile_attention_for_retry(
         self,
         episode_id: str,
