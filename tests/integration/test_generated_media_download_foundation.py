@@ -1589,6 +1589,7 @@ def test_manual_review_refuses_existing_canonical_mp4_and_keeps_ambiguous_histor
             is None
         )
 
+
 @pytest.mark.parametrize(
     "replacement_state",
     [DownloadState.FAILED, DownloadState.ATTENTION_REQUIRED, DownloadState.DOWNLOADED],
@@ -1686,4 +1687,3 @@ def test_guarded_success_rejects_same_generate_id_but_changed_confirmed_identity
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
     assert Path(original.output_path or "").read_bytes() == b"fake-video"
     assert len(driver.calls) == 1
-
