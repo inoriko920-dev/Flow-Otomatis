@@ -1588,3 +1588,102 @@ def test_manual_review_refuses_existing_canonical_mp4_and_keeps_ambiguous_histor
             ).fetchone()
             is None
         )
+
+@pytest.mark.parametrize(
+    "replacement_state",
+    [DownloadState.FAILED, DownloadState.ATTENTION_REQUIRED, DownloadState.DOWNLOADED],
+)
+def test_plain_save_cannot_downgrade_or_repoint_confirmed_mp4(
+    tmp_path: Path,
+    replacement_state: str,
+) -> None:
+    """The legacy convenience upsert cannot erase immutable success evidence."""
+
+    from dataclasses import replace
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    path = Path(original.output_path or "")
+    original_bytes = path.read_bytes()
+
+    alternate = replace(
+        original,
+        state=replacement_state,
+        updated_at=datetime.now(UTC),
+        output_path=str(path.with_name("different-take.mp4")),
+        take=2,
+        error_message="unsafe replacement",
+    )
+    downloads.save(alternate)
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert path.read_bytes() == original_bytes
+    assert not path.with_name("different-take.mp4").exists()
+    assert len(driver.calls) == 1
+    assert (root / "EP500_DOWNLOAD" / "project.sqlite3").exists()
+
+
+@pytest.mark.parametrize(
+    "replacement_state",
+    [DownloadState.FAILED, DownloadState.ATTENTION_REQUIRED, DownloadState.DOWNLOADED],
+)
+def test_plain_save_does_not_clear_unreviewed_ambiguity(
+    tmp_path: Path,
+    replacement_state: str,
+) -> None:
+    """Only audited manual reconciliation can release ATTENTION_REQUIRED."""
+
+    from dataclasses import replace
+
+    driver = FakeDownloadDriver(GoogleFlowDownloadState.AMBIGUOUS)
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    original = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert original is not None
+    assert original.state == DownloadState.ATTENTION_REQUIRED
+
+    downloads.save(
+        replace(
+            original,
+            state=replacement_state,
+            updated_at=datetime.now(UTC),
+            output_path="/unsafe/stale.mp4",
+            error_message="attempt to erase ambiguity",
+        )
+    )
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize("variation", ["different_mp4", "different_take", "different_remote"])
+def test_guarded_success_rejects_same_generate_id_but_changed_confirmed_identity(
+    tmp_path: Path,
+    variation: str,
+) -> None:
+    """The exact remote ID alone cannot authorize replacing recorded MP4 evidence."""
+
+    from dataclasses import replace
+
+    driver = FakeDownloadDriver()
+    _root, _jobs, downloads, service = _setup(tmp_path, driver)
+    original = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    changed = {"updated_at": datetime.now(UTC)}
+    if variation == "different_mp4":
+        changed["output_path"] = str(Path(original.output_path or "").with_name("other.mp4"))
+    elif variation == "different_take":
+        changed["take"] = 3
+    else:
+        changed["generation_remote_result_id"] = "remote:DIFFERENT"
+    attempted = replace(original, **changed)
+    if variation == "different_remote":
+        with pytest.raises(ValueError, match="identity does not match"):
+            downloads.save_if_current_generate(attempted, "remote:SCENE_001")
+    else:
+        assert downloads.save_if_current_generate(attempted, "remote:SCENE_001") is False
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
+    assert Path(original.output_path or "").read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1
+
