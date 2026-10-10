@@ -20,7 +20,7 @@ from flow_otomatis.application.services.generated_media_download import (
 from flow_otomatis.domain.errors import InternalInvariantError, StorageError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
-from flow_otomatis.domain.result import DownloadState
+from flow_otomatis.domain.result import DownloadRecord, DownloadState
 from flow_otomatis.infrastructure.persistence import (
     SqliteDownloadResultRepository,
     SqliteGenerationJobRepository,
@@ -397,6 +397,94 @@ def test_browser_driver_typed_exception_text_never_leaks(
         (MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
     ],
 )
+@pytest.mark.parametrize("error_class", [TimeoutError, OSError, RuntimeError])
+@pytest.mark.parametrize("leave_final_mp4", [False, True])
+def test_unexpected_alternate_provider_crash_is_sticky_and_preserves_bytes(
+    tmp_path: Path,
+    error_class: type[Exception],
+    leave_final_mp4: bool,
+) -> None:
+    """The service enforces fail-closed semantics for *any* Download provider."""
+
+    class CrashingProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            self.calls += 1
+            if leave_final_mp4:
+                destination = Path(request.destination_path)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(b"uncertain-final-mp4")
+            raise error_class("private-browser-cookie=DO_NOT_PERSIST")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    provider = CrashingProvider()
+    service._provider = provider  # type: ignore[assignment]
+
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation") as raised:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == "remote:SCENE_001"
+    assert stored.output_path is None
+    assert "DO_NOT_PERSIST" not in (stored.error_message or "")
+    assert b"DO_NOT_PERSIST" not in (
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ).read_bytes()
+
+    final_mp4 = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final_mp4.exists() is leave_final_mp4
+    if leave_final_mp4:
+        assert final_mp4.read_bytes() == b"uncertain-final-mp4"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert provider.calls == 1
+    if leave_final_mp4:
+        assert final_mp4.read_bytes() == b"uncertain-final-mp4"
+
+
+def test_unexpected_provider_crash_does_not_replace_rival_confirmed_download(
+    tmp_path: Path,
+) -> None:
+    """A concurrent confirmed MP4 must survive an older provider's crash."""
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    original_provider = service._provider
+
+    class RacingProvider:
+        def download(self, request: GeneratedMediaDownloadRequest) -> None:
+            original_provider.download(request)
+            # Simulate a different process committing the confirmed result
+            # before this provider's uncertain exception returns.
+            saved = DownloadRecord(
+                episode_id=request.episode_id,
+                scene_id=request.scene_id,
+                state=DownloadState.DOWNLOADED,
+                updated_at=datetime.now(UTC),
+                output_path=request.destination_path,
+                take=1,
+                generation_remote_result_id=request.remote_result_id,
+            )
+            assert downloads.save_if_current_generate(saved, request.remote_result_id)
+            raise RuntimeError("private-token=DO_NOT_PERSIST")
+
+    service._provider = RacingProvider()  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAmbiguousError):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.DOWNLOADED
+    final_mp4 = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final_mp4.read_bytes() == b"fake-video"
+    assert b"DO_NOT_PERSIST" not in (
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ).read_bytes()
+
+
 def test_download_service_redacts_custom_provider_error_on_sqlite_boundary(
     tmp_path: Path,
     error_type: type[MediaDownloadProviderError],
