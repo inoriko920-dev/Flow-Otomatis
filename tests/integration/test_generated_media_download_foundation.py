@@ -432,9 +432,7 @@ def test_unexpected_alternate_provider_crash_is_sticky_and_preserves_bytes(
     assert stored.generation_remote_result_id == "remote:SCENE_001"
     assert stored.output_path is None
     assert "DO_NOT_PERSIST" not in (stored.error_message or "")
-    assert b"DO_NOT_PERSIST" not in (
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ).read_bytes()
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
 
     final_mp4 = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
     assert final_mp4.exists() is leave_final_mp4
@@ -480,9 +478,7 @@ def test_unexpected_provider_crash_does_not_replace_rival_confirmed_download(
     assert recorded.state == DownloadState.DOWNLOADED
     final_mp4 = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
     assert final_mp4.read_bytes() == b"fake-video"
-    assert b"DO_NOT_PERSIST" not in (
-        root / "EP500_DOWNLOAD" / "project.sqlite3"
-    ).read_bytes()
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
 
 
 def test_download_service_redacts_custom_provider_error_on_sqlite_boundary(
