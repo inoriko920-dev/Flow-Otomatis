@@ -168,14 +168,19 @@ class LocalResultsService:
         scene_id: str,
         error_message: str,
     ) -> DownloadRecord:
-        """Record a Download failure without modifying Generate state."""
+        """Record a Download failure without modifying Generate state.
 
+        Caller error text is untrusted: it can include signed URLs, API keys,
+        browser cookies and local paths. Do not persist it to project history.
+        """
+
+        del error_message
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
             state=DownloadState.FAILED,
             updated_at=datetime.now(UTC),
-            error_message=error_message[:500],
+            error_message="Local Download failed; no confirmed MP4 was recorded.",
         )
         # An out-of-order failure must not erase a confirmed local video.
         # Use the repository's atomic conditional write, not a read-then-save.
