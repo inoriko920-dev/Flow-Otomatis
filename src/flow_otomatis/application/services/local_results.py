@@ -146,10 +146,14 @@ class LocalResultsService:
                 "Download requires a current GENERATED job with a stable remote result ID"
             )
         workspace = self._workspace_repository.load(episode_id)
-        scene = next(
-            (candidate for candidate in workspace.scenes if candidate.scene_id == scene_id),
-            None,
-        ) if workspace is not None else None
+        scene = (
+            next(
+                (candidate for candidate in workspace.scenes if candidate.scene_id == scene_id),
+                None,
+            )
+            if workspace is not None
+            else None
+        )
         if scene is None or not self._matches_current_scene(job, scene):
             raise InternalInvariantError(
                 "Download belongs to a previous Scene revision; refresh Generate history first"
