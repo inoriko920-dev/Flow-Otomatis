@@ -1193,7 +1193,65 @@ def test_download_worker_never_publishes_a_linked_partial_even_if_driver_claims_
     assert not list((tmp_path / "projects").rglob("SCENE_001__take_01.mp4"))
 
 
-def test_download_service_rejects_provider_symlink_success_without_persisting(
+@pytest.mark.parametrize(
+    "variant",
+    ["wrong_path", "wrong_path_with_final", "missing_file", "empty_final"],
+)
+def test_unverified_provider_success_requires_review_and_preserves_outputs(
+    tmp_path: Path,
+    variant: str,
+) -> None:
+    """A typed success cannot permit a retry if the MP4 evidence is unverified."""
+
+    class UnverifiedProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> GeneratedMediaDownloadResult:
+            self.calls += 1
+            final = Path(request.destination_path)
+            final.parent.mkdir(parents=True, exist_ok=True)
+            if variant.startswith("wrong_path"):
+                alternate = tmp_path / "outside.mp4"
+                alternate.write_bytes(b"unrelated-output")
+                if variant == "wrong_path_with_final":
+                    final.write_bytes(b"uncertain-canonical")
+                return GeneratedMediaDownloadResult(output_path=str(alternate))
+            if variant == "empty_final":
+                final.write_bytes(b"")
+            return GeneratedMediaDownloadResult(output_path=str(final))
+
+    provider = UnverifiedProvider()
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    service._provider = provider  # type: ignore[assignment]
+
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == "remote:SCENE_001"
+    assert stored.take == 1
+    assert stored.output_path is None
+    assert stored.error_message is not None
+
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    if variant == "wrong_path_with_final":
+        assert final.read_bytes() == b"uncertain-canonical"
+    elif variant == "empty_final":
+        assert final.is_file() and final.stat().st_size == 0
+    else:
+        assert not final.exists()
+    if variant.startswith("wrong_path"):
+        assert (tmp_path / "outside.mp4").read_bytes() == b"unrelated-output"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert provider.calls == 1
+    if variant == "wrong_path_with_final":
+        assert final.read_bytes() == b"uncertain-canonical"
+
+
+def test_download_service_rejects_provider_symlink_success_with_sticky_review(
     tmp_path: Path,
 ) -> None:
     from flow_otomatis.application.ports.generated_media_download import (
@@ -1215,9 +1273,19 @@ def test_download_service_rejects_provider_symlink_success_without_persisting(
     service = GeneratedMediaDownloadService(
         jobs, downloads, LinkedFinalProvider(), tmp_path / "projects"
     )
-    with pytest.raises(InternalInvariantError, match="regular file"):
+    with pytest.raises(MediaDownloadAmbiguousError, match="unavailable or redirected MP4"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
-    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == "remote:SCENE_001"
+    assert stored.output_path is None
+    symlink = tmp_path / "projects" / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert symlink.is_symlink()
+    assert symlink.read_bytes() == b"unrelated-bytes"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert symlink.is_symlink()
 
 
 def test_download_worker_rejects_invalid_partial_even_when_symlink_creation_unavailable(
