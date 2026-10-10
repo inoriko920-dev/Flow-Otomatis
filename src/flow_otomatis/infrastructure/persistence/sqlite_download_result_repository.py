@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
+from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
@@ -443,7 +444,9 @@ class SqliteDownloadResultRepository:
                 "Could not verify manually reconciled Download retry authorization"
             ) from exc
 
-    def claim_reviewed_retry_if_present(self, record: DownloadRecord) -> bool | None:
+    def claim_reviewed_retry_if_present(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
         """Consume exactly one reviewed retry using an SQLite BEGIN IMMEDIATE lock.
 
         A claim is committed before any browser attempt, so power loss cannot
@@ -454,6 +457,15 @@ class SqliteDownloadResultRepository:
 
         if record.state != DownloadState.FAILED:
             return None
+        if (
+            expected_generation.episode_id != record.episode_id
+            or expected_generation.scene_id != record.scene_id
+            or expected_generation.state is not GenerationJobState.GENERATED
+            or not expected_generation.has_verified_request_snapshot
+            or (expected_generation.remote_result_id or "").strip()
+            != record.generation_remote_result_id
+        ):
+            return False
         db_path = self._db_path(record.episode_id)
         if not db_path.is_file():
             return False
@@ -556,10 +568,41 @@ class SqliteDownloadResultRepository:
                     )
                     connection.commit()
                     return False
-                # Do not claim an authorization for a now-stale Generate.
-                if not self._failure_generate_is_current(
-                    connection, record, record.generation_remote_result_id or ""
-                ):
+                # The row and its Generate revision must be coherent under
+                # the SAME write lock. A matching remote ID alone does not
+                # prove that the prepared request or Scene stayed unchanged.
+                coherent = connection.execute(
+                    """
+                    SELECT 1
+                    FROM generation_jobs AS g
+                    JOIN scenes AS s ON s.scene_id = g.scene_id
+                    WHERE g.episode_id = ? AND g.scene_id = ?
+                      AND g.job_id = ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                      AND g.updated_at = ?
+                      AND g.request_fingerprint = ?
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
+                      AND g.target_duration_s = s.target_duration_s
+                      AND g.flow_duration_s = s.selected_flow_duration_s
+                      AND g.image_file = s.image_file
+                      AND g.motion_prompt = s.motion_prompt
+                      AND g.model = s.model
+                      AND g.resolution = s.resolution
+                      AND g.aspect_ratio = s.aspect_ratio
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        expected_generation.job_id,
+                        record.generation_remote_result_id,
+                        expected_generation.updated_at.isoformat(),
+                        expected_generation.request_fingerprint,
+                    ),
+                ).fetchone()
+                if coherent is None:
                     connection.rollback()
                     return False
                 connection.execute(
