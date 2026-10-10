@@ -23,6 +23,7 @@ from flow_otomatis.domain.errors import InternalInvariantError, StorageError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
+from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.persistence import (
     SqliteDownloadResultRepository,
     SqliteGenerationJobRepository,
@@ -47,7 +48,22 @@ def _workspace(episode_id: str = "EP500_DOWNLOAD") -> WorkspaceState:
         model="Omni Flash 1.1",
         resolution="720p",
         aspect_ratio="16:9",
-        scenes=(),
+        scenes=(
+            WorkspaceScene(
+                scene_id="SCENE_001",
+                image_file="SCENE_001.png",
+                image_exists=True,
+                motion_prompt="Slow push in.",
+                target_duration_s=4.0,
+                recommended_flow_duration_s=4,
+                selected_flow_duration_s=4,
+                readiness=SceneReadiness.READY,
+                trim_target_s=4.0,
+                model="Omni Flash 1.1",
+                resolution="720p",
+                aspect_ratio="16:9",
+            ),
+        ),
     )
 
 
