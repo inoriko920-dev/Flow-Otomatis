@@ -382,10 +382,7 @@ class GeneratedMediaDownloadService:
             item.scene_id: item for item in self._job_repository.list_for_episode(episode_id)
         }
         current_job = current_jobs.get(scene_id)
-        if (
-            current_job is None
-            or current_job != job
-        ):
+        if current_job is None or current_job != job:
             # Never delete an MP4 that was already published: recovery is an
             # explicit operator reconciliation, not an automatic retry.
             raise InternalInvariantError(
