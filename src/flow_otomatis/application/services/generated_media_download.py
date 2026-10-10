@@ -10,6 +10,7 @@ from typing import NoReturn
 
 from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadProviderPort,
     GeneratedMediaDownloadRequest,
@@ -20,8 +21,12 @@ from flow_otomatis.application.ports.generated_media_download import (
     MediaDownloadProviderError,
 )
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
+from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
+from flow_otomatis.application.services.scene_source_integrity import (
+    matches_current_generated_scene,
+)
 from flow_otomatis.domain.errors import InternalInvariantError
-from flow_otomatis.domain.job import GenerationJobState
+from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 
 
@@ -34,11 +39,18 @@ class GeneratedMediaDownloadService:
         download_repository: DownloadResultRepositoryPort,
         provider: GeneratedMediaDownloadProviderPort,
         projects_root: Path,
+        *,
+        workspace_repository: WorkspaceRepositoryPort | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
     ) -> None:
         self._job_repository = job_repository
         self._download_repository = download_repository
         self._provider = provider
         self._projects_root = projects_root
+        if (workspace_repository is None) != (image_verifier is None):
+            raise ValueError("Source integrity requires both Workspace and image verifier")
+        self._workspace_repository = workspace_repository
+        self._image_verifier = image_verifier
 
     def download_scene(
         self,
@@ -72,6 +84,8 @@ class GeneratedMediaDownloadService:
             raise InternalInvariantError(
                 "Download requires a stable remote result identifier from Generate."
             )
+        # Verify real source bytes BEFORE cached MP4 reuse or provider traffic.
+        self._require_current_source(episode_id, scene_id, job)
 
         existing = self._download_repository.get(episode_id, scene_id)
         if existing is not None and existing.state == DownloadState.ATTENTION_REQUIRED:
@@ -278,6 +292,9 @@ class GeneratedMediaDownloadService:
                 "Generate result changed during Download; local video needs reconciliation."
             )
 
+        # Source bytes can change while a browser worker runs, even when
+        # the saved Scene name and Generate ID remain identical.
+        self._require_current_source(episode_id, scene_id, current_job)
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -294,7 +311,39 @@ class GeneratedMediaDownloadService:
                 "Generate result changed during atomic Download save; "
                 "local video needs reconciliation."
             )
+        # A changed source during the SQLite commit must not be returned as
+        # verified success. Keep both MP4 bytes and the historical SQLite row
+        # for read-only Handoff reconciliation instead of deleting evidence.
+        self._require_current_source(episode_id, scene_id, current_job)
         return record
+
+    def _require_current_source(
+        self, episode_id: str, scene_id: str, job: GenerationJob
+    ) -> None:
+        """Fail closed for a configured canonical source verifier.
+
+        Legacy offline-only callers may omit the pair of source dependencies;
+        real Download composition must supply both.
+        """
+
+        if self._workspace_repository is None or self._image_verifier is None:
+            return
+        workspace = self._workspace_repository.load(episode_id)
+        scene = (
+            next(
+                (candidate for candidate in workspace.scenes if candidate.scene_id == scene_id),
+                None,
+            )
+            if workspace is not None
+            else None
+        )
+        if scene is None or not matches_current_generated_scene(
+            job, scene, workspace.source_package_path, self._image_verifier
+        ):
+            raise InternalInvariantError(
+                "Download source image or prepared Generate revision no longer matches; "
+                "manual reconciliation required."
+            )
 
     def _reject_unverified_success(
         self,
