@@ -18,7 +18,7 @@ from flow_otomatis.domain.result import (
     ProjectResults,
     SceneResult,
 )
-from flow_otomatis.domain.scene import WorkspaceScene
+from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 
 
 class LocalResultsService:
@@ -116,6 +116,8 @@ class LocalResultsService:
 
         return (
             job.has_verified_request_snapshot
+            and scene.image_exists
+            and scene.readiness is SceneReadiness.READY
             and job.target_duration_s == scene.target_duration_s
             and job.flow_duration_s == scene.selected_flow_duration_s
             and job.image_file == scene.image_file
