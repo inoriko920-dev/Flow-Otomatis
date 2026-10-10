@@ -11,6 +11,7 @@ from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadRequest,
     MediaDownloadAmbiguousError,
     MediaDownloadAuthenticationRequiredError,
+    MediaDownloadCancelledError,
     MediaDownloadProviderError,
 )
 from flow_otomatis.application.services.generated_media_download import (
@@ -289,6 +290,131 @@ def test_controlled_download_failure_records_failure_without_retry(
         with pytest.raises(InternalInvariantError, match="manual reconciliation"):
             service.download_scene("EP500_DOWNLOAD", "SCENE_001")
         assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("state", "error_type", "expected_state"),
+    [
+        (GoogleFlowDownloadState.SAFE_FAILURE, MediaDownloadProviderError, DownloadState.FAILED),
+        (GoogleFlowDownloadState.AUTH_REQUIRED, MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
+        (GoogleFlowDownloadState.CANCELLED, MediaDownloadCancelledError, DownloadState.FAILED),
+        (GoogleFlowDownloadState.AMBIGUOUS, MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
+    ],
+)
+def test_browser_evidence_detail_never_enters_errors_or_sqlite(
+    tmp_path: Path,
+    state: GoogleFlowDownloadState,
+    error_type: type[Exception],
+    expected_state: str,
+) -> None:
+    """Sanitized driver evidence cannot leak private session URLs into history."""
+
+    class SecretEvidenceDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            return GoogleFlowDownloadEvidence(
+                state=state,
+                detail="https://example.invalid/?access_token=DO_NOT_PERSIST",
+            )
+
+    driver = SecretEvidenceDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(error_type) as raised:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None
+    assert record.state == expected_state
+    assert record.error_message
+    assert "DO_NOT_PERSIST" not in record.error_message
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    assert b"DO_NOT_PERSIST" not in database.read_bytes()
+    assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected_state"),
+    [
+        (MediaDownloadProviderError, DownloadState.FAILED),
+        (MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
+        (MediaDownloadCancelledError, DownloadState.FAILED),
+        (MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
+    ],
+)
+def test_browser_driver_typed_exception_text_never_leaks(
+    tmp_path: Path,
+    error_type: type[MediaDownloadProviderError],
+    expected_state: str,
+) -> None:
+    """Keep typed errors while discarding untrusted driver exception strings."""
+
+    class SecretErrorDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            raise error_type("private-browser-cookie=DO_NOT_PERSIST")
+
+    driver = SecretErrorDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(error_type) as raised:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(raised.value)
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None
+    assert record.state == expected_state
+    assert record.error_message
+    assert "DO_NOT_PERSIST" not in record.error_message
+    assert b"DO_NOT_PERSIST" not in (
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ).read_bytes()
+    assert len(driver.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected_state"),
+    [
+        (MediaDownloadProviderError, DownloadState.FAILED),
+        (MediaDownloadAuthenticationRequiredError, DownloadState.FAILED),
+        (MediaDownloadAmbiguousError, DownloadState.ATTENTION_REQUIRED),
+    ],
+)
+def test_download_service_redacts_custom_provider_error_on_sqlite_boundary(
+    tmp_path: Path,
+    error_type: type[MediaDownloadProviderError],
+    expected_state: str,
+) -> None:
+    """A second provider implementation cannot bypass SQLite error redaction."""
+
+    class UntrustedProvider:
+        def download(self, request: GeneratedMediaDownloadRequest):
+            del request
+            raise error_type("session-token=DO_NOT_PERSIST")
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    service._provider = UntrustedProvider()  # type: ignore[assignment]
+    with pytest.raises(error_type):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None
+    assert record.state == expected_state
+    assert record.error_message
+    assert "DO_NOT_PERSIST" not in record.error_message
+    assert b"DO_NOT_PERSIST" not in (
+        root / "EP500_DOWNLOAD" / "project.sqlite3"
+    ).read_bytes()
 
 
 @pytest.mark.parametrize(
