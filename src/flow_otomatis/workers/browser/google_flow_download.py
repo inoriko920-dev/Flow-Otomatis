@@ -105,12 +105,20 @@ class GoogleFlowDownloadProvider:
                 "Unique partial path collision; nothing was overwritten."
             )
 
-        evidence = self._driver.download_one(
-            self._profile_id,
-            remote_result_id,
-            str(partial_path),
-            timeout_ms=self._timeout_ms,
-        )
+        try:
+            evidence = self._driver.download_one(
+                self._profile_id,
+                remote_result_id,
+                str(partial_path),
+                timeout_ms=self._timeout_ms,
+            )
+        except MediaDownloadProviderError as exc:
+            if os.path.lexists(partial_path) and not isinstance(exc, MediaDownloadAmbiguousError):
+                raise MediaDownloadAmbiguousError(
+                    "Flow driver left a partial file after reporting failure; "
+                    "inspect the preserved file before any retry."
+                ) from exc
+            raise
         detail = evidence.detail[:500]
 
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
@@ -154,6 +162,15 @@ class GoogleFlowDownloadProvider:
             with suppress(OSError):
                 partial_path.unlink()
             return GeneratedMediaDownloadResult(output_path=str(final_path))
+
+        # A driver cannot certify SAFE_FAILURE, CANCELLED or AUTH_REQUIRED
+        # if it has already written an attempt-owned partial: the local
+        # outcome requires reconciliation before a future browser retry.
+        if os.path.lexists(partial_path) and evidence.state is not GoogleFlowDownloadState.AMBIGUOUS:
+            raise MediaDownloadAmbiguousError(
+                "Flow left a partial file despite an unconfirmed outcome; "
+                "inspect the preserved file before any retry."
+            )
 
         if evidence.state is GoogleFlowDownloadState.AUTH_REQUIRED:
             raise MediaDownloadAuthenticationRequiredError(
