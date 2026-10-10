@@ -115,10 +115,16 @@ class GeneratedMediaDownloadService:
         try:
             result = self._provider.download(request)
         except MediaDownloadProviderError as exc:
+            # A provider can report a nominally safe error after another
+            # process (or the provider itself) has already written the final
+            # path. Treat any such local evidence as uncertain, preserving it
+            # for review rather than authorizing a future silent retry.
+            final_appeared = os.path.lexists(destination)
+            ambiguous = isinstance(exc, MediaDownloadAmbiguousError) or final_appeared
             # Providers and browser drivers may include session URLs, tokens
             # or filesystem paths in their error text. Persist only our
             # fixed classification, never untrusted exception messages.
-            if isinstance(exc, MediaDownloadAmbiguousError):
+            if ambiguous:
                 safe_error = "Download outcome uncertain; manual reconciliation required."
             elif isinstance(exc, MediaDownloadAuthenticationRequiredError):
                 safe_error = "Google session requires manual login."
@@ -129,11 +135,7 @@ class GeneratedMediaDownloadService:
             record = DownloadRecord(
                 episode_id=episode_id,
                 scene_id=scene_id,
-                state=(
-                    DownloadState.ATTENTION_REQUIRED
-                    if isinstance(exc, MediaDownloadAmbiguousError)
-                    else DownloadState.FAILED
-                ),
+                state=DownloadState.ATTENTION_REQUIRED if ambiguous else DownloadState.FAILED,
                 updated_at=datetime.now(UTC),
                 take=normalized_take,
                 error_message=safe_error,
@@ -145,6 +147,11 @@ class GeneratedMediaDownloadService:
                 self._download_repository.save_attention_if_unconfirmed(record)
             else:
                 self._download_repository.save_failure_if_unconfirmed(record)
+            if final_appeared and not isinstance(exc, MediaDownloadAmbiguousError):
+                raise MediaDownloadAmbiguousError(
+                    "Download destination appeared during a failed provider attempt; "
+                    "manual reconciliation required."
+                ) from None
             raise
         except Exception:
             # A provider outside the Google Flow adapter can fail unexpectedly
