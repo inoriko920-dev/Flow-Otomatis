@@ -203,6 +203,18 @@ class GeneratedMediaDownloadService:
                 # transaction. A later race must not overwrite a changed
                 # FAILED row, rival success, or new ambiguity.
                 reviewed_download = existing
+        # Recheck the complete persisted Generate revision immediately before
+        # entering the provider boundary. A concurrent worker can replace the
+        # job (even with the same remote ID) after the original Source check.
+        # A stale job must not cause another browser Download attempt.
+        before_provider_jobs = {
+            item.scene_id: item for item in self._job_repository.list_for_episode(episode_id)
+        }
+        if before_provider_jobs.get(scene_id) != job:
+            raise InternalInvariantError(
+                "Generate revision changed before Download provider call; "
+                "manual reconciliation required."
+            )
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -372,8 +384,7 @@ class GeneratedMediaDownloadService:
         current_job = current_jobs.get(scene_id)
         if (
             current_job is None
-            or current_job.state is not GenerationJobState.GENERATED
-            or (current_job.remote_result_id or "").strip() != remote_result_id
+            or current_job != job
         ):
             # Never delete an MP4 that was already published: recovery is an
             # explicit operator reconciliation, not an automatic retry.

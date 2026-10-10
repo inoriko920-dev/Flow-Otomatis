@@ -2820,3 +2820,77 @@ def test_sol22_new_download_rejects_same_remote_id_changed_generate_after_save(
     assert recorded.state == DownloadState.DOWNLOADED
     assert recorded.output_path == str(video)
     assert len(driver.calls) == 1
+
+
+def test_sol23_never_contacts_provider_when_generate_revision_changes_before_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The last local source read does not authorize dispatching an old job."""
+
+    import sqlite3
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    verify_source = service._require_current_source
+    calls = 0
+
+    def revise_after_second_source_check(
+        episode_id: str, scene_id: str, job: GenerationJob
+    ) -> None:
+        nonlocal calls
+        verify_source(episode_id, scene_id, job)
+        calls += 1
+        if calls == 2:
+            # Same remote result ID, distinct persisted revision.
+            with sqlite3.connect(database) as db:
+                db.execute(
+                    "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+                    ("2042-06-01T00:00:00+00:00", scene_id),
+                )
+                db.commit()
+
+    monkeypatch.setattr(service, "_require_current_source", revise_after_second_source_check)
+    with pytest.raises(InternalInvariantError, match="changed before Download provider call"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    assert calls == 2
+    assert driver.calls == []
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert not (root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4").exists()
+
+
+def test_sol23_download_preserves_published_mp4_if_generate_revision_changes_inflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same-ID revision race during provider work must never confirm a stale MP4."""
+
+    import sqlite3
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+    download = service._provider.download
+
+    def mutate_generate_after_provider(
+        request: GeneratedMediaDownloadRequest,
+    ) -> GeneratedMediaDownloadResult:
+        evidence = download(request)
+        with sqlite3.connect(database) as db:
+            db.execute(
+                "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+                ("2042-06-01T00:00:00+00:00", request.scene_id),
+            )
+            db.commit()
+        return evidence
+
+    monkeypatch.setattr(service._provider, "download", mutate_generate_after_provider)
+    with pytest.raises(InternalInvariantError, match="Generate result changed during Download"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    published = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert published.read_bytes() == b"fake-video"
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert len(driver.calls) == 1
+    with pytest.raises(InternalInvariantError, match="will not be overwritten"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
