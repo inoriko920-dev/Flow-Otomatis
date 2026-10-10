@@ -616,7 +616,6 @@ def test_manifest_rejects_changed_generated_id_even_when_download_exists(
     )
 
 
-
 def test_local_recording_cannot_replace_download_from_earlier_generate_identity(
     tmp_path: Path,
 ) -> None:
