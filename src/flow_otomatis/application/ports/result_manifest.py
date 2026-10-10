@@ -12,8 +12,6 @@ from flow_otomatis.domain.result import ProjectResults
 class ResultManifestWriterPort(Protocol):
     """Write one credential-free local result manifest."""
 
-    def write(
-        self, results: ProjectResults, *, recheck: Callable[[], bool] | None = None
-    ) -> Path:
+    def write(self, results: ProjectResults, *, recheck: Callable[[], bool] | None = None) -> Path:
         """Publish only if the effective result still matches before atomic replace."""
         ...
