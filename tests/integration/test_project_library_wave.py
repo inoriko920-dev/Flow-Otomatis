@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from flow_otomatis.application.services import ProjectLibraryService
-from flow_otomatis.domain.errors import WorkspaceCorruptError
+from flow_otomatis.domain.errors import StorageError, WorkspaceCorruptError
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
@@ -186,3 +187,76 @@ def test_t25_naive_load_and_scan_preserve_db_byte_checksum(tmp_path: Path) -> No
         repo.load("EP604_NAIVE")
     assert repo.scan_recent().issues[0].kind == "CORRUPT"
     assert db.read_bytes() == before
+
+
+def test_readonly_workspace_load_uses_one_snapshot_across_concurrent_writer(
+    tmp_path: Path,
+) -> None:
+    """Project and Scene reads must never mix two committed revisions."""
+    root = tmp_path / "projects"
+    repo = SqliteWorkspaceRepository(root)
+    original = _workspace("EP605_SNAPSHOT", datetime.now(UTC))
+    repo.save(original)
+    changed = replace(
+        original,
+        project_name="Updated by another editor",
+        scenes=(replace(original.scenes[0], motion_prompt="Changed after first read"),),
+    )
+    db = _db_path(root, original.episode_id)
+    with sqlite3.connect(db) as connection:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+
+    class _InterleavedReader(SqliteWorkspaceRepository):
+        def __init__(self) -> None:
+            super().__init__(root)
+            self.writer_ran = False
+
+        def _connect_readonly(self, db_path: Path) -> sqlite3.Connection:
+            connection = super()._connect_readonly(db_path)
+
+            def interleave(statement: str) -> None:
+                if not self.writer_ran and statement.startswith("SELECT * FROM scenes"):
+                    self.writer_ran = True
+                    # WAL permits a committed concurrent writer while this
+                    # read transaction retains its original consistent snapshot.
+                    repo.save(changed)
+
+            connection.set_trace_callback(interleave)
+            return connection
+
+    reader = _InterleavedReader()
+    snapshot = reader.load(original.episode_id)
+    assert reader.writer_ran
+    assert snapshot == original
+    assert repo.load(original.episode_id) == changed
+
+
+@pytest.mark.parametrize(
+    "episode_id",
+    [
+        "../EP_UNSAFE",
+        "..\\EP_UNSAFE",
+        "C:\\EP_UNSAFE",
+        "EP_UNSAFE/name",
+        "EP_UNSAFE\\name",
+        "..",
+        "",
+        "ep_lowercase",
+    ],
+)
+def test_untrusted_episode_id_cannot_escape_project_storage(
+    tmp_path: Path, episode_id: str
+) -> None:
+    projects = tmp_path / "projects"
+    repository = SqliteWorkspaceRepository(projects)
+    candidate = replace(_workspace("EP608_SAFE", datetime.now(UTC)), episode_id=episode_id)
+    for command in (
+        lambda: repository.create(candidate),
+        lambda: repository.save(candidate),
+        lambda: repository.update(candidate),
+        lambda: repository.load(episode_id),
+    ):
+        with pytest.raises(StorageError, match="Invalid episode ID"):
+            command()
+    assert not projects.exists()
+    assert not (tmp_path / "EP_UNSAFE").exists()

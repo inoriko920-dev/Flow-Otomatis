@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from flow_otomatis.application.ports.workspace_repository import (
     WorkspaceScanResult,
 )
 from flow_otomatis.domain.errors import (
+    InternalInvariantError,
     StorageError,
     WorkspaceAlreadyExistsError,
     WorkspaceCorruptError,
@@ -65,8 +67,9 @@ class SqliteWorkspaceRepository:
                         scene_order, scene_id, image_file, image_exists,
                         motion_prompt, target_duration_s,
                         recommended_flow_duration_s, selected_flow_duration_s,
-                        readiness, trim_target_s, model, resolution, aspect_ratio
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        readiness, trim_target_s, model, resolution, aspect_ratio,
+                        image_sha256_imported
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -83,6 +86,7 @@ class SqliteWorkspaceRepository:
                             scene.model,
                             scene.resolution,
                             scene.aspect_ratio,
+                            scene.image_sha256_imported,
                         )
                         for index, scene in enumerate(workspace.scenes)
                     ],
@@ -91,20 +95,50 @@ class SqliteWorkspaceRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not create workspace: {exc}") from exc
 
-    def update(self, workspace: WorkspaceState) -> None:
-        """Update an existing workspace without creating a missing project."""
+    def update(
+        self,
+        workspace: WorkspaceState,
+        *,
+        expected_workspace: WorkspaceState | None = None,
+    ) -> None:
+        """Update with an optional transaction-locked optimistic revision guard."""
 
         if self.load(workspace.episode_id) is None:
             raise StorageError(f"Workspace not found for update: {workspace.episode_id}")
-        self.save(workspace)
+        self.save(workspace, expected_workspace=expected_workspace)
 
-    def save(self, workspace: WorkspaceState) -> None:
+    def save(
+        self,
+        workspace: WorkspaceState,
+        *,
+        expected_workspace: WorkspaceState | None = None,
+    ) -> None:
         db_path = self._db_path(workspace.episode_id)
         try:
             db_path.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(db_path) as connection:
+            with sqlite3.connect(db_path, timeout=10.0) as connection:
+                connection.row_factory = sqlite3.Row
+                # Keep the expected-snapshot read and the write under the
+                # SAME writer lock. Two editors cannot pass the same revision.
+                connection.execute("BEGIN IMMEDIATE")
                 self._create_schema(connection)
-                connection.execute("BEGIN")
+                if expected_workspace is not None:
+                    project_row = connection.execute(
+                        "SELECT * FROM project WHERE singleton = 1"
+                    ).fetchone()
+                    if project_row is None:
+                        raise StorageError("Workspace disappeared during update")
+                    scene_rows = connection.execute(
+                        "SELECT * FROM scenes ORDER BY scene_order"
+                    ).fetchall()
+                    current = self._decode_workspace(
+                        expected_workspace.episode_id, project_row, scene_rows
+                    )
+                    if current != expected_workspace:
+                        raise InternalInvariantError(
+                            "Workspace berubah saat disimpan. Muat ulang proyek "
+                            "sebelum mengulangi perubahan."
+                        )
                 connection.execute(
                     """
                     INSERT OR REPLACE INTO project (
@@ -132,8 +166,9 @@ class SqliteWorkspaceRepository:
                         scene_order, scene_id, image_file, image_exists,
                         motion_prompt, target_duration_s,
                         recommended_flow_duration_s, selected_flow_duration_s,
-                        readiness, trim_target_s, model, resolution, aspect_ratio
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        readiness, trim_target_s, model, resolution, aspect_ratio,
+                        image_sha256_imported
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         (
@@ -150,6 +185,7 @@ class SqliteWorkspaceRepository:
                             scene.model,
                             scene.resolution,
                             scene.aspect_ratio,
+                            scene.image_sha256_imported,
                         )
                         for index, scene in enumerate(workspace.scenes)
                     ],
@@ -167,6 +203,12 @@ class SqliteWorkspaceRepository:
         try:
             with self._connect_readonly(db_path) as connection:
                 connection.row_factory = sqlite3.Row
+                # Both SELECTs must see one stable SQLite snapshot. Without an
+                # explicit read transaction a concurrent writer can commit
+                # between the project and scenes queries, creating a hybrid
+                # Workspace with metadata and Scenes from different revisions.
+                # BEGIN is read-only on this mode=ro connection.
+                connection.execute("BEGIN")
                 project = connection.execute("SELECT * FROM project WHERE singleton = 1").fetchone()
                 if project is None:
                     return None
@@ -278,12 +320,34 @@ class SqliteWorkspaceRepository:
             model=str(row["model"]),
             resolution=str(row["resolution"]),
             aspect_ratio=str(row["aspect_ratio"]),
+            image_sha256_imported=(
+                str(row["image_sha256_imported"])
+                if "image_sha256_imported" in set(row.keys())
+                and row["image_sha256_imported"] is not None
+                else None
+            ),
         )
 
     def _db_path(self, episode_id: str) -> Path:
-        return self._projects_root / episode_id / "project.sqlite3"
+        # Repositories can also be used by direct callers, not just the
+        # validated manifest importer. Reject traversal, drive names and
+        # malformed IDs before any directory is created or opened.
+        if re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{2,127}", episode_id) is None:
+            raise StorageError("Invalid episode ID for local project storage")
+        db_path = self._projects_root / episode_id / "project.sqlite3"
+        try:
+            # An ID can be perfectly valid while its project folder or DB file
+            # is a link redirecting storage outside the configured root.
+            # Resolve before any read, mkdir or SQLite open.
+            root = self._projects_root.resolve()
+            if not db_path.resolve().is_relative_to(root):
+                raise StorageError("Project database resolves outside the local storage root")
+        except (OSError, RuntimeError) as exc:
+            raise StorageError("Could not resolve local project storage path") from exc
+        return db_path
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
+        """Create new schema or migrate old Scene rows only on an explicit write."""
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS project (
@@ -315,7 +379,15 @@ class SqliteWorkspaceRepository:
                 trim_target_s REAL NOT NULL,
                 model TEXT NOT NULL,
                 resolution TEXT NOT NULL,
-                aspect_ratio TEXT NOT NULL
+                aspect_ratio TEXT NOT NULL,
+                image_sha256_imported TEXT
             )
             """
         )
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(scenes)").fetchall()
+        }
+        if "image_sha256_imported" not in columns:
+            # Old projects are not rewritten on read. Explicit write migrations
+            # never invent a checksum baseline for previously imported images.
+            connection.execute("ALTER TABLE scenes ADD COLUMN image_sha256_imported TEXT")

@@ -21,12 +21,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from flow_otomatis.application.ports import GoogleSessionProfile
+from flow_otomatis.application.ports import (
+    GoogleFlowAccessProbe,
+    GoogleSessionProfile,
+    GoogleSessionState,
+)
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.services import (
     EpisodeImportService,
     GeminiAgentReply,
     GeminiAgentService,
     GeminiKeyService,
+    GoogleFlowPreflightService,
     GoogleSessionService,
     LocalResultsService,
     ProjectLibraryService,
@@ -41,6 +47,7 @@ from flow_otomatis.domain.errors import (
 )
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -51,6 +58,7 @@ from flow_otomatis.presentation.google_profiles_view import (
     build_google_login_view,
     build_google_profiles_view,
 )
+from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
@@ -182,6 +190,13 @@ class _GoogleSessionSignals(QObject):
     failed = Signal(str, str)
 
 
+class _GoogleFlowSignals(QObject):
+    """Emit sanitized read-only Flow results to the Qt owner thread."""
+
+    checked = Signal(str, int, object)
+    failed = Signal(str, int, str)
+
+
 _DIALOG_BACKGROUNDS = {
     "UI-IMG-001C": "UI-IMG-001A",
     "UI-IMG-012A": "UI-IMG-002A",
@@ -201,9 +216,11 @@ class MainWindow(QMainWindow):
         *,
         episode_import_service: EpisodeImportService | None = None,
         scene_planning_service: ScenePlanningService | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
+        google_flow_preflight_service: GoogleFlowPreflightService | None = None,
         gemini_key_service: GeminiKeyService | None = None,
         gemini_agent_service: GeminiAgentService | None = None,
     ) -> None:
@@ -218,9 +235,15 @@ class MainWindow(QMainWindow):
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
+        self._image_verifier = image_verifier
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
+        self._google_flow_preflight_service = google_flow_preflight_service
+        self._google_flow_probes: dict[str, GoogleFlowAccessProbe] = {}
+        self._google_flow_epochs: dict[str, int] = {}
+        self._google_flow_busy: set[str] = set()
+        self._google_browser_closed = False
         self._gemini_key_service = gemini_key_service
         self._gemini_agent_service = gemini_agent_service
         self._agent_answer: str | None = None
@@ -238,6 +261,9 @@ class MainWindow(QMainWindow):
         self._google_session_signals.profile_ready.connect(self._on_google_session_profile_ready)
         self._google_session_signals.all_ready.connect(self.show_google_profiles)
         self._google_session_signals.failed.connect(self._show_google_session_error)
+        self._google_flow_signals = _GoogleFlowSignals(self)
+        self._google_flow_signals.checked.connect(self._on_google_flow_checked)
+        self._google_flow_signals.failed.connect(self._on_google_flow_failed)
         self._gemini_health_signals = _GeminiHealthSignals(self)
         self._gemini_health_signals.checked.connect(self._on_gemini_health_checked)
         self._gemini_health_signals.failed.connect(self._show_gemini_health_error)
@@ -699,6 +725,13 @@ class MainWindow(QMainWindow):
         view = build_google_login_view(
             profile,
             restart_gate=restart_gate,
+            flow_probe=self._google_flow_probes.get(profile.profile_id),
+            flow_busy=profile.profile_id in self._google_flow_busy,
+            on_check_flow=(
+                self._check_active_google_flow
+                if self._google_flow_preflight_service is not None
+                else None
+            ),
             on_open_login=self._reopen_active_google_login,
             on_recheck=self._recheck_active_google_login,
             on_back=self.show_google_profiles,
@@ -727,6 +760,7 @@ class MainWindow(QMainWindow):
     def _open_google_login(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
+        self._invalidate_google_flow(profile_id)
         future = self._google_session_service.open_login_async(profile_id)
         self._watch_google_profile_future(future, "open", "Bantuan Login")
 
@@ -740,20 +774,123 @@ class MainWindow(QMainWindow):
         if self._google_session_service is None or self._active_google_profile_id is None:
             self.show_google_profiles()
             return
+        self._invalidate_google_flow(self._active_google_profile_id)
         future = self._google_session_service.check_profile_async(self._active_google_profile_id)
         self._watch_google_profile_future(future, "recheck", "Bantuan Login")
 
     def _check_google_profile(self, profile_id: str) -> None:
         if self._google_session_service is None:
             return
+        self._invalidate_google_flow(profile_id)
         future = self._google_session_service.check_profile_async(profile_id)
         self._watch_google_profile_future(future, "check", "Profil Google")
 
     def _check_all_google_profiles(self) -> None:
         if self._google_session_service is None:
             return
+        for profile in self._google_session_service.list_profiles():
+            self._invalidate_google_flow(profile.profile_id)
         future = self._google_session_service.check_all_async()
         self._watch_google_all_future(future, "Profil Google")
+
+    def _invalidate_google_flow(self, profile_id: str) -> int:
+        """Revoke cached Flow proof and fence callbacks after session changes."""
+
+        self._google_flow_probes.pop(profile_id, None)
+        self._google_flow_busy.discard(profile_id)
+        epoch = self._google_flow_epochs.get(profile_id, 0) + 1
+        self._google_flow_epochs[profile_id] = epoch
+        return epoch
+
+    def _check_active_google_flow(self) -> None:
+        """Run read-only Flow preflight without blocking Qt or mutating Flow."""
+
+        sessions = self._google_session_service
+        preflight = self._google_flow_preflight_service
+        profile_id = self._active_google_profile_id
+        if sessions is None or preflight is None or profile_id is None:
+            return
+        if profile_id in self._google_flow_busy:
+            return
+        if sessions.get_restart_gate(profile_id).current_state is not GoogleSessionState.READY:
+            QMessageBox.warning(self, "Cek Akses Flow", "Cek Ulang Sesi Google terlebih dahulu.")
+            return
+
+        epoch = self._invalidate_google_flow(profile_id)
+        self._google_flow_busy.add(profile_id)
+        current_profile = next(
+            (p for p in sessions.list_profiles() if p.profile_id == profile_id),
+            None,
+        )
+        if current_profile is not None:
+            self.show_google_login(current_profile)
+        future = preflight.check_async(profile_id)
+
+        def completed(done: Future[GoogleFlowAccessProbe]) -> None:
+            if self._google_browser_closed:
+                return
+            try:
+                probe = done.result()
+            except FlowOtomatisError as exc:
+                self._google_flow_signals.failed.emit(profile_id, epoch, str(exc))
+            except Exception:
+                self._google_flow_signals.failed.emit(
+                    profile_id, epoch, "Pemeriksaan Flow gagal tanpa data akun sensitif."
+                )
+            else:
+                self._google_flow_signals.checked.emit(profile_id, epoch, probe)
+
+        future.add_done_callback(completed)
+
+    def _on_google_flow_checked(
+        self,
+        requested_profile_id: str,
+        epoch: int,
+        probe: GoogleFlowAccessProbe,
+    ) -> None:
+        if self._google_browser_closed:
+            return
+        if self._google_flow_epochs.get(requested_profile_id) != epoch:
+            return
+        if probe.profile_id != requested_profile_id:
+            # Never permit a response for profile B to authorize profile A.
+            self._google_flow_busy.discard(requested_profile_id)
+            self._refresh_active_google_login(requested_profile_id)
+            return
+        if self._google_session_service is None:
+            return
+        if probe.profile_id not in {
+            p.profile_id for p in self._google_session_service.list_profiles()
+        }:
+            return
+        self._google_flow_busy.discard(probe.profile_id)
+        self._google_flow_probes[probe.profile_id] = probe
+        self._refresh_active_google_login(probe.profile_id)
+
+    def _on_google_flow_failed(self, profile_id: str, epoch: int, detail: str) -> None:
+        if self._google_browser_closed or self._google_flow_epochs.get(profile_id) != epoch:
+            return
+        self._google_flow_busy.discard(profile_id)
+        self._refresh_active_google_login(profile_id)
+        if (
+            self._fixture_code == "REAL_GOOGLE_LOGIN"
+            and self._active_google_profile_id == profile_id
+        ):
+            QMessageBox.warning(self, "Cek Akses Flow", detail)
+
+    def _refresh_active_google_login(self, profile_id: str) -> None:
+        if (
+            self._google_session_service is None
+            or self._fixture_code != "REAL_GOOGLE_LOGIN"
+            or self._active_google_profile_id != profile_id
+        ):
+            return
+        profile = next(
+            (p for p in self._google_session_service.list_profiles() if p.profile_id == profile_id),
+            None,
+        )
+        if profile is not None:
+            self.show_google_login(profile)
 
     def _watch_google_profile_future(
         self,
@@ -803,21 +940,29 @@ class MainWindow(QMainWindow):
         action: str,
         profile: GoogleSessionProfile,
     ) -> None:
+        if self._google_browser_closed:
+            return
         if action == "open":
             self.show_google_login(profile)
             return
-        if action == "recheck" and self._active_google_profile_id == profile.profile_id:
-            self.show_google_login(profile)
+        if action == "recheck":
+            if self._active_google_profile_id == profile.profile_id:
+                self.show_google_login(profile)
             return
-        self.show_google_profiles()
+        if self._fixture_code == "REAL_GOOGLE_PROFILES":
+            self.show_google_profiles()
 
     def _show_google_session_error(self, title: str, message: str) -> None:
-        QMessageBox.warning(self, title, message)
+        if not self._google_browser_closed:
+            QMessageBox.warning(self, title, message)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Bound how long Qt waits while Browser Worker cleans up."""
 
         self._agent_closed = True
+        self._google_browser_closed = True
+        for profile_id in tuple(self._google_flow_epochs):
+            self._invalidate_google_flow(profile_id)
         self._invalidate_agent_context()
         if self._google_session_service is not None:
             self._google_session_service.shutdown(timeout_s=1.5)
@@ -915,13 +1060,119 @@ class MainWindow(QMainWindow):
             workspace,
             on_rescan_images=self.rescan_workspace_images,
             on_scene_selected=self.select_workspace_scene,
+            on_preview_credit_ui=self.open_credit_uix_preview,
+            on_local_preflight=self.open_local_scene_preflight,
+            on_bulk_durations=self.auto_fill_scene_durations,
+            selected_scene_id=self._selected_scene_id,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
 
-    def select_workspace_scene(self, scene_id: str) -> None:
-        """Select a real Scene row and refresh only the Scene Inspector."""
+    def auto_fill_scene_durations(self) -> WorkspaceState | None:
+        """Preview and explicitly confirm one safe bulk local duration update."""
+        if self._fixture_code != "REAL_WORKSPACE" or self._current_workspace is None:
+            return None
+        if self._scene_planning_service is None:
+            raise InternalInvariantError("Scene planning service is not configured")
+        episode_id = self._current_workspace.episode_id
+        try:
+            snapshot = self._scene_planning_service.load_workspace(episode_id)
+            plan = self._scene_planning_service.preview_missing_recommended_durations(episode_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Rencana Durasi Tidak Tersedia", str(exc))
+            return None
+        if not plan:
+            QMessageBox.information(
+                self,
+                "Tidak Ada Durasi yang Perlu Diisi",
+                "Semua durasi sudah dipilih, atau ada Target yang perlu diperbaiki manual.",
+            )
+            return None
+        distribution = dict.fromkeys((4, 6, 8, 10), 0)
+        for _scene_id, duration in plan:
+            distribution[duration] += 1
+        breakdown = " • ".join(
+            f"{duration}s: {distribution[duration]}" for duration in (4, 6, 8, 10)
+        )
+        confirm = QMessageBox.question(
+            self,
+            "Konfirmasi Durasi Flow Massal",
+            f"Isi durasi rekomendasi untuk {len(plan)} Scene yang belum dipilih?\n"
+            f"{breakdown}\n\n"
+            "Pilihan manual, target narasi, dan checksum gambar tetap sama. "
+            "Tidak membuat antrean atau menjalankan Google Flow.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return None
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return None
+        try:
+            workspace = self._scene_planning_service.fill_missing_recommended_durations(
+                episode_id, expected_workspace=snapshot
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Tidak Dapat Mengisi Durasi", str(exc))
+            # Display current durable state rather than a stale planning table.
+            latest = self._scene_planning_service.load_workspace(episode_id)
+            if (
+                self._current_workspace is not None
+                and self._current_workspace.episode_id == episode_id
+            ):
+                self.show_workspace_state(latest)
+            return None
+        self.show_workspace_state(workspace)
+        return workspace
 
+    def open_local_scene_preflight(self) -> None:
+        """Audit real Workspace Scene metadata; do not touch durable generation jobs."""
+        workspace = self._current_workspace
+        if workspace is None or self._fixture_code != "REAL_WORKSPACE":
+            return
+        dialog = LocalScenePreflightDialog(
+            workspace, parent=self, image_verifier=self._image_verifier
+        )
+        dialog.exec()
+        self._return_to_local_scene(workspace, dialog.requested_scene_id)
+
+    def _return_to_local_scene(
+        self, workspace: WorkspaceState, requested_scene_id: str | None
+    ) -> None:
+        """Return only to a unique Scene in the exact currently opened Workspace."""
+        if requested_scene_id is None:
+            return
+        if self._current_workspace is not workspace or self._fixture_code != "REAL_WORKSPACE":
+            return
+        if sum(scene.scene_id == requested_scene_id for scene in workspace.scenes) != 1:
+            return
+        self._selected_scene_id = requested_scene_id
+        self.show_workspace_state(workspace)
+
+    def open_credit_uix_preview(self) -> None:
+        """Open the approved UIX addendum as an offline-only temporary route."""
+
+        preview = CreditUixDialog(
+            self, workspace=self._current_workspace, image_verifier=self._image_verifier
+        )
+        workspace = self._current_workspace
+        preview.exec()
+        if workspace is not None:
+            self._return_to_local_scene(workspace, preview.requested_scene_id)
+
+    def select_workspace_scene(self, scene_id: str) -> None:
+        """Select only a persisted Scene row and refresh the Scene Inspector."""
+
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or not any(scene.scene_id == scene_id for scene in self._current_workspace.scenes)
+        ):
+            return
         self._invalidate_agent_context()
         self._selected_scene_id = scene_id
         self._render_workspace_right_panel()
@@ -952,7 +1203,13 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Scene planning service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        workspace = self._scene_planning_service.rescan_images(self._current_workspace.episode_id)
+        try:
+            workspace = self._scene_planning_service.rescan_images(
+                self._current_workspace.episode_id
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Scan Gambar Ditolak", str(exc))
+            return self._current_workspace
         self.show_workspace_state(workspace)
         return workspace
 
