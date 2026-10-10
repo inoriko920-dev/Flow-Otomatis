@@ -377,6 +377,57 @@ def test_driver_exception_with_partial_requires_reconciliation(tmp_path: Path) -
     assert len(driver.calls) == 1
 
 
+@pytest.mark.parametrize("error_class", [TimeoutError, OSError, RuntimeError])
+@pytest.mark.parametrize("leave_partial", [False, True])
+def test_unexpected_browser_exception_requires_review_without_disclosing_details(
+    tmp_path: Path,
+    error_class: type[Exception],
+    leave_partial: bool,
+) -> None:
+    """Unknown driver errors cannot silently authorize a second browser request."""
+
+    class CrashedDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            if leave_partial:
+                path = Path(destination_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"unconfirmed-browser-transfer")
+            raise error_class("sensitive-session-token=DO_NOT_PERSIST")
+
+    driver = CrashedDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.ATTENTION_REQUIRED
+    assert recorded.generation_remote_result_id == "remote:SCENE_001"
+    assert recorded.output_path is None
+    assert "DO_NOT_PERSIST" not in (recorded.error_message or "")
+
+    folder = root / "EP500_DOWNLOAD" / "downloads"
+    partials = list(folder.glob("SCENE_001__take_01.mp4.*.part"))
+    assert len(partials) == int(leave_partial)
+    if leave_partial:
+        assert partials[0].read_bytes() == b"unconfirmed-browser-transfer"
+    assert not (folder / "SCENE_001__take_01.mp4").exists()
+
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+    if leave_partial:
+        assert partials[0].read_bytes() == b"unconfirmed-browser-transfer"
+
+
 def test_download_provider_rejects_untracked_existing_final_file(tmp_path: Path) -> None:
     driver = FakeDownloadDriver()
     _root, _jobs, _downloads, service = _setup(tmp_path, driver)
