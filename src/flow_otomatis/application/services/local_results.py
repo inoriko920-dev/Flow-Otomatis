@@ -7,9 +7,11 @@ from pathlib import Path
 
 from flow_otomatis.application.file_integrity import is_available_output
 from flow_otomatis.application.ports.download_results import DownloadResultRepositoryPort
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.ports.generation_jobs import GenerationJobRepositoryPort
 from flow_otomatis.application.ports.result_manifest import ResultManifestWriterPort
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
+from flow_otomatis.application.services.local_generation_queue import _scene_fingerprint
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.result import (
@@ -30,11 +32,14 @@ class LocalResultsService:
         job_repository: GenerationJobRepositoryPort,
         download_repository: DownloadResultRepositoryPort,
         manifest_writer: ResultManifestWriterPort,
+        *,
+        image_verifier: EpisodeImageVerifierPort | None = None,
     ) -> None:
         self._workspace_repository = workspace_repository
         self._job_repository = job_repository
         self._download_repository = download_repository
         self._manifest_writer = manifest_writer
+        self._image_verifier = image_verifier
 
     def snapshot(self, episode_id: str) -> ProjectResults:
         """Build a local result snapshot without inventing missing outcomes."""
@@ -61,7 +66,7 @@ class LocalResultsService:
                 job is not None
                 and job.state is GenerationJobState.GENERATED
                 and bool((job.remote_result_id or "").strip())
-                and self._matches_current_scene(job, scene)
+                and self._matches_current_scene(job, scene, workspace.source_package_path)
             )
             scenes.append(
                 SceneResult(
@@ -110,11 +115,12 @@ class LocalResultsService:
             scenes=tuple(scenes),
         )
 
-    @staticmethod
-    def _matches_current_scene(job: GenerationJob, scene: WorkspaceScene) -> bool:
-        """A persisted result belongs only to its original prepared Scene request."""
+    def _matches_current_scene(
+        self, job: GenerationJob, scene: WorkspaceScene, source_package_path: str
+    ) -> bool:
+        """Reject stale Scene metadata and, when composed, changed source image bytes."""
 
-        return (
+        metadata_current = (
             job.has_verified_request_snapshot
             and scene.image_exists
             and scene.readiness is SceneReadiness.READY
@@ -126,6 +132,29 @@ class LocalResultsService:
             and job.resolution == scene.resolution
             and job.aspect_ratio == scene.aspect_ratio
         )
+        if not metadata_current:
+            return False
+        if self._image_verifier is None:
+            # Older service consumers may omit the verifier. The production
+            # composition supplies it, so Handoff there is content-verified.
+            return True
+        try:
+            digest = self._image_verifier.image_digest(
+                Path(source_package_path), scene.scene_id, scene.image_file
+            )
+        except Exception:
+            # Source ZIP/filesystem input is untrusted. Missing, unreadable or
+            # changed images must not certify a historical Generate result.
+            return False
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            return False
+        if scene.image_sha256_imported is not None and digest != scene.image_sha256_imported:
+            return False
+        return job.request_fingerprint == _scene_fingerprint(job.episode_id, scene, digest)
 
     def record_downloaded(
         self,
@@ -156,7 +185,9 @@ class LocalResultsService:
             if workspace is not None
             else None
         )
-        if scene is None or not self._matches_current_scene(job, scene):
+        if scene is None or not self._matches_current_scene(
+            job, scene, workspace.source_package_path
+        ):
             raise InternalInvariantError(
                 "Download belongs to a previous Scene revision; refresh Generate history first"
             )
