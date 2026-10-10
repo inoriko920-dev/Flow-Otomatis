@@ -119,6 +119,15 @@ class GoogleFlowDownloadProvider:
                     "inspect the preserved file before any retry."
                 ) from exc
             raise
+        except Exception as exc:
+            # After a browser attempt starts, an unexpected driver crash or
+            # timeout cannot prove that no remote/local transfer occurred.
+            # Preserve any partial file, never retry, and avoid saving raw
+            # exception text (which may contain private browser/session data).
+            raise MediaDownloadAmbiguousError(
+                "Flow browser attempt stopped unexpectedly; the outcome is "
+                "uncertain and requires manual reconciliation before retry."
+            ) from exc
         detail = evidence.detail[:500]
 
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
