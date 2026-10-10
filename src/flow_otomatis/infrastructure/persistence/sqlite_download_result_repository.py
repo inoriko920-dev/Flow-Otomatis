@@ -99,9 +99,12 @@ class SqliteDownloadResultRepository:
                         take = excluded.take,
                         error_message = excluded.error_message,
                         generation_remote_result_id = excluded.generation_remote_result_id
-                    WHERE download_results.state <> 'DOWNLOADED'
-                       OR download_results.generation_remote_result_id =
-                          excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN ('DOWNLOADED', 'ATTENTION_REQUIRED')
+                       OR (
+                           download_results.state = 'DOWNLOADED'
+                           AND download_results.generation_remote_result_id =
+                               excluded.generation_remote_result_id
+                       )
                     """,
                     (
                         record.episode_id,
@@ -126,7 +129,7 @@ class SqliteDownloadResultRepository:
             raise StorageError("Could not atomically verify and save Download result") from exc
 
     def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Store a failure only when no prior successful history exists.
+        """Store a failure only when no success or unresolved ambiguity exists.
 
         The conditional upsert is atomic across competing SQLite connections.
         """
@@ -150,7 +153,7 @@ class SqliteDownloadResultRepository:
                         take = excluded.take,
                         error_message = excluded.error_message,
                         generation_remote_result_id = excluded.generation_remote_result_id
-                    WHERE download_results.state <> ?
+                    WHERE download_results.state NOT IN (?, ?)
                     """,
                     (
                         record.episode_id,
@@ -162,11 +165,56 @@ class SqliteDownloadResultRepository:
                         record.error_message,
                         record.generation_remote_result_id,
                         DownloadState.DOWNLOADED,
+                        DownloadState.ATTENTION_REQUIRED,
                     ),
                 )
                 connection.commit()
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download failure: {exc}") from exc
+
+    def save_attention_if_unconfirmed(self, record: DownloadRecord) -> None:
+        """Record sticky ambiguity only if no success or prior ambiguity exists.
+
+        The conditional upsert is atomic across competing SQLite connections.
+        """
+
+        if record.state != DownloadState.ATTENTION_REQUIRED:
+            raise ValueError("Only ATTENTION_REQUIRED records may use ambiguous persistence")
+        try:
+            with self._connect(record.episode_id) as connection:
+                self._create_schema(connection)
+                connection.execute(
+                    """
+                    INSERT INTO download_results (
+                        episode_id, scene_id, state, updated_at,
+                        output_path, take, error_message,
+                        generation_remote_result_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (episode_id, scene_id) DO UPDATE SET
+                        state = excluded.state,
+                        updated_at = excluded.updated_at,
+                        output_path = excluded.output_path,
+                        take = excluded.take,
+                        error_message = excluded.error_message,
+                        generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN (?, ?)
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.state,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.error_message,
+                        record.generation_remote_result_id,
+                        DownloadState.DOWNLOADED,
+                        DownloadState.ATTENTION_REQUIRED,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.Error as exc:
+            raise StorageError(f"Could not save ambiguous download outcome: {exc}") from exc
 
     def get(self, episode_id: str, scene_id: str) -> DownloadRecord | None:
         db_path = self._db_path(episode_id)
