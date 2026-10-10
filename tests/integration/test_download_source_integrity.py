@@ -63,9 +63,7 @@ class Rig:
     results: LocalResultsService
 
 
-def _setup(
-    tmp_path: Path, *, zip_source: bool = False, imported_baseline: bool = True
-) -> Rig:
+def _setup(tmp_path: Path, *, zip_source: bool = False, imported_baseline: bool = True) -> Rig:
     now = datetime.now(UTC)
     scene = WorkspaceScene(
         scene_id=_SCENE,
@@ -80,9 +78,7 @@ def _setup(
         model="Omni Flash 1.1",
         resolution="720p",
         aspect_ratio="16:9",
-        image_sha256_imported=(
-            hashlib.sha256(_IMAGE).hexdigest() if imported_baseline else None
-        ),
+        image_sha256_imported=(hashlib.sha256(_IMAGE).hexdigest() if imported_baseline else None),
     )
     manifest = {
         "schema_version": "1.0",
@@ -120,9 +116,7 @@ def _setup(
     else:
         source = tmp_path / "source"
         source.mkdir()
-        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(json.dumps(manifest), encoding="utf-8")
         (source / scene.image_file).write_bytes(_IMAGE)
 
     workspace = WorkspaceState(
@@ -155,9 +149,7 @@ def _setup(
         model=scene.model,
         resolution=scene.resolution,
         aspect_ratio=scene.aspect_ratio,
-        request_fingerprint=_scene_fingerprint(
-            _EPISODE, scene, hashlib.sha256(_IMAGE).hexdigest()
-        ),
+        request_fingerprint=_scene_fingerprint(_EPISODE, scene, hashlib.sha256(_IMAGE).hexdigest()),
     )
     jobs.prepare_jobs([job])
     assert jobs.claim_next(_EPISODE, "source-test-owner", lease_seconds=60)
@@ -166,12 +158,18 @@ def _setup(
     provider = FakeDownloadProvider()
     verifier = EpisodePackageReader()
     service = GeneratedMediaDownloadService(
-        jobs, downloads, provider, root,
+        jobs,
+        downloads,
+        provider,
+        root,
         workspace_repository=workspaces,
         image_verifier=verifier,
     )
     results = LocalResultsService(
-        workspaces, jobs, downloads, ResultManifestWriter(root),
+        workspaces,
+        jobs,
+        downloads,
+        ResultManifestWriter(root),
         image_verifier=verifier,
     )
     return Rig(service, provider, downloads, source, root, results)
@@ -266,7 +264,10 @@ def test_sol09_partial_guard_dependencies_are_rejected(tmp_path: Path) -> None:
         )
     with pytest.raises(ValueError, match="both Workspace and image verifier"):
         GeneratedMediaDownloadService(
-            jobs, downloads, provider, root,
+            jobs,
+            downloads,
+            provider,
+            root,
             workspace_repository=SqliteWorkspaceRepository(root),
         )
 
@@ -289,7 +290,10 @@ def test_sol09_late_source_change_after_atomic_save_does_not_return_success(
     jobs = SqliteGenerationJobRepository(rig.root)
     workspaces = SqliteWorkspaceRepository(rig.root)
     service = GeneratedMediaDownloadService(
-        jobs, ChangeAfterSave(rig.root), rig.provider, rig.root,
+        jobs,
+        ChangeAfterSave(rig.root),
+        rig.provider,
+        rig.root,
         workspace_repository=workspaces,
         image_verifier=EpisodePackageReader(),
     )
