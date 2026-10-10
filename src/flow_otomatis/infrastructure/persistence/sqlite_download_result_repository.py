@@ -216,6 +216,61 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save ambiguous download outcome: {exc}") from exc
 
+    def matches_current_generated_download(self, record: DownloadRecord) -> bool:
+        """Revalidate stored Download and Generate in one read-only SQLite query.
+
+        Never initialize legacy tables, migrate schema, or update history
+        merely to reuse a previously downloaded local MP4.
+        """
+
+        if (
+            record.state != DownloadState.DOWNLOADED
+            or not record.generation_remote_result_id
+            or record.output_path is None
+        ):
+            return False
+        db_path = self._db_path(record.episode_id)
+        if not db_path.is_file():
+            return False
+        try:
+            with self._connect_readonly(db_path) as connection:
+                if not self._has_download_results_table(connection):
+                    return False
+                columns = {
+                    str(row[1]) for row in connection.execute("PRAGMA table_info(download_results)")
+                }
+                if "generation_remote_result_id" not in columns:
+                    return False
+                matching = connection.execute(
+                    """
+                    SELECT 1
+                    FROM download_results AS d
+                    JOIN generation_jobs AS g
+                      ON d.episode_id = g.episode_id AND d.scene_id = g.scene_id
+                    WHERE d.episode_id = ? AND d.scene_id = ?
+                      AND d.state = 'DOWNLOADED'
+                      AND d.updated_at = ?
+                      AND d.output_path = ?
+                      AND d.take = ?
+                      AND d.generation_remote_result_id = ?
+                      AND g.state = 'GENERATED'
+                      AND TRIM(COALESCE(g.remote_result_id, '')) = ?
+                    LIMIT 1
+                    """,
+                    (
+                        record.episode_id,
+                        record.scene_id,
+                        record.updated_at.isoformat(),
+                        record.output_path,
+                        record.take,
+                        record.generation_remote_result_id,
+                        record.generation_remote_result_id,
+                    ),
+                ).fetchone()
+                return matching is not None
+        except sqlite3.Error as exc:
+            raise StorageError("Could not verify cached Download against current Generate") from exc
+
     def reconcile_attention_for_retry(
         self,
         episode_id: str,
