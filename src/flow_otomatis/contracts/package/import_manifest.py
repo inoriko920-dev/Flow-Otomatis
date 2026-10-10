@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 FlowDuration = Literal[4, 6, 8, 10]
 
@@ -62,7 +61,7 @@ class ImportManifest(BaseModel):
     production_profile: ProductionProfile
     scene_count: int = Field(ge=1)
     scenes: tuple[ImportScene, ...] = Field(min_length=1)
-    created_at: datetime
+    created_at: AwareDatetime
     source_versions: dict[str, str]
 
     @model_validator(mode="after")
