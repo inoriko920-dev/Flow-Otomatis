@@ -645,3 +645,34 @@ def test_local_recording_cannot_replace_download_from_earlier_generate_identity(
     status = service.snapshot("EP400_RESULTS")
     assert status.scenes[0].download_state == DownloadState.UNAVAILABLE
     assert status.handoff_ready is False
+
+
+def test_ambiguous_download_is_visible_in_results_and_cannot_be_downgraded(
+    tmp_path: Path,
+) -> None:
+    """Hasil and manifest must surface the unresolved attempt, not 'Gagal'."""
+
+    service, _jobs = _service(tmp_path)
+    repo = SqliteDownloadResultRepository(tmp_path / "projects")
+    ambiguous = DownloadRecord(
+        episode_id="EP400_RESULTS",
+        scene_id="SCENE_001",
+        state=DownloadState.ATTENTION_REQUIRED,
+        updated_at=datetime.now(UTC),
+        take=1,
+        error_message="browser result uncertain",
+        generation_remote_result_id="remote:unverified",
+    )
+    repo.save_attention_if_unconfirmed(ambiguous)
+    assert service.record_download_failed(
+        "EP400_RESULTS", "SCENE_001", "late safe failure"
+    ) == ambiguous
+    assert repo.get("EP400_RESULTS", "SCENE_001") == ambiguous
+
+    snapshot = service.snapshot("EP400_RESULTS")
+    assert snapshot.scenes[0].download_state == DownloadState.ATTENTION_REQUIRED
+    assert snapshot.attention_count == 1
+    assert snapshot.downloaded_count == 0
+    assert snapshot.handoff_ready is False
+    exported = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert exported["scenes"][0]["download_status"] == DownloadState.ATTENTION_REQUIRED
