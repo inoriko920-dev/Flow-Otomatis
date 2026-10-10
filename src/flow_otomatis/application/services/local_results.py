@@ -11,7 +11,8 @@ from flow_otomatis.application.ports.generation_jobs import GenerationJobReposit
 from flow_otomatis.application.ports.result_manifest import ResultManifestWriterPort
 from flow_otomatis.application.ports.workspace_repository import WorkspaceRepositoryPort
 from flow_otomatis.domain.errors import InternalInvariantError
-from flow_otomatis.domain.job import GenerationJobState
+from flow_otomatis.domain.job import GenerationJob, GenerationJobState
+from flow_otomatis.domain.scene import WorkspaceScene
 from flow_otomatis.domain.result import (
     DownloadRecord,
     DownloadState,
@@ -60,6 +61,7 @@ class LocalResultsService:
                 job is not None
                 and job.state is GenerationJobState.GENERATED
                 and bool((job.remote_result_id or "").strip())
+                and self._matches_current_scene(job, scene)
             )
             scenes.append(
                 SceneResult(
@@ -108,6 +110,21 @@ class LocalResultsService:
             scenes=tuple(scenes),
         )
 
+    @staticmethod
+    def _matches_current_scene(job: GenerationJob, scene: WorkspaceScene) -> bool:
+        """A persisted result belongs only to its original prepared Scene request."""
+
+        return (
+            job.has_verified_request_snapshot
+            and job.target_duration_s == scene.target_duration_s
+            and job.flow_duration_s == scene.selected_flow_duration_s
+            and job.image_file == scene.image_file
+            and job.motion_prompt == scene.motion_prompt
+            and job.model == scene.model
+            and job.resolution == scene.resolution
+            and job.aspect_ratio == scene.aspect_ratio
+        )
+
     def record_downloaded(
         self,
         episode_id: str,
@@ -127,6 +144,15 @@ class LocalResultsService:
         ):
             raise InternalInvariantError(
                 "Download requires a current GENERATED job with a stable remote result ID"
+            )
+        workspace = self._workspace_repository.load(episode_id)
+        scene = next(
+            (candidate for candidate in workspace.scenes if candidate.scene_id == scene_id),
+            None,
+        ) if workspace is not None else None
+        if scene is None or not self._matches_current_scene(job, scene):
+            raise InternalInvariantError(
+                "Download belongs to a previous Scene revision; refresh Generate history first"
             )
         # Inspect the original path BEFORE resolving it. Resolving first
         # would silently follow a symlink and falsely attest to an MP4 that
