@@ -1194,6 +1194,11 @@ def test_malformed_browser_evidence_never_authorizes_safe_retry(
         "<html>Sign in to Google</html>".encode("utf-16"),
         b"\xfe\xff" + '{"error":"expired session"}'.encode("utf-16-be"),
         "<?xml version='1.0'?><error>Session expired</error>".encode("utf-16"),
+        "<html>Session expired</html>".encode("utf-16-le"),
+        "  <html>Login expired</html>".encode("utf-16-be"),
+        '{"error":"session expired"}'.encode("utf-32-le"),
+        "<!DOCTYPE html><html>Authentication required</html>".encode("utf-32-be"),
+        "<html>Session expired</html>".encode("utf-32"),
     ],
 )
 def test_browser_nonvideo_response_never_becomes_confirmed_mp4(
