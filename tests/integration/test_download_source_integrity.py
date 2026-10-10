@@ -914,9 +914,7 @@ def test_sol15_status_changed_after_claim_before_provider_rejects_dispatch(
             _replace_reviewed_download_state(rig.root, state=rival_state)
         return result
 
-    monkeypatch.setattr(
-        rig.downloads, "claim_reviewed_retry_if_present", claim_then_commit_rival
-    )
+    monkeypatch.setattr(rig.downloads, "claim_reviewed_retry_if_present", claim_then_commit_rival)
     with pytest.raises(InternalInvariantError, match="Download history changed"):
         rig.service.download_scene(_EPISODE, _SCENE)
 
@@ -926,7 +924,8 @@ def test_sol15_status_changed_after_claim_before_provider_rejects_dispatch(
     assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
         actions = [
-            row[0] for row in connection.execute(
+            row[0]
+            for row in connection.execute(
                 "SELECT action FROM download_reconciliation_audit ORDER BY id"
             )
         ]
@@ -1000,11 +999,14 @@ def test_sol15_claim_audit_required_even_when_review_row_fields_match(
     )
     # A reviewed FAILED row by itself is not enough to fabricate a successful
     # retry: the matching one-shot claim must have committed first.
-    assert rig.downloads.save_if_current_generate(
-        attempted,
-        "remote:source-verification",
-        expected_reviewed_download=reviewed,
-    ) is False
+    assert (
+        rig.downloads.save_if_current_generate(
+            attempted,
+            "remote:source-verification",
+            expected_reviewed_download=reviewed,
+        )
+        is False
+    )
     assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
     assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     assert job.state == GenerationJobState.GENERATED
