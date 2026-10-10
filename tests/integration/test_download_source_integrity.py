@@ -494,12 +494,17 @@ def test_sol12_review_authorizes_one_retry_and_second_attempt_needs_new_review(
     reviewed = _reviewed_retry(rig)
     assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
 
-    first_claim = rig.downloads.claim_reviewed_retry_if_present(reviewed)
+    generation = SqliteGenerationJobRepository(rig.root).list_for_episode(_EPISODE)[0]
+    first_claim = rig.downloads.claim_reviewed_retry_if_present(
+        reviewed, expected_generation=generation
+    )
     assert first_claim is True
     assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
     assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
 
-    second_claim = rig.downloads.claim_reviewed_retry_if_present(reviewed)
+    second_claim = rig.downloads.claim_reviewed_retry_if_present(
+        reviewed, expected_generation=generation
+    )
     assert second_claim is False
     renewed_attention = rig.downloads.get(_EPISODE, _SCENE)
     assert renewed_attention is not None
@@ -596,7 +601,10 @@ def test_sol12_two_connections_cannot_claim_the_same_review(
 
     def competing_claim() -> bool | None:
         separate = SqliteDownloadResultRepository(rig.root)
-        return separate.claim_reviewed_retry_if_present(reviewed)
+        generation = SqliteGenerationJobRepository(rig.root).list_for_episode(_EPISODE)[0]
+        return separate.claim_reviewed_retry_if_present(
+            reviewed, expected_generation=generation
+        )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(competing_claim)
