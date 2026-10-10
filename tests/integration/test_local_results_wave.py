@@ -368,9 +368,7 @@ def test_local_failure_text_never_leaks_into_sqlite_or_exported_manifest(
     """Direct local failure recording must redact caller-supplied private data."""
 
     service, _jobs = _service(tmp_path)
-    saved = service.record_download_failed(
-        "EP400_RESULTS", "SCENE_001", unsafe_message
-    )
+    saved = service.record_download_failed("EP400_RESULTS", "SCENE_001", unsafe_message)
     assert saved.state == DownloadState.FAILED
     assert saved.error_message == "Local Download failed; no confirmed MP4 was recorded."
     repository = SqliteDownloadResultRepository(tmp_path / "projects")
