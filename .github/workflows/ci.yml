@@ -144,3 +144,65 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+
+  offline-simulator-windows:
+    needs: quality
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          architecture: "x64"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check "uv==0.12.23"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --all-groups
+
+      - name: Exercise synthetic offline allocation CLI
+        shell: pwsh
+        run: |
+          uv run python scripts/offline_credit_simulator.py docs/examples/OFFLINE_SIMULATOR_DEMO.json --output offline-demo-result.json
+          if ($LASTEXITCODE -ne 0) { throw "Offline simulator returned nonzero" }
+          $data = Get-Content offline-demo-result.json -Raw | ConvertFrom-Json
+          if ($data.mode -ne 'OFFLINE_SIMULATION' -or $data.live_dispatch_allowed -ne $false) {
+            throw "Offline-only dispatch invariant failed"
+          }
+          if ($data.total_simulated_credits -ne 27 -or $data.assigned.Count -ne 2 -or $data.blocked.Count -ne 1) {
+            throw "Synthetic sample results changed unexpectedly"
+          }
+
+      - name: Package separate standalone simulator GUI
+        run: >
+          uv run python -m PyInstaller
+          --noconfirm --clean --onefile --windowed
+          --name Flow-Otomatis-Offline-Simulator
+          --distpath dist/offline-simulator
+          --workpath build/offline-simulator
+          --specpath build/offline-simulator-spec
+          scripts/offline_credit_simulator_ui.py
+
+      - name: Verify executable and report presence
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/offline-simulator/Flow-Otomatis-Offline-Simulator.exe")) {
+            throw "Standalone offline simulator Windows EXE missing"
+          }
+          if (!(Test-Path "offline-demo-result.json")) { throw "Synthetic output missing" }
+
+      - name: Upload new standalone Windows simulator
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-OFFLINE-Simulator-Win11-x64
+          path: |
+            dist/offline-simulator/Flow-Otomatis-Offline-Simulator.exe
+            offline-demo-result.json
+            docs/examples/OFFLINE_SIMULATOR_DEMO.json
+          if-no-files-found: error
+          retention-days: 14
