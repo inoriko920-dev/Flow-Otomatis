@@ -122,7 +122,23 @@ class GeneratedMediaDownloadService:
             # path. Treat any such local evidence as uncertain, preserving it
             # for review rather than authorizing a future silent retry.
             final_appeared = os.path.lexists(destination)
-            ambiguous = isinstance(exc, MediaDownloadAmbiguousError) or final_appeared
+            # An alternate provider may have used the same attempt-owned
+            # .part convention before returning an apparently safe failure.
+            # Partial bytes are evidence of an uncertain transfer, just as
+            # a published final MP4 is. Never authorize retry in that case.
+            try:
+                partial_appeared = any(
+                    destination.parent.glob(f"{destination.name}.*.part")
+                )
+            except (OSError, RuntimeError, ValueError):
+                # An unreadable download folder cannot prove that no bytes
+                # were written by the provider, so fail closed.
+                partial_appeared = True
+            ambiguous = (
+                isinstance(exc, MediaDownloadAmbiguousError)
+                or final_appeared
+                or partial_appeared
+            )
             # Providers and browser drivers may include session URLs, tokens
             # or filesystem paths in their error text. Persist only our
             # fixed classification, never untrusted exception messages.
@@ -149,9 +165,9 @@ class GeneratedMediaDownloadService:
                 self._download_repository.save_attention_if_unconfirmed(record)
             else:
                 self._download_repository.save_failure_if_unconfirmed(record)
-            if final_appeared:
+            if final_appeared or partial_appeared:
                 raise MediaDownloadAmbiguousError(
-                    "Download destination appeared during a failed provider attempt; "
+                    "Download file evidence appeared during a failed provider attempt; "
                     "manual reconciliation required."
                 ) from None
             raise
