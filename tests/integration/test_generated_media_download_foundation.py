@@ -148,7 +148,6 @@ def test_generated_scene_download_is_atomic_and_idempotent(tmp_path: Path) -> No
     assert output.is_relative_to(projects_root.resolve())
 
 
-
 @pytest.mark.parametrize(
     "change",
     ["queued_generate", "new_generate_id", "download_revision", "ambiguous_download"],
