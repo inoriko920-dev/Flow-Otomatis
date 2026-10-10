@@ -73,7 +73,8 @@ class ProjectResults:
         return sum(
             scene.generate_state
             in {GenerationJobState.FAILED, GenerationJobState.ATTENTION_REQUIRED}
-            or scene.download_state in {
+            or scene.download_state
+            in {
                 DownloadState.FAILED,
                 DownloadState.UNAVAILABLE,
                 DownloadState.ATTENTION_REQUIRED,
