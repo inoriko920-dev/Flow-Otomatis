@@ -134,10 +134,8 @@ class GeneratedMediaDownloadService:
         try:
             interrupted_partial_exists = os.path.lexists(
                 destination.with_name(f"{destination.name}.part")
-            ) or any(
-                destination.parent.glob(f"{glob_escape(destination.name)}.*.part")
-            )
-        except (OSError, RuntimeError, ValueError):
+            ) or any(destination.parent.glob(f"{glob_escape(destination.name)}.*.part"))
+        except OSError, RuntimeError, ValueError:
             raise InternalInvariantError(
                 "Prior Download partial evidence cannot be inspected; "
                 "manual reconciliation required."
