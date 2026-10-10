@@ -33,6 +33,18 @@ class SqliteDownloadResultRepository:
                         take = excluded.take,
                         error_message = excluded.error_message,
                         generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state NOT IN ('DOWNLOADED', 'ATTENTION_REQUIRED')
+                       OR (
+                           download_results.state = 'DOWNLOADED'
+                           AND excluded.state = 'DOWNLOADED'
+                           AND download_results.output_path IS excluded.output_path
+                           AND download_results.take = excluded.take
+                           AND (
+                               download_results.generation_remote_result_id IS
+                                   excluded.generation_remote_result_id
+                               OR download_results.generation_remote_result_id IS NULL
+                           )
+                       )
                     """,
                     (
                         record.episode_id,
@@ -104,6 +116,8 @@ class SqliteDownloadResultRepository:
                            download_results.state = 'DOWNLOADED'
                            AND download_results.generation_remote_result_id =
                                excluded.generation_remote_result_id
+                           AND download_results.output_path IS excluded.output_path
+                           AND download_results.take = excluded.take
                        )
                     """,
                     (
