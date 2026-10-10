@@ -698,9 +698,21 @@ def test_import_pinned_image_change_after_queue_prepare_never_submits(
 @pytest.mark.parametrize(
     ("exception_type", "expected_state", "expected_attention"),
     [
-        (RuntimeError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.SUBMIT_AMBIGUOUS),
-        (GenerationSubmissionAmbiguousError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.SUBMIT_AMBIGUOUS),
-        (GenerationAuthenticationRequiredError, GenerationJobState.ATTENTION_REQUIRED, GenerationAttentionCode.AUTH_REQUIRED),
+        (
+            RuntimeError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.SUBMIT_AMBIGUOUS,
+        ),
+        (
+            GenerationSubmissionAmbiguousError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.SUBMIT_AMBIGUOUS,
+        ),
+        (
+            GenerationAuthenticationRequiredError,
+            GenerationJobState.ATTENTION_REQUIRED,
+            GenerationAttentionCode.AUTH_REQUIRED,
+        ),
         (GenerationCancelledError, GenerationJobState.FAILED, None),
     ],
 )
@@ -714,8 +726,7 @@ def test_t05_t07_generate_provider_errors_never_persist_raw_details(
     root, workspace_repo, jobs, _, _ = _setup(tmp_path)
     marker = (
         "Authorization: Bearer SYNTHETIC_SECRET_NOT_REAL\\n"
-        "https://example.invalid/video?signature=fake-signed-marker "
-        + "private-path/" * 100
+        "https://example.invalid/video?signature=fake-signed-marker " + "private-path/" * 100
     )
 
     class FailingProvider:
@@ -727,7 +738,9 @@ def test_t05_t07_generate_provider_errors_never_persist_raw_details(
 
     provider = FailingProvider()
     queue = LocalGenerationQueueService(
-        workspace_repo, jobs, provider,
+        workspace_repo,
+        jobs,
+        provider,
         image_verifier=EpisodePackageReader(),
         owner_id="secret-regression-worker",
     )
@@ -752,7 +765,6 @@ def test_t05_t07_generate_provider_errors_never_persist_raw_details(
 
 
 
-
 def test_t11_google_safe_failure_queue_requires_explicit_reprepare(tmp_path: Path) -> None:
     _, workspace_repo, jobs, _, _ = _setup(tmp_path)
 
@@ -770,8 +782,11 @@ def test_t11_google_safe_failure_queue_requires_explicit_reprepare(tmp_path: Pat
 
     driver = SafeDriver()
     queue = LocalGenerationQueueService(
-        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
-        image_verifier=EpisodePackageReader(), owner_id="safe-worker",
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="safe-worker",
     )
     queue.prepare_queue("EP300_QUEUE")
     failed = queue.run_next("EP300_QUEUE")
@@ -818,8 +833,11 @@ def test_t12_invalid_generation_request_never_invokes_browser_driver(
 
     driver = ShouldNeverSubmit()
     queue = LocalGenerationQueueService(
-        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
-        image_verifier=EpisodePackageReader(), owner_id="precheck-worker",
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="precheck-worker",
     )
     queue.prepare_queue("EP300_QUEUE")
     outcome = queue.run_next("EP300_QUEUE")
@@ -845,8 +863,11 @@ def test_t12_accepted_without_id_stays_ambiguous_after_reprepare(tmp_path: Path)
 
     driver = MissingIdDriver()
     queue = LocalGenerationQueueService(
-        workspace_repo, jobs, GoogleFlowGenerationProvider("fake-profile", driver),
-        image_verifier=EpisodePackageReader(), owner_id="unknown-worker",
+        workspace_repo,
+        jobs,
+        GoogleFlowGenerationProvider("fake-profile", driver),
+        image_verifier=EpisodePackageReader(),
+        owner_id="unknown-worker",
     )
     queue.prepare_queue("EP300_QUEUE")
     outcome = queue.run_next("EP300_QUEUE")
