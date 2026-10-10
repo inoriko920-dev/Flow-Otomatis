@@ -185,7 +185,7 @@ class LocalResultsService:
             if workspace is not None
             else None
         )
-        if scene is None or not self._matches_current_scene(
+        if workspace is None or scene is None or not self._matches_current_scene(
             job, scene, workspace.source_package_path
         ):
             raise InternalInvariantError(
