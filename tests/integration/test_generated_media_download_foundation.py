@@ -9,6 +9,7 @@ import pytest
 
 from flow_otomatis.application.ports.generated_media_download import (
     GeneratedMediaDownloadRequest,
+    GeneratedMediaDownloadResult,
     MediaDownloadAmbiguousError,
     MediaDownloadAuthenticationRequiredError,
     MediaDownloadCancelledError,
@@ -435,6 +436,63 @@ def test_unexpected_alternate_provider_crash_is_sticky_and_preserves_bytes(
     assert provider.calls == 1
     if leave_final_mp4:
         assert final_mp4.read_bytes() == b"uncertain-final-mp4"
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ["none", "wrong_object", "blank_path", "wrong_path_type", "nul_path"],
+)
+@pytest.mark.parametrize("leave_final_mp4", [False, True])
+def test_untrusted_provider_malformed_success_is_sticky_and_preserves_mp4(
+    tmp_path: Path,
+    variant: str,
+    leave_final_mp4: bool,
+) -> None:
+    """A malformed provider result cannot trigger an unreviewed second request."""
+
+    class MalformedProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def download(self, request: GeneratedMediaDownloadRequest) -> object:
+            self.calls += 1
+            if leave_final_mp4:
+                path = Path(request.destination_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"unconfirmed-download")
+            if variant == "none":
+                return None
+            if variant == "wrong_object":
+                return object()
+            if variant == "blank_path":
+                return GeneratedMediaDownloadResult(output_path=" ")
+            if variant == "wrong_path_type":
+                return GeneratedMediaDownloadResult(output_path=123)  # type: ignore[arg-type]
+            return GeneratedMediaDownloadResult(output_path=chr(0))
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    provider = MalformedProvider()
+    service._provider = provider  # type: ignore[assignment]
+    with pytest.raises(MediaDownloadAmbiguousError, match="invalid success evidence"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert recorded is not None
+    assert recorded.state == DownloadState.ATTENTION_REQUIRED
+    assert recorded.generation_remote_result_id == "remote:SCENE_001"
+    assert recorded.output_path is None
+    assert recorded.take == 1
+    assert "invalid success evidence" in (recorded.error_message or "")
+
+    output = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert output.exists() is leave_final_mp4
+    if leave_final_mp4:
+        assert output.read_bytes() == b"unconfirmed-download"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert provider.calls == 1
+    if leave_final_mp4:
+        assert output.read_bytes() == b"unconfirmed-download"
 
 
 def test_unexpected_provider_crash_does_not_replace_rival_confirmed_download(
