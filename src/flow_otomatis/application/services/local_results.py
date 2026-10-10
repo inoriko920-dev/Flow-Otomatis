@@ -185,8 +185,10 @@ class LocalResultsService:
             if workspace is not None
             else None
         )
-        if workspace is None or scene is None or not self._matches_current_scene(
-            job, scene, workspace.source_package_path
+        if (
+            workspace is None
+            or scene is None
+            or not self._matches_current_scene(job, scene, workspace.source_package_path)
         ):
             raise InternalInvariantError(
                 "Download belongs to a previous Scene revision; refresh Generate history first"
