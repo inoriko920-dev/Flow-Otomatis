@@ -342,3 +342,14 @@ Audit remediation does not unblock I12-02B2-LIVE. Live Generate remains gated by
 - [ ] T06: validate proposed ADR-020–023 with ASTRA/owner, resolve open decisions and record signoff; **NOT IMPLEMENTED**.
 - [ ] G0 strict DOCX authority/visual equivalence remains BLOCKED; G1 policy, G5 actual tariff/credit, G6 restart READY unverified.
 - [ ] Do NOT start E12-02 UI prompts/coding from this task without explicit NEXT wave authorization and UI STOP checkpoint. No production file edits on this PR.
+
+## 10 Oktober 2026 — SOL F01–F05 remediasi dari audit ASTRA (PR #34)
+- [x] SOL00: baseline cocok dengan audit ASTRA `48d5fda77a63e8bda06016232e51ecabd9a98bf1`; ringkasan handoff DOCX di `docs/planning/audits/FLOW_OTOMATIS_ASTRA_AUDIT_DAN_RENCANA_SOL_2026-10-10_RINGKASAN.docx` (ringkasan, bukan DOCX asli).
+- [x] SOL01 / F01: `created_at` impor wajib timezone-aware; create/save menolak tanggal tanpa offset sebelum menulis, dengan tes timestamp positif/negatif dan DB lama.
+- [x] SOL02 / F02: error Generate ditulis sebagai pesan domain tetap tanpa detail provider/secret; tes fake token, signed URL, logging dan kategori gagal.
+- [x] SOL03 / F05: Hasil/Generation history read-only, legacy decode tanpa migrasi, future-version guard, explicit write-only migration, rollback fault injection.
+- [x] SOL04 / F03: request snapshot vs planning Scene dicek saat snapshot, record Download, transaksi simpan, dan pemakaian ulang MP4 cache; video/histori lama tetap dipertahankan.
+- [x] SOL05 / F04: SAFE_FAILURE terpercaya dipisah dari submit ambigu melalui typed provider exception, tanpa auto retry; invalid request gagal sebelum driver.
+- [x] SOL06 / code quality: run `38048442995` pada SHA `8d44a43b511cac1784c26d7f8164fa3ac971c2f4` mencatat 702 PASS, ruff format/lint, mypy, guard arsitektur PASS. Tambahan tes cache F03 pada SHA `a34e8de58470b98bacdaadfec8a910f7c8a353e3` memerlukan CI baru.
+- [ ] Gate final: konfirmasi semua job Windows pada SHA final (quality, simulator, screenshot, UI native, portable package) PASS sebelum F01–F05 disebut CLOSED. Tidak ada Google Flow live, kredit, perubahan fitur maupun UI, atau merge.
+- [ ] G0/E12-02/akun/Flow live tetap BLOCKED independen dari bugfix offline ini.
