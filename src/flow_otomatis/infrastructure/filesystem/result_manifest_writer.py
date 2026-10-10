@@ -25,14 +25,22 @@ class ResultManifestWriter:
     def _verified_export_directory(self, episode_id: str) -> Path:
         """Reject redirected project/export parents, including Windows junctions."""
 
+        # This direct writer boundary must enforce the same Windows-safe
+        # episode naming rules as the Download and SQLite boundaries.
+        # Reject devices and control characters before creating any folder.
+        forbidden = '<>:"/\\\\|?*'
+        reserved = (
+            {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+            | {f"COM{i}" for i in range(1, 10)}
+            | {f"LPT{i}" for i in range(1, 10)}
+        )
         if (
-            not episode_id
+            not isinstance(episode_id, str)
+            or not episode_id
             or episode_id in {".", ".."}
-            or "/" in episode_id
-            or "\\" in episode_id
-            or ":" in episode_id
-            or "\x00" in episode_id
             or episode_id.endswith((".", " "))
+            or any(char in forbidden or ord(char) < 32 for char in episode_id)
+            or episode_id.split(".", 1)[0].upper() in reserved
         ):
             raise InternalInvariantError("Unsafe episode identity for result export")
 
