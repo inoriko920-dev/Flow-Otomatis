@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -240,15 +241,40 @@ class LocalResultsService:
                 self._download_repository.list_for_episode(episode_id),
             )
 
-        expected = current_revision()
-        # An update during the FIRST collection can make the displayed
-        # snapshot and persisted revision lists momentarily inconsistent.
-        # Settle on a second read before staging so Hasil can still export
-        # an already-downgraded UNAVAILABLE result; post-stage changes
-        # remain forbidden by the final publication guard.
+        first = current_revision()
+        # A race DURING the first read is different from a race AFTER the
+        # manifest has been staged. Keep SOL17's conservative UNAVAILABLE
+        # outcome for affected Scenes, but use the settled full revisions to
+        # detect any later changes at the publication boundary.
         settled = current_revision()
-        if settled != expected:
-            expected = settled
+        staged = settled[0]
+        if first != settled:
+            initial_scenes = {scene.scene_id: scene for scene in first[0].scenes}
+            initial_jobs = {job.scene_id: job for job in first[1]}
+            latest_jobs = {job.scene_id: job for job in settled[1]}
+            initial_downloads = {row.scene_id: row for row in first[2]}
+            latest_downloads = {row.scene_id: row for row in settled[2]}
+            conservative_scenes: list[SceneResult] = []
+            for scene in staged.scenes:
+                previous = initial_scenes.get(scene.scene_id)
+                changed_revision = (
+                    initial_jobs.get(scene.scene_id) != latest_jobs.get(scene.scene_id)
+                    or initial_downloads.get(scene.scene_id)
+                    != latest_downloads.get(scene.scene_id)
+                )
+                if previous is not None and (
+                    previous.download_state == DownloadState.UNAVAILABLE
+                    or (
+                        changed_revision
+                        and (
+                            previous.download_state == DownloadState.DOWNLOADED
+                            or scene.download_state == DownloadState.DOWNLOADED
+                        )
+                    )
+                ):
+                    scene = replace(scene, download_state=DownloadState.UNAVAILABLE)
+                conservative_scenes.append(scene)
+            staged = replace(staged, scenes=tuple(conservative_scenes))
         return self._manifest_writer.write(
-            expected[0], recheck=lambda: current_revision() == expected
+            staged, recheck=lambda: current_revision() == settled
         )
