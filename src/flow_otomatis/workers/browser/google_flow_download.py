@@ -133,15 +133,16 @@ class GoogleFlowDownloadProvider:
                     "Download was cancelled before a confirmed local file existed."
                 ) from None
             raise MediaDownloadProviderError("Google Flow download failed safely.") from None
-        except Exception as exc:
+        except Exception:
             # After a browser attempt starts, an unexpected driver crash or
             # timeout cannot prove that no remote/local transfer occurred.
-            # Preserve any partial file, never retry, and avoid saving raw
-            # exception text (which may contain private browser/session data).
+            # Preserve partial evidence and suppress the original traceback:
+            # even a sanitized message can otherwise expose browser tokens
+            # through an untrusted exception in the chained traceback.
             raise MediaDownloadAmbiguousError(
                 "Flow browser attempt stopped unexpectedly; the outcome is "
                 "uncertain and requires manual reconciliation before retry."
-            ) from exc
+            ) from None
         # Do not trust runtime type annotations across the browser-driver
         # boundary. Unknown/malformed evidence cannot prove a safe failure;
         # the remote attempt may already have downloaded a file.
