@@ -650,7 +650,7 @@ class SqliteGenerationJobRepository:
     def _row_to_job(self, row: sqlite3.Row) -> GenerationJob:
         # Pre-v2 records can be decoded without mutating their schema.
         def optional(column: str) -> object | None:
-            return row[column] if column in row.keys() else None
+            return row[column] if column in row else None
 
         attention_raw = optional("attention_code")
         return GenerationJob(
