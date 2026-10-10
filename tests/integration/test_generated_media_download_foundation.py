@@ -1608,6 +1608,20 @@ def test_parallel_losing_attempt_ambiguity_commits_before_winner(
 
     driver = ConcurrentDriver()
     root, _jobs, downloads, service = _setup(tmp_path, driver)
+    # Both service calls must cross the pre-provider partial-file gate before
+    # either browser worker starts writing. Otherwise the newer crash guard
+    # correctly rejects the second attempt and this legacy two-writer race
+    # test becomes nondeterministic.
+    before_provider = Barrier(2)
+    actual_download = service._provider.download
+
+    def synchronized_provider_start(
+        request: GeneratedMediaDownloadRequest,
+    ) -> GeneratedMediaDownloadResult:
+        before_provider.wait(timeout=15)
+        return actual_download(request)
+
+    monkeypatch.setattr(service._provider, "download", synchronized_provider_start)
     ambiguity_committed = Event()
     guarded_save = downloads.save_if_current_generate
     attention_save = downloads.save_attention_if_unconfirmed
