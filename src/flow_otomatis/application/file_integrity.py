@@ -40,8 +40,6 @@ def is_available_output(output_path: str | None) -> bool:
             # and must never be attested as a downloaded result. This is a
             # narrow negative check, not a complete MP4 decoder.
             leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
-            if leading.startswith((b"<!doctype html", b"<html", b"<?xml", b"{", b"[")):
-                return False
-            return True
+            return not leading.startswith((b"<!doctype html", b"<html", b"<?xml", b"{", b"["))
     except OSError, ValueError:
         return False
