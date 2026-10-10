@@ -235,6 +235,81 @@ def test_cached_mp4_identity_guard_reads_sqlite_without_writes(tmp_path: Path) -
     assert len(driver.calls) == 1
 
 
+@pytest.mark.parametrize(
+    "reported_state",
+    [GoogleFlowDownloadState.SAFE_FAILURE, GoogleFlowDownloadState.AMBIGUOUS],
+)
+@pytest.mark.parametrize("change", ["requeued", "replaced_remote_id"])
+def test_stale_browser_outcome_cannot_poison_new_generate_result(
+    tmp_path: Path,
+    reported_state: GoogleFlowDownloadState,
+    change: str,
+) -> None:
+    """A late failure/ambiguity is not a failure of a newer Generate result."""
+
+    import sqlite3
+
+    root, _jobs, downloads, service = _setup(tmp_path, FakeDownloadDriver())
+    database = root / "EP500_DOWNLOAD" / "project.sqlite3"
+
+    class StaleBrowserDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            if reported_state is GoogleFlowDownloadState.AMBIGUOUS:
+                Path(destination_path).write_bytes(b"previous-generate-uncertain-partial")
+            with sqlite3.connect(database) as connection:
+                if change == "requeued":
+                    connection.execute(
+                        "UPDATE generation_jobs SET state = ? WHERE scene_id = ?",
+                        (GenerationJobState.QUEUED.value, "SCENE_001"),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+                        ("remote:NEW_GENERATE", "SCENE_001"),
+                    )
+                connection.commit()
+            return evidence
+
+    driver = StaleBrowserDriver(reported_state)
+    service._provider = GoogleFlowDownloadProvider("profile-safe", driver)
+    expected_error = (
+        MediaDownloadAmbiguousError
+        if reported_state is GoogleFlowDownloadState.AMBIGUOUS
+        else MediaDownloadProviderError
+    )
+    with pytest.raises(expected_error):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+
+    # A stale failure or sticky ambiguity cannot be written as the outcome
+    # for the new generation ID, even though the worker did run once.
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") is None
+    assert len(driver.calls) == 1
+    with sqlite3.connect(database) as connection:
+        current = connection.execute(
+            "SELECT state, remote_result_id FROM generation_jobs WHERE scene_id = ?",
+            ("SCENE_001",),
+        ).fetchone()
+    assert current == (
+        (GenerationJobState.QUEUED.value, "remote:SCENE_001")
+        if change == "requeued"
+        else (GenerationJobState.GENERATED.value, "remote:NEW_GENERATE")
+    )
+    partials = list((root / "EP500_DOWNLOAD" / "downloads").glob("*.part"))
+    assert len(partials) == int(reported_state is GoogleFlowDownloadState.AMBIGUOUS)
+    if partials:
+        assert partials[0].read_bytes() == b"previous-generate-uncertain-partial"
+
+
 def test_download_requires_generated_state_and_never_starts_generate(tmp_path: Path) -> None:
     driver = FakeDownloadDriver()
     _root, jobs, _downloads, service = _setup(tmp_path, driver)
