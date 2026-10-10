@@ -132,9 +132,7 @@ class GoogleFlowDownloadProvider:
                 raise MediaDownloadCancelledError(
                     "Download was cancelled before a confirmed local file existed."
                 ) from None
-            raise MediaDownloadProviderError(
-                "Google Flow download failed safely."
-            ) from None
+            raise MediaDownloadProviderError("Google Flow download failed safely.") from None
         except Exception as exc:
             # After a browser attempt starts, an unexpected driver crash or
             # timeout cannot prove that no remote/local transfer occurred.
@@ -199,9 +197,7 @@ class GoogleFlowDownloadProvider:
             )
 
         if evidence.state is GoogleFlowDownloadState.AUTH_REQUIRED:
-            raise MediaDownloadAuthenticationRequiredError(
-                "Google session requires manual login."
-            )
+            raise MediaDownloadAuthenticationRequiredError("Google session requires manual login.")
         if evidence.state is GoogleFlowDownloadState.CANCELLED:
             raise MediaDownloadCancelledError("Download was cancelled safely.")
         if evidence.state is GoogleFlowDownloadState.AMBIGUOUS:
