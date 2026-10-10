@@ -44,11 +44,11 @@ def is_available_output(output_path: str | None) -> bool:
             # MP4 just because the browser named it .mp4.
             signatures = ("<!doctype html", "<html", "<?xml", "<!--", "{", "[")
             if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
-                leading_text = prefix.decode("utf-16", errors="ignore").lstrip(
-                    "\ufeff \t\r\n"
-                ).lower()
+                leading_text = (
+                    prefix.decode("utf-16", errors="ignore").lstrip("\ufeff \t\r\n").lower()
+                )
                 return not leading_text.startswith(signatures)
             leading = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
             return not leading.startswith(tuple(sig.encode("ascii") for sig in signatures))
-    except (OSError, RuntimeError, ValueError):
+    except OSError, RuntimeError, ValueError:
         return False
