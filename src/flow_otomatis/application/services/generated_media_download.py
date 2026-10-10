@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from glob import escape as glob_escape
 from pathlib import Path
 from typing import NoReturn
 
@@ -127,7 +128,9 @@ class GeneratedMediaDownloadService:
             # Partial bytes are evidence of an uncertain transfer, just as
             # a published final MP4 is. Never authorize retry in that case.
             try:
-                partial_appeared = any(destination.parent.glob(f"{destination.name}.*.part"))
+                partial_appeared = any(
+                    destination.parent.glob(f"{glob_escape(destination.name)}.*.part")
+                )
             except OSError, RuntimeError, ValueError:
                 # An unreadable download folder cannot prove that no bytes
                 # were written by the provider, so fail closed.
