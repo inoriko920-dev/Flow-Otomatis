@@ -520,9 +520,7 @@ def test_sol12_review_authorizes_one_retry_and_second_attempt_needs_new_review(
     with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as conn:
         actions = [
             item[0]
-            for item in conn.execute(
-                "SELECT action FROM download_reconciliation_audit ORDER BY id"
-            )
+            for item in conn.execute("SELECT action FROM download_reconciliation_audit ORDER BY id")
         ]
     assert actions == [
         "OPERATOR_REVIEWED_RETRY",
@@ -537,9 +535,7 @@ def test_sol12_simulated_crash_after_claim_cannot_replay_review_on_restart(
 ) -> None:
     rig = _setup(tmp_path)
     reviewed = _reviewed_retry(rig)
-    preserved_partial = (
-        rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4.abandoned.part"
-    )
+    preserved_partial = rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4.abandoned.part"
 
     class CrashingProvider:
         def __init__(self) -> None:
@@ -589,9 +585,7 @@ def test_sol12_simulated_crash_after_claim_cannot_replay_review_on_restart(
     assert current.state == DownloadState.ATTENTION_REQUIRED
     if left_partial:
         assert preserved_partial.read_bytes() == b"original-crashed-browser-evidence"
-    assert not (
-        rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4"
-    ).exists()
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
 
 
 def test_sol12_two_connections_cannot_claim_the_same_review(
