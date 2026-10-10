@@ -317,9 +317,7 @@ class GeneratedMediaDownloadService:
         self._require_current_source(episode_id, scene_id, current_job)
         return record
 
-    def _require_current_source(
-        self, episode_id: str, scene_id: str, job: GenerationJob
-    ) -> None:
+    def _require_current_source(self, episode_id: str, scene_id: str, job: GenerationJob) -> None:
         """Fail closed for a configured canonical source verifier.
 
         Legacy offline-only callers may omit the pair of source dependencies;
