@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +25,21 @@ from flow_otomatis.domain.result import (
     SceneResult,
 )
 from flow_otomatis.domain.scene import WorkspaceScene
+
+
+def _mp4_identity(path: Path, canonical: Path) -> tuple[int, int, int, int, int] | None:
+    """Verify the same nonredirected MP4 and capture its filesystem identity."""
+
+    if not is_available_output(str(path)):
+        return None
+    try:
+        current = path.resolve(strict=True)
+        if os.path.normcase(str(current)) != os.path.normcase(str(canonical)):
+            return None
+        info = os.stat(path, follow_symlinks=False)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
 class LocalResultsService:
@@ -183,6 +199,14 @@ class LocalResultsService:
             local_output = original.resolve(strict=True)
         except (OSError, RuntimeError, ValueError) as exc:
             raise InternalInvariantError("Download output path cannot be verified") from exc
+        # Resolving can follow a symlink swapped in after the first check.
+        # Preserve the operator-selected identity instead of accepting its target.
+        expected_path = Path(os.path.abspath(original))
+        if os.path.normcase(str(local_output)) != os.path.normcase(str(expected_path)):
+            raise InternalInvariantError("Download output path was redirected during verification")
+        before_commit_mp4 = _mp4_identity(original, local_output)
+        if before_commit_mp4 is None:
+            raise InternalInvariantError("Download MP4 changed during initial verification")
         record = DownloadRecord(
             episode_id=episode_id,
             scene_id=scene_id,
@@ -205,7 +229,7 @@ class LocalResultsService:
         # so Hasil callers never receive a stale, falsely confirmed result.
         if not self._download_repository.matches_current_generated_download(
             record, expected_generation=job
-        ) or not is_available_output(str(local_output)):
+        ) or _mp4_identity(original, local_output) != before_commit_mp4:
             raise InternalInvariantError(
                 "Local Download history or MP4 changed after atomic save; "
                 "local video needs reconciliation."

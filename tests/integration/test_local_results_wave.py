@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import zipfile
 from dataclasses import replace
@@ -1391,3 +1392,88 @@ def test_sol19_unchanged_local_download_record_still_succeeds_and_exports_manife
     manifest = service.export_manifest("EP400_RESULTS")
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["scenes"][0]["download_status"] == DownloadState.DOWNLOADED
+
+
+@pytest.mark.parametrize("mutation", ["same_size_replacement", "in_place_rewrite"])
+def test_sol20_local_record_rejects_valid_mp4_replaced_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """A different readable MP4 must not be certified as the saved file."""
+
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol20-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol20", "sol20-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    original_bytes = b"original-local-video"
+    replacement_bytes = b"R" * len(original_bytes)
+    video.write_bytes(original_bytes)
+    repository = service._download_repository
+    guarded_save = repository.save_if_current_generate
+
+    def change_after_commit(record: DownloadRecord, remote_id: str) -> bool:
+        success = guarded_save(record, remote_id)
+        if success:
+            if mutation == "same_size_replacement":
+                other = tmp_path / "same-size-valid.mp4"
+                other.write_bytes(replacement_bytes)
+                other.replace(video)
+            else:
+                original_stat = video.stat()
+                video.write_bytes(replacement_bytes)
+                os.utime(
+                    video,
+                    ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns + 2_000_000_000),
+                )
+        return success
+
+    monkeypatch.setattr(repository, "save_if_current_generate", change_after_commit)
+    with pytest.raises(InternalInvariantError, match="MP4 changed after atomic save"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert video.read_bytes() == replacement_bytes
+    row = SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    )
+    assert row is not None and row.state == DownloadState.DOWNLOADED
+
+
+def test_sol20_local_record_rejects_path_redirect_during_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An MP4 swapped for a symlink mid-check cannot redirect its certification."""
+
+    from flow_otomatis.application.services import local_results as results_module
+
+    service, jobs = _service(tmp_path)
+    job = _queue_one(jobs)
+    assert jobs.claim_next("EP400_RESULTS", "sol20-owner", lease_seconds=60)
+    jobs.mark_generated(job.job_id, "remote:sol20", "sol20-owner")
+    video = tmp_path / "SCENE_001.mp4"
+    video.write_bytes(b"original-local-video")
+    unrelated = tmp_path / "unrelated.mp4"
+    unrelated.write_bytes(b"another-valid-video")
+    verified_before_swap = results_module.is_available_output
+    swapped = False
+
+    def swap_after_initial_read(path: str | None) -> bool:
+        nonlocal swapped
+        result = verified_before_swap(path)
+        if path == str(video) and result and not swapped:
+            video.unlink()
+            try:
+                video.symlink_to(unrelated)
+            except OSError:
+                pytest.skip("Symlink creation is not available on this platform")
+            swapped = True
+        return result
+
+    monkeypatch.setattr(results_module, "is_available_output", swap_after_initial_read)
+    with pytest.raises(InternalInvariantError, match="redirected during verification"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    assert swapped
+    assert unrelated.read_bytes() == b"another-valid-video"
+    assert SqliteDownloadResultRepository(tmp_path / "projects").get(
+        "EP400_RESULTS", "SCENE_001"
+    ) is None
