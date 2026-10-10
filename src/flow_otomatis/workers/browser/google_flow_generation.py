@@ -84,9 +84,7 @@ class GoogleFlowGenerationProvider:
         # Never forward provider-controlled detail into an error boundary.
         # Contradictory evidence cannot establish a safely rejected submit.
         if evidence.remote_result_id and evidence.state is not GoogleFlowSubmitState.ACCEPTED:
-            raise GenerationSubmissionAmbiguousError(
-                "Flow returned contradictory submit evidence."
-            )
+            raise GenerationSubmissionAmbiguousError("Flow returned contradictory submit evidence.")
 
         if evidence.state is GoogleFlowSubmitState.ACCEPTED:
             remote_result_id = (evidence.remote_result_id or "").strip()
