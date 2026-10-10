@@ -110,6 +110,10 @@ class GeneratedMediaDownloadService:
                         "Cached Download no longer matches current Generate and persisted "
                         "Download identity; manual reconciliation required."
                     )
+                # The source may change between the initial byte check and
+                # this cached-row identity check. Never return an old MP4 on
+                # the strength of an earlier filesystem read.
+                self._require_current_source(episode_id, scene_id, job)
                 return existing
 
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -123,6 +127,10 @@ class GeneratedMediaDownloadService:
                 f"manual reconciliation required: {destination.name}"
             )
 
+        # Folder creation and prior Download-row lookup are separate I/O.
+        # Re-read source bytes immediately before the provider boundary so
+        # a changed input cannot begin a new download unnoticed.
+        self._require_current_source(episode_id, scene_id, job)
         request = GeneratedMediaDownloadRequest(
             episode_id=episode_id,
             scene_id=scene_id,
