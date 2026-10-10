@@ -145,9 +145,8 @@ class GoogleFlowDownloadProvider:
         # Do not trust runtime type annotations across the browser-driver
         # boundary. Unknown/malformed evidence cannot prove a safe failure;
         # the remote attempt may already have downloaded a file.
-        if (
-            not isinstance(evidence, GoogleFlowDownloadEvidence)
-            or not isinstance(evidence.state, GoogleFlowDownloadState)
+        if not isinstance(evidence, GoogleFlowDownloadEvidence) or not isinstance(
+            evidence.state, GoogleFlowDownloadState
         ):
             raise MediaDownloadAmbiguousError(
                 "Flow browser returned invalid Download evidence; "
