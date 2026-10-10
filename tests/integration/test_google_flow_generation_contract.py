@@ -151,11 +151,14 @@ def test_invalid_request_fails_before_driver_mutation(
     assert driver.calls == []
 
 
-@pytest.mark.parametrize("state", [
-    GoogleFlowSubmitState.SAFE_FAILURE,
-    GoogleFlowSubmitState.AUTH_REQUIRED,
-    GoogleFlowSubmitState.CANCELLED,
-])
+@pytest.mark.parametrize(
+    "state",
+    [
+        GoogleFlowSubmitState.SAFE_FAILURE,
+        GoogleFlowSubmitState.AUTH_REQUIRED,
+        GoogleFlowSubmitState.CANCELLED,
+    ],
+)
 def test_t13_contradictory_result_id_never_proves_safe_failure(
     state: GoogleFlowSubmitState,
 ) -> None:
