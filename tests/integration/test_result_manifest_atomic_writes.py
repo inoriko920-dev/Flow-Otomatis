@@ -175,5 +175,3 @@ def test_export_refuses_replaced_directory_without_overwriting_rival_manifest(
     assert len(preserved) == 1
     assert b"Must not overwrite another export" in preserved[0].read_bytes()
     assert not (relocated / "FLOW_OTOMATIS_RESULT.json").exists()
-
-
