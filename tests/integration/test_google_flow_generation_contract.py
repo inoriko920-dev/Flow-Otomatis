@@ -8,6 +8,7 @@ from flow_otomatis.application.ports import (
     GenerationProviderError,
     GenerationRequest,
     GenerationRequestValidationError,
+    GenerationSafeFailureError,
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.workers.browser import (
@@ -71,7 +72,7 @@ def test_google_flow_contract_accepts_exactly_one_stable_submit() -> None:
         (GoogleFlowSubmitState.AMBIGUOUS, GenerationSubmissionAmbiguousError),
         (GoogleFlowSubmitState.AUTH_REQUIRED, GenerationAuthenticationRequiredError),
         (GoogleFlowSubmitState.CANCELLED, GenerationCancelledError),
-        (GoogleFlowSubmitState.SAFE_FAILURE, GenerationProviderError),
+        (GoogleFlowSubmitState.SAFE_FAILURE, GenerationSafeFailureError),
     ],
 )
 def test_google_flow_contract_maps_non_success_without_retry(
@@ -148,3 +149,37 @@ def test_invalid_request_fails_before_driver_mutation(
         provider.generate(request)
 
     assert driver.calls == []
+
+
+@pytest.mark.parametrize("state", [
+    GoogleFlowSubmitState.SAFE_FAILURE,
+    GoogleFlowSubmitState.AUTH_REQUIRED,
+    GoogleFlowSubmitState.CANCELLED,
+])
+def test_t13_contradictory_result_id_never_proves_safe_failure(
+    state: GoogleFlowSubmitState,
+) -> None:
+    driver = FixtureFlowDriver(
+        GoogleFlowSubmitEvidence(
+            state=state,
+            detail="Authorization Bearer FAKE_SECRET_UNTRUSTED",
+            remote_result_id="remote-id-contradicts-failure",
+        )
+    )
+    provider = GoogleFlowGenerationProvider("profile-test", driver)
+    with pytest.raises(GenerationSubmissionAmbiguousError) as error:
+        provider.generate(_request())
+    assert "FAKE_SECRET_UNTRUSTED" not in str(error.value)
+    assert len(driver.calls) == 1
+
+
+def test_t13_blank_safe_failure_evidence_is_ambiguous() -> None:
+    driver = FixtureFlowDriver(
+        GoogleFlowSubmitEvidence(
+            state=GoogleFlowSubmitState.SAFE_FAILURE,
+            detail="   ",
+        )
+    )
+    with pytest.raises(GenerationSubmissionAmbiguousError):
+        GoogleFlowGenerationProvider("profile-test", driver).generate(_request())
+    assert len(driver.calls) == 1
