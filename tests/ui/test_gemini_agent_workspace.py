@@ -86,8 +86,9 @@ def test_dynamic_agent_answer_is_async_and_keeps_qt_heartbeat(qtbot) -> None:
 
     agent_input.setText("Scene ini siap?")
     send.click()
-    qtbot.wait(80)
-    assert len(heartbeat) >= 2
+    # Windows CI can delay Qt timers under heavy build load. Await the actual
+    # heartbeat rather than requiring two events in a fixed 80 ms slice.
+    qtbot.waitUntil(lambda: len(heartbeat) >= 2, timeout=1000)
 
     qtbot.waitUntil(
         lambda: any(

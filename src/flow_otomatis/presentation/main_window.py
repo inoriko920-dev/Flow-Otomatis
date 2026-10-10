@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from flow_otomatis.application.ports import GoogleSessionProfile
+from flow_otomatis.application.ports.episode_package import EpisodeImageVerifierPort
 from flow_otomatis.application.services import (
     EpisodeImportService,
     GeminiAgentReply,
@@ -41,6 +42,7 @@ from flow_otomatis.domain.errors import (
 )
 from flow_otomatis.domain.gemini import GeminiKeyProfile
 from flow_otomatis.domain.project import WorkspaceState
+from flow_otomatis.presentation.credit_uix_preview import CreditUixDialog
 from flow_otomatis.presentation.fixtures import (
     DEFAULT_FIXTURE_CODE,
     NAV_ITEMS,
@@ -51,6 +53,7 @@ from flow_otomatis.presentation.google_profiles_view import (
     build_google_login_view,
     build_google_profiles_view,
 )
+from flow_otomatis.presentation.local_scene_preflight_view import LocalScenePreflightDialog
 from flow_otomatis.presentation.project_hub_view import build_project_hub_view
 from flow_otomatis.presentation.results_view import build_results_view
 from flow_otomatis.presentation.screen_factory import build_right_panel, build_screen
@@ -201,6 +204,7 @@ class MainWindow(QMainWindow):
         *,
         episode_import_service: EpisodeImportService | None = None,
         scene_planning_service: ScenePlanningService | None = None,
+        image_verifier: EpisodeImageVerifierPort | None = None,
         project_library_service: ProjectLibraryService | None = None,
         local_results_service: LocalResultsService | None = None,
         google_session_service: GoogleSessionService | None = None,
@@ -218,6 +222,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons: dict[str, QPushButton] = {}
         self._episode_import_service = episode_import_service
         self._scene_planning_service = scene_planning_service
+        self._image_verifier = image_verifier
         self._project_library_service = project_library_service
         self._local_results_service = local_results_service
         self._google_session_service = google_session_service
@@ -915,13 +920,119 @@ class MainWindow(QMainWindow):
             workspace,
             on_rescan_images=self.rescan_workspace_images,
             on_scene_selected=self.select_workspace_scene,
+            on_preview_credit_ui=self.open_credit_uix_preview,
+            on_local_preflight=self.open_local_scene_preflight,
+            on_bulk_durations=self.auto_fill_scene_durations,
+            selected_scene_id=self._selected_scene_id,
         )
         self._replace_layout_widget(self._content_layout, view)
         self._render_workspace_right_panel()
 
-    def select_workspace_scene(self, scene_id: str) -> None:
-        """Select a real Scene row and refresh only the Scene Inspector."""
+    def auto_fill_scene_durations(self) -> WorkspaceState | None:
+        """Preview and explicitly confirm one safe bulk local duration update."""
+        if self._fixture_code != "REAL_WORKSPACE" or self._current_workspace is None:
+            return None
+        if self._scene_planning_service is None:
+            raise InternalInvariantError("Scene planning service is not configured")
+        episode_id = self._current_workspace.episode_id
+        try:
+            snapshot = self._scene_planning_service.load_workspace(episode_id)
+            plan = self._scene_planning_service.preview_missing_recommended_durations(episode_id)
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Rencana Durasi Tidak Tersedia", str(exc))
+            return None
+        if not plan:
+            QMessageBox.information(
+                self,
+                "Tidak Ada Durasi yang Perlu Diisi",
+                "Semua durasi sudah dipilih, atau ada Target yang perlu diperbaiki manual.",
+            )
+            return None
+        distribution = dict.fromkeys((4, 6, 8, 10), 0)
+        for _scene_id, duration in plan:
+            distribution[duration] += 1
+        breakdown = " • ".join(
+            f"{duration}s: {distribution[duration]}" for duration in (4, 6, 8, 10)
+        )
+        confirm = QMessageBox.question(
+            self,
+            "Konfirmasi Durasi Flow Massal",
+            f"Isi durasi rekomendasi untuk {len(plan)} Scene yang belum dipilih?\n"
+            f"{breakdown}\n\n"
+            "Pilihan manual, target narasi, dan checksum gambar tetap sama. "
+            "Tidak membuat antrean atau menjalankan Google Flow.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return None
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or self._current_workspace.episode_id != episode_id
+        ):
+            return None
+        try:
+            workspace = self._scene_planning_service.fill_missing_recommended_durations(
+                episode_id, expected_workspace=snapshot
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Tidak Dapat Mengisi Durasi", str(exc))
+            # Display current durable state rather than a stale planning table.
+            latest = self._scene_planning_service.load_workspace(episode_id)
+            if (
+                self._current_workspace is not None
+                and self._current_workspace.episode_id == episode_id
+            ):
+                self.show_workspace_state(latest)
+            return None
+        self.show_workspace_state(workspace)
+        return workspace
 
+    def open_local_scene_preflight(self) -> None:
+        """Audit real Workspace Scene metadata; do not touch durable generation jobs."""
+        workspace = self._current_workspace
+        if workspace is None or self._fixture_code != "REAL_WORKSPACE":
+            return
+        dialog = LocalScenePreflightDialog(
+            workspace, parent=self, image_verifier=self._image_verifier
+        )
+        dialog.exec()
+        self._return_to_local_scene(workspace, dialog.requested_scene_id)
+
+    def _return_to_local_scene(
+        self, workspace: WorkspaceState, requested_scene_id: str | None
+    ) -> None:
+        """Return only to a unique Scene in the exact currently opened Workspace."""
+        if requested_scene_id is None:
+            return
+        if self._current_workspace is not workspace or self._fixture_code != "REAL_WORKSPACE":
+            return
+        if sum(scene.scene_id == requested_scene_id for scene in workspace.scenes) != 1:
+            return
+        self._selected_scene_id = requested_scene_id
+        self.show_workspace_state(workspace)
+
+    def open_credit_uix_preview(self) -> None:
+        """Open the approved UIX addendum as an offline-only temporary route."""
+
+        preview = CreditUixDialog(
+            self, workspace=self._current_workspace, image_verifier=self._image_verifier
+        )
+        workspace = self._current_workspace
+        preview.exec()
+        if workspace is not None:
+            self._return_to_local_scene(workspace, preview.requested_scene_id)
+
+    def select_workspace_scene(self, scene_id: str) -> None:
+        """Select only a persisted Scene row and refresh the Scene Inspector."""
+
+        if (
+            self._fixture_code != "REAL_WORKSPACE"
+            or self._current_workspace is None
+            or not any(scene.scene_id == scene_id for scene in self._current_workspace.scenes)
+        ):
+            return
         self._invalidate_agent_context()
         self._selected_scene_id = scene_id
         self._render_workspace_right_panel()
@@ -952,7 +1063,13 @@ class MainWindow(QMainWindow):
             raise InternalInvariantError("Scene planning service is not configured")
         if self._current_workspace is None:
             raise InternalInvariantError("No active workspace")
-        workspace = self._scene_planning_service.rescan_images(self._current_workspace.episode_id)
+        try:
+            workspace = self._scene_planning_service.rescan_images(
+                self._current_workspace.episode_id
+            )
+        except FlowOtomatisError as exc:
+            QMessageBox.warning(self, "Scan Gambar Ditolak", str(exc))
+            return self._current_workspace
         self.show_workspace_state(workspace)
         return workspace
 

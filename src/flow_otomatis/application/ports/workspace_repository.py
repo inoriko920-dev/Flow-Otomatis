@@ -31,8 +31,13 @@ class WorkspaceRepositoryPort(Protocol):
         """Create a new workspace atomically; reject duplicate identity."""
         ...
 
-    def update(self, workspace: WorkspaceState) -> None:
-        """Update an already-persisted workspace transactionally."""
+    def update(
+        self,
+        workspace: WorkspaceState,
+        *,
+        expected_workspace: WorkspaceState | None = None,
+    ) -> None:
+        """Update transactionally, rejecting a changed snapshot when supplied."""
         ...
 
     def load(self, episode_id: str) -> WorkspaceState | None:

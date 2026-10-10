@@ -51,8 +51,12 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
     paths = PathService.discover()
     package_reader = EpisodePackageReader()
     workspace_repository = SqliteWorkspaceRepository(paths.projects_root)
-    import_service = EpisodeImportService(package_reader, workspace_repository)
-    planning_service = ScenePlanningService(package_reader, workspace_repository)
+    import_service = EpisodeImportService(
+        package_reader, workspace_repository, image_verifier=package_reader
+    )
+    planning_service = ScenePlanningService(
+        package_reader, workspace_repository, image_verifier=package_reader
+    )
     library_service = ProjectLibraryService(workspace_repository)
     job_repository = SqliteGenerationJobRepository(paths.projects_root)
     download_repository = SqliteDownloadResultRepository(paths.projects_root)
@@ -84,6 +88,7 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         fixture_code=fixture_code,
         episode_import_service=import_service,
         scene_planning_service=planning_service,
+        image_verifier=package_reader,
         project_library_service=library_service,
         local_results_service=results_service,
         google_session_service=google_session_service,

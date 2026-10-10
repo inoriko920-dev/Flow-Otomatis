@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
-from flow_otomatis.domain.errors import InvalidDurationError
+from flow_otomatis.domain.errors import (
+    InternalInvariantError,
+    InvalidDurationError,
+    PackageValidationError,
+)
 from flow_otomatis.domain.scene import SceneReadiness
 from flow_otomatis.infrastructure.filesystem import EpisodePackageReader
 from flow_otomatis.infrastructure.persistence import SqliteWorkspaceRepository
@@ -114,3 +119,177 @@ def test_image_rescan_recomputes_readiness_deterministically(tmp_path: Path) -> 
     rescanned_again = planner.rescan_images(workspace.episode_id)
     assert rescanned_again.scenes[0].selected_flow_duration_s == 8
     assert rescanned_again.scenes[0].readiness is SceneReadiness.MISSING_IMAGE
+
+
+def test_fill_missing_recommended_durations_for_large_real_workspace_is_atomic(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    prototype = original.scenes[0]
+    scenes = tuple(
+        replace(
+            prototype,
+            scene_id=f"SCENE_{index:03d}",
+            target_duration_s=(3.8, 5.42, 7.32, 9.1)[index % 4],
+            trim_target_s=(3.8, 5.42, 7.32, 9.1)[index % 4],
+            selected_flow_duration_s=10 if index == 0 else None,
+            readiness=(
+                SceneReadiness.NEEDS_DURATION_SELECTION if index != 0 else SceneReadiness.READY
+            ),
+            image_sha256_imported=f"{index:064x}",
+        )
+        for index in range(100)
+    )
+    repository.update(replace(original, scenes=scenes))
+    plan = planner.preview_missing_recommended_durations(original.episode_id)
+    assert len(plan) == 99
+    assert dict(plan)["SCENE_001"] == 6
+    assert dict(plan)["SCENE_002"] == 8
+    assert dict(plan)["SCENE_003"] == 10
+    before = repository.load(original.episode_id)
+    assert before is not None
+    assert before.scenes[1].selected_flow_duration_s is None
+
+    after = planner.fill_missing_recommended_durations(original.episode_id)
+    assert len(after.scenes) == 100
+    assert after.ready_count == 100
+    assert after.scenes[0].selected_flow_duration_s == 10
+    assert [after.scenes[i].selected_flow_duration_s for i in range(1, 5)] == [6, 8, 10, 4]
+    assert after.scenes[67].image_sha256_imported == scenes[67].image_sha256_imported
+    assert after.scenes[67].target_duration_s == scenes[67].target_duration_s
+    assert after.scenes[67].trim_target_s == scenes[67].trim_target_s
+    assert planner.preview_missing_recommended_durations(original.episode_id) == ()
+    assert planner.fill_missing_recommended_durations(original.episode_id) == after
+
+
+def test_auto_duration_planner_skips_invalid_targets_and_preserves_missing_inputs(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    base = original.scenes[0]
+    scenes = (
+        replace(base, scene_id="SCENE_IMAGE", image_exists=False),
+        replace(
+            base,
+            scene_id="SCENE_PROMPT",
+            motion_prompt="",
+            image_sha256_imported="b" * 64,
+        ),
+        replace(base, scene_id="SCENE_INVALID", target_duration_s=11.0),
+    )
+    repository.update(replace(original, scenes=scenes))
+    plan = planner.preview_missing_recommended_durations(original.episode_id)
+    assert plan == (("SCENE_IMAGE", 8), ("SCENE_PROMPT", 8))
+    result = planner.fill_missing_recommended_durations(original.episode_id)
+    assert result.scenes[0].readiness is SceneReadiness.MISSING_IMAGE
+    assert result.scenes[1].readiness is SceneReadiness.MISSING_PROMPT
+    assert result.scenes[1].image_sha256_imported == "b" * 64
+    assert result.scenes[2].selected_flow_duration_s is None
+    assert result.scenes[2].target_duration_s == 11.0
+
+
+def test_bulk_duration_rejects_stale_preview_and_keeps_newer_manual_choice(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    plan = planner.preview_missing_recommended_durations(original.episode_id)
+    assert plan == (("SCENE_016", 8),)
+
+    # Another editor writes a different manual choice while confirmation is open.
+    manually_selected = planner.select_flow_duration(original.episode_id, "SCENE_016", 10)
+    with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
+        planner.fill_missing_recommended_durations(original.episode_id, expected_workspace=original)
+    assert planner.load_workspace(original.episode_id) == manually_selected
+    assert planner.load_workspace(original.episode_id).scenes[0].selected_flow_duration_s == 10
+
+
+def test_bulk_duration_stale_preview_rejects_changed_target_even_if_ceil_is_same(
+    tmp_path: Path,
+) -> None:
+    package = _write_directory_package(tmp_path / "episode")
+    importer, planner = _services(tmp_path)
+    original = importer.import_package(package)
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    scene = original.scenes[0]
+    newer = replace(
+        original,
+        scenes=(replace(scene, target_duration_s=7.55, trim_target_s=7.55),),
+    )
+    repository.update(newer)
+    assert planner.preview_missing_recommended_durations(original.episode_id) == (("SCENE_016", 8),)
+    with pytest.raises(InternalInvariantError, match="berubah setelah pratinjau"):
+        planner.fill_missing_recommended_durations(original.episode_id, expected_workspace=original)
+    assert planner.load_workspace(original.episode_id) == newer
+
+
+def test_rescan_rejects_changed_pinned_image_without_mutating_workspace(tmp_path: Path) -> None:
+    reader = EpisodePackageReader()
+    repo = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repo, image_verifier=reader)
+    planner = ScenePlanningService(reader, repo, image_verifier=reader)
+    folder = _write_directory_package(tmp_path / "episode")
+    workspace = importer.import_package(folder)
+    assert workspace.scenes[0].image_sha256_imported is not None
+    ready = planner.select_flow_duration(workspace.episode_id, "SCENE_016", 8)
+    unchanged = planner.rescan_images(workspace.episode_id)
+    assert unchanged == ready
+    image = folder / "08_APPROVED_IMAGES" / "EP011__IMAGE__SCENE_016__v1.0.png"
+    image.write_bytes(b"different-image-bytes-at-identical-path")
+    with pytest.raises(PackageValidationError) as error:
+        planner.rescan_images(workspace.episode_id)
+    assert error.value.code == "IMAGE_CHANGED_SINCE_IMPORT"
+    assert repo.load(workspace.episode_id) == ready
+    assert repo.load(workspace.episode_id).scenes[0].image_sha256_imported == (
+        workspace.scenes[0].image_sha256_imported
+    )
+
+
+def test_rescan_rejects_changed_manifest_image_reference_even_without_hash(
+    tmp_path: Path,
+) -> None:
+    reader = EpisodePackageReader()
+    repo = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repo)
+    planner = ScenePlanningService(reader, repo, image_verifier=reader)
+    folder = _write_directory_package(tmp_path / "episode")
+    workspace = importer.import_package(folder)
+    assert workspace.scenes[0].image_sha256_imported is None
+    source_manifest = folder / "09_FLOW_PROMPTS_AND_TAKES" / "FLOW_OTOMATIS_IMPORT.json"
+    data = json.loads(source_manifest.read_text(encoding="utf-8"))
+    new_name = "replacement.png"
+    (folder / "08_APPROVED_IMAGES" / new_name).write_bytes(b"replacement")
+    data["scenes"][0]["image_file"] = f"../08_APPROVED_IMAGES/{new_name}"
+    source_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(PackageValidationError) as error:
+        planner.rescan_images(workspace.episode_id)
+    assert error.value.code == "IMAGE_REFERENCE_CHANGED"
+    assert repo.load(workspace.episode_id) == workspace
+
+
+def test_rescan_accepts_original_image_restored_after_temporary_absence(tmp_path: Path) -> None:
+    reader = EpisodePackageReader()
+    repo = SqliteWorkspaceRepository(tmp_path / "projects")
+    importer = EpisodeImportService(reader, repo, image_verifier=reader)
+    planner = ScenePlanningService(reader, repo, image_verifier=reader)
+    folder = _write_directory_package(tmp_path / "episode")
+    workspace = importer.import_package(folder)
+    image = folder / "08_APPROVED_IMAGES" / "EP011__IMAGE__SCENE_016__v1.0.png"
+    original_bytes = image.read_bytes()
+    image.unlink()
+    missing = planner.rescan_images(workspace.episode_id)
+    assert missing.scenes[0].readiness is SceneReadiness.MISSING_IMAGE
+    assert missing.scenes[0].image_sha256_imported == workspace.scenes[0].image_sha256_imported
+
+    image.write_bytes(original_bytes)
+    restored = planner.rescan_images(workspace.episode_id)
+    assert restored.scenes[0].readiness is SceneReadiness.NEEDS_DURATION_SELECTION
+    assert restored.scenes[0].image_sha256_imported == workspace.scenes[0].image_sha256_imported

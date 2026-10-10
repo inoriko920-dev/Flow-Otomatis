@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import zipfile
@@ -15,7 +16,7 @@ from flow_otomatis.application.ports import (
     GenerationSubmissionAmbiguousError,
 )
 from flow_otomatis.application.services import LocalGenerationQueueService
-from flow_otomatis.domain.errors import StorageError
+from flow_otomatis.domain.errors import PackageValidationError, StorageError
 from flow_otomatis.domain.job import (
     GenerationAttentionCode,
     GenerationJobState,
@@ -647,3 +648,42 @@ def test_prepare_requires_canonical_verifier(tmp_path: Path) -> None:
     with pytest.raises(Exception, match="verifier"):
         service.prepare_queue("EP300_QUEUE")
     assert jobs.list_for_episode("EP300_QUEUE") == ()
+
+
+def test_import_pinned_image_change_blocks_queue_before_job_persistence(
+    tmp_path: Path,
+) -> None:
+    _root, workspace_repo, job_repo, provider, service = _setup(tmp_path)
+    current = workspace_repo.load("EP300_QUEUE")
+    assert current is not None
+    pinned = hashlib.sha256(b"image-bytes-SCENE_001").hexdigest()
+    first = replace(current.scenes[0], image_sha256_imported=pinned)
+    workspace_repo.update(replace(current, scenes=(first, current.scenes[1])))
+
+    source = Path(current.source_package_path).parent / "SCENE_001.png"
+    source.write_bytes(b"tampered-after-import")
+    with pytest.raises(PackageValidationError) as error:
+        service.prepare_queue("EP300_QUEUE")
+    assert error.value.code == "IMAGE_CHANGED_SINCE_IMPORT"
+    assert job_repo.list_for_episode("EP300_QUEUE") == ()
+    assert provider.calls == []
+
+
+def test_import_pinned_image_change_after_queue_prepare_never_submits(
+    tmp_path: Path,
+) -> None:
+    _root, workspace_repo, _job_repo, provider, service = _setup(tmp_path)
+    current = workspace_repo.load("EP300_QUEUE")
+    assert current is not None
+    pinned = hashlib.sha256(b"image-bytes-SCENE_001").hexdigest()
+    first = replace(current.scenes[0], image_sha256_imported=pinned)
+    workspace_repo.update(replace(current, scenes=(first, current.scenes[1])))
+    service.prepare_queue("EP300_QUEUE")
+
+    source = Path(current.source_package_path).parent / "SCENE_001.png"
+    source.write_bytes(b"modified-after-queued")
+    blocked = service.run_next("EP300_QUEUE")
+    assert blocked is not None
+    assert blocked.state is GenerationJobState.ATTENTION_REQUIRED
+    assert blocked.attention_code is GenerationAttentionCode.REQUEST_STALE
+    assert provider.calls == []
