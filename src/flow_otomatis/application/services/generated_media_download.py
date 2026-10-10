@@ -106,8 +106,9 @@ class GeneratedMediaDownloadService:
                 and is_available_output(str(existing_path))
             ):
                 before_cached_mp4 = verified_output_identity(existing_path, destination)
-                if before_cached_mp4 is None or not self._download_repository.matches_current_generated_download(
-                    existing
+                if (
+                    before_cached_mp4 is None
+                    or not self._download_repository.matches_current_generated_download(existing)
                 ):
                     raise InternalInvariantError(
                         "Cached Download no longer matches current Generate, MP4 and persisted "

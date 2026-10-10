@@ -59,6 +59,7 @@ def is_available_output(output_path: str | None) -> bool:
     except OSError, RuntimeError, ValueError:
         return False
 
+
 def verified_output_identity(path: Path, canonical: Path) -> tuple[int, int, int, int, int] | None:
     """Read-only fingerprint for an unchanged, canonical output file.
 
@@ -74,6 +75,6 @@ def verified_output_identity(path: Path, canonical: Path) -> tuple[int, int, int
         if os.path.normcase(str(current)) != os.path.normcase(str(canonical)):
             return None
         info = os.stat(path, follow_symlinks=False)
-    except (OSError, RuntimeError, ValueError):
+    except OSError, RuntimeError, ValueError:
         return None
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
