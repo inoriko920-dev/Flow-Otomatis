@@ -1001,3 +1001,108 @@ def test_sol08_missing_source_image_fails_closed_despite_stale_ready_metadata(
     assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
     assert downloads.get("EP400_RESULTS", "SCENE_001") is not None
     assert video.read_bytes() == b"existing-confirmed-local-video"
+
+
+@pytest.mark.parametrize("reader", ["hasil", "manifest"])
+@pytest.mark.parametrize(
+    "concurrent_change",
+    [
+        "download_state",
+        "download_revision",
+        "download_error",
+        "generate_state",
+        "generate_id",
+        "generate_revision",
+        "generate_fingerprint",
+    ],
+)
+def test_sol17_hasil_manifest_reject_history_changed_after_list_read(
+    tmp_path: Path, reader: str, concurrent_change: str
+) -> None:
+    """A SQLite revision committed after list_for_episode invalidates a stale success."""
+
+    service, video = _generated_result_with_file(tmp_path)
+    assert service.snapshot("EP400_RESULTS").handoff_ready
+    root = tmp_path / "projects"
+    database = root / "EP400_RESULTS" / "project.sqlite3"
+    original = SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001")
+    assert original is not None
+    sql, parameters = {
+        "download_state": (
+            "UPDATE download_results SET state = 'ATTENTION_REQUIRED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "download_revision": (
+            "UPDATE download_results SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "download_error": (
+            "UPDATE download_results SET error_message = ? WHERE scene_id = ?",
+            ("competing revision", "SCENE_001"),
+        ),
+        "generate_state": (
+            "UPDATE generation_jobs SET state = 'QUEUED' WHERE scene_id = ?",
+            ("SCENE_001",),
+        ),
+        "generate_id": (
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:new-result", "SCENE_001"),
+        ),
+        "generate_revision": (
+            "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?",
+            ("2040-01-01T00:00:00+00:00", "SCENE_001"),
+        ),
+        "generate_fingerprint": (
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?",
+            ("different-prepared-request", "SCENE_001"),
+        ),
+    }[concurrent_change]
+
+    class RaceAfterList(SqliteDownloadResultRepository):
+        def __init__(self, projects_root: Path) -> None:
+            super().__init__(projects_root)
+            self.changed = False
+
+        def list_for_episode(self, episode_id: str) -> tuple[DownloadRecord, ...]:
+            previous = super().list_for_episode(episode_id)
+            if not self.changed:
+                self.changed = True
+                with sqlite3.connect(database) as conn:
+                    conn.execute(sql, parameters)
+                    conn.commit()
+            return previous
+
+    downloads = RaceAfterList(root)
+    guarded = LocalResultsService(
+        SqliteWorkspaceRepository(root),
+        SqliteGenerationJobRepository(root),
+        downloads,
+        ResultManifestWriter(root),
+    )
+    if reader == "hasil":
+        result = guarded.snapshot("EP400_RESULTS")
+        assert not result.handoff_ready
+        assert result.downloaded_count == 0
+        state = result.scenes[0].download_state
+        output = result.scenes[0].output_path
+    else:
+        exported = guarded.export_manifest("EP400_RESULTS")
+        payload = json.loads(exported.read_text(encoding="utf-8"))
+        state = payload["scenes"][0]["download_status"]
+        output = payload["scenes"][0]["output_path"]
+    assert downloads.changed
+    assert state == DownloadState.UNAVAILABLE
+    assert output == str(video.resolve())
+    assert video.read_bytes() == b"real-local-test-video"
+
+    actual = SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001")
+    assert actual is not None
+    if concurrent_change.startswith("generate_"):
+        assert actual == original
+    elif concurrent_change == "download_state":
+        assert actual.state == DownloadState.ATTENTION_REQUIRED
+    elif concurrent_change == "download_revision":
+        assert actual.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
+    else:
+        assert actual.error_message == "competing revision"
+
