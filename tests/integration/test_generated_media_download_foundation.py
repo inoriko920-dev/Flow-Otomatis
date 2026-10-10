@@ -849,3 +849,35 @@ def test_download_does_not_reuse_mp4_from_another_generated_result(tmp_path: Pat
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
     assert video.read_bytes() == b"fake-video"
     assert len(driver.calls) == 1
+
+
+
+def test_new_generated_identity_cannot_replace_confirmed_download_history(
+    tmp_path: Path,
+) -> None:
+    """A new valid Generate result cannot erase an older successful Download row."""
+
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    previous = service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=1)
+    previous_video = Path(previous.output_path or "")
+    assert previous.generation_remote_result_id == "remote:SCENE_001"
+
+    with __import__("sqlite3").connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as db:
+        db.execute(
+            "UPDATE generation_jobs SET remote_result_id = ? WHERE scene_id = ?",
+            ("remote:NEW_GENERATED", "SCENE_001"),
+        )
+        db.commit()
+
+    # A different take has a free destination. Without a transaction-level
+    # conflict guard it could replace the old SQLite row despite being a
+    # distinct Generate identity.
+    with pytest.raises(InternalInvariantError, match="atomic Download save"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+
+    newer_video = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_02.mp4"
+    assert newer_video.read_bytes() == b"fake-video"
+    assert previous_video.read_bytes() == b"fake-video"
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == previous
+    assert len(driver.calls) == 2
