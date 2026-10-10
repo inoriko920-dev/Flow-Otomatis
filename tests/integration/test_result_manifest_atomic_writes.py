@@ -44,6 +44,52 @@ def _leftovers(root: Path) -> list[Path]:
     return list((root / "EP_EXPORT_RACE" / "exports").glob("*.tmp"))
 
 
+@pytest.mark.parametrize(
+    "unsafe_episode_id",
+    [
+        "",
+        ".",
+        "..",
+        "../outside",
+        "..\\\\outside",
+        "C:outside",
+        "EP:stream",
+        "EP?broken",
+        "EP*broken",
+        "EP<bad",
+        'EP"bad',
+        "EP|bad",
+        "EP\\tbad",
+        "EP\\nbad",
+        "EP\\x00bad",
+        "EP_END.",
+        "EP_END ",
+        "CON",
+        "con.txt",
+        "NUL",
+        "PRN.log",
+        "COM1",
+        "com9.log",
+        "LPT1",
+        "LPT9.log",
+        "CONIN$",
+        "CONOUT$",
+    ],
+)
+def test_manifest_rejects_unsafe_windows_episode_before_creating_files(
+    tmp_path: Path,
+    unsafe_episode_id: str,
+) -> None:
+    """Manifest writing must reject unsafe aliases even when invoked directly."""
+
+    root = tmp_path / "fresh-projects"
+    writer = ResultManifestWriter(root)
+    bad_results = replace(_results("Untrusted project"), episode_id=unsafe_episode_id)
+    with pytest.raises(InternalInvariantError, match="Unsafe episode identity"):
+        writer.write(bad_results)
+    assert not root.exists()
+
+
 def test_concurrent_exports_have_unique_temporary_files_and_valid_final_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
