@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier, Event
-import traceback
 
 import pytest
 
