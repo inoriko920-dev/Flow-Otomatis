@@ -86,6 +86,11 @@ class GeneratedMediaDownloadService:
                 and existing_path == destination
                 and is_available_output(str(existing_path))
             ):
+                if not self._download_repository.matches_current_generated_download(existing):
+                    raise InternalInvariantError(
+                        "Cached Download no longer matches current Generate and persisted "
+                        "Download identity; manual reconciliation required."
+                    )
                 return existing
 
         destination.parent.mkdir(parents=True, exist_ok=True)
