@@ -393,10 +393,9 @@ class GeneratedMediaDownloadService:
         # Download history or replaces the published MP4. Never return the
         # in-memory success until both the current persisted revision and the
         # file itself still agree. Preserve all bytes/history for reconciliation.
-        if (
-            not self._download_repository.matches_current_generated_download(record)
-            or not is_available_output(str(output))
-        ):
+        if not self._download_repository.matches_current_generated_download(
+            record
+        ) or not is_available_output(str(output)):
             raise InternalInvariantError(
                 "Download history or MP4 changed after atomic save; "
                 "local video needs reconciliation."
