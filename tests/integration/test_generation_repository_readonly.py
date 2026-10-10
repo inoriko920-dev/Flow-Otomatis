@@ -157,3 +157,27 @@ def test_t17_explicit_write_migrates_legacy_history(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT schema_version FROM generation_job_schema"
         ).fetchone() == (2,)
+
+
+def test_t17_failed_explicit_schema_migration_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db, repo = _setup(tmp_path)
+    before = _digest(db)
+
+    def fail_during_migration(connection: sqlite3.Connection) -> None:
+        # Called after the version marker was created, before COMMIT.
+        assert connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE name = 'generation_job_schema'"
+        ).fetchone()
+        raise sqlite3.OperationalError("synthetic migration fault")
+
+    monkeypatch.setattr(repo, "_create_latest_table", fail_during_migration)
+    with pytest.raises(StorageError, match="Could not prepare"):
+        repo.prepare_jobs((_job(),))
+
+    with sqlite3.connect(db) as connection:
+        assert connection.execute(
+            "SELECT name FROM sqlite_master WHERE name LIKE 'generation_%'"
+        ).fetchall() == []
+    assert _digest(db) == before
