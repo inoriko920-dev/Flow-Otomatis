@@ -92,6 +92,8 @@ class SqliteDownloadResultRepository:
                       AND g.state = 'GENERATED'
                       AND TRIM(COALESCE(g.remote_result_id, '')) = ?
                       AND g.request_fingerprint IS NOT NULL
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
                       AND g.target_duration_s = s.target_duration_s
                       AND g.flow_duration_s = s.selected_flow_duration_s
                       AND g.image_file = s.image_file
@@ -341,6 +343,8 @@ class SqliteDownloadResultRepository:
                       AND g.state = 'GENERATED'
                       AND TRIM(COALESCE(g.remote_result_id, '')) = ?
                       AND g.request_fingerprint IS NOT NULL
+                      AND s.image_exists = 1
+                      AND s.readiness = 'READY'
                       AND g.target_duration_s = s.target_duration_s
                       AND g.flow_duration_s = s.selected_flow_duration_s
                       AND g.image_file = s.image_file
