@@ -1527,10 +1527,13 @@ def test_t19_unsupported_no_clobber_primitive_fails_without_fallback(
 
 
 def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: Path) -> None:
+    """A visible in-flight .part is not an excuse for a duplicate browser attempt."""
+
     class ConcurrentDriver(FakeDownloadDriver):
         def __init__(self) -> None:
             super().__init__()
-            self.barrier = Barrier(2)
+            self.partial_written = Event()
+            self.release_first = Event()
 
         def download_one(
             self,
@@ -1543,7 +1546,8 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
             evidence = super().download_one(
                 profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
             )
-            self.barrier.wait(timeout=10)
+            self.partial_written.set()
+            assert self.release_first.wait(timeout=15)
             return evidence
 
     driver = ConcurrentDriver()
@@ -1557,36 +1561,24 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(attempt)
+        assert driver.partial_written.wait(timeout=15)
+        # Ensure the second attempt sees the first worker's in-flight partial
+        # rather than racing to the browser provider before it exists.
         second = pool.submit(attempt)
-        outcomes = [first.result(timeout=20), second.result(timeout=20)]
+        blocked = second.result(timeout=15)
+        driver.release_first.set()
+        confirmed = first.result(timeout=15)
 
-    # Both commit orders are safe: the winner may save first (DOWNLOADED),
-    # or the losing attempt may save ambiguity first, preventing the winner
-    # from overwriting manual-review evidence. Never fabricate a success.
-    successes = [item for item in outcomes if isinstance(item, DownloadRecord)]
-    errors = [item for item in outcomes if isinstance(item, Exception)]
-    assert len(successes) <= 1
-    assert len(successes) + len(errors) == 2
+    assert isinstance(blocked, InternalInvariantError)
+    assert "Prior Download partial file" in str(blocked)
+    assert isinstance(confirmed, DownloadRecord)
     final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
     assert final.is_file()
     assert final.read_bytes() == b"fake-video"
-    assert len(driver.calls) == 2
-    assert len({call[2] for call in driver.calls}) == 2
-    recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
-    assert recorded is not None
-    if successes:
-        assert len(errors) == 1
-        assert recorded.state == DownloadState.DOWNLOADED
-        assert recorded.output_path == str(final)
-        assert successes[0] == recorded
-    else:
-        assert len(errors) == 2
-        assert recorded.state == DownloadState.ATTENTION_REQUIRED
-        assert recorded.output_path is None
-        with pytest.raises(InternalInvariantError, match="manual reconciliation"):
-            service.download_scene("EP500_DOWNLOAD", "SCENE_001")
-        assert len(driver.calls) == 2
-    assert final.read_bytes() == b"fake-video"
+    assert len(driver.calls) == 1
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == confirmed
+    assert confirmed.state == DownloadState.DOWNLOADED
+    assert confirmed.output_path == str(final)
     assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
 
 
