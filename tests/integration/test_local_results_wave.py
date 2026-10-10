@@ -796,6 +796,7 @@ def test_t10_scene_edit_during_download_commit_is_rejected_without_deleting_vide
     assert downloads.get("EP400_RESULTS", "SCENE_001") is None
     assert racing_service.snapshot("EP400_RESULTS").handoff_ready is False
 
+
 @pytest.mark.parametrize(
     "scene_change",
     [
@@ -803,8 +804,6 @@ def test_t10_scene_edit_during_download_commit_is_rejected_without_deleting_vide
         {"readiness": SceneReadiness.MISSING_PROMPT},
     ],
 )
-
-
 def test_f03_not_ready_scene_refuses_new_download_certificate_and_keeps_bytes(
     tmp_path: Path, scene_change: dict[str, object]
 ) -> None:
