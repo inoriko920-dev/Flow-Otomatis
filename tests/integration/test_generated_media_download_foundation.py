@@ -1285,7 +1285,7 @@ def test_published_file_is_rechecked_before_success_and_partial_cleanup(
             Path(destination).write_bytes(b"independent-file")
 
     monkeypatch.setattr(google_flow_download.os, "link", changed_publication)
-    with pytest.raises(MediaDownloadAmbiguousError, match="final verification"):
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
 
     final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
