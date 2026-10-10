@@ -872,7 +872,7 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
     def attempt():
         try:
             return service.download_scene("EP500_DOWNLOAD", "SCENE_001")
-        except MediaDownloadProviderError as exc:
+        except (MediaDownloadProviderError, InternalInvariantError) as exc:
             return exc
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -880,8 +880,13 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
         second = pool.submit(attempt)
         outcomes = [first.result(timeout=20), second.result(timeout=20)]
 
-    assert sum(isinstance(item, Exception) for item in outcomes) == 1
-    assert sum(getattr(item, "state", None) == DownloadState.DOWNLOADED for item in outcomes) == 1
+    # Both commit orders are safe: the winner may save first (DOWNLOADED),
+    # or the losing attempt may save ambiguity first, preventing the winner
+    # from overwriting manual-review evidence. Never fabricate a success.
+    successes = [item for item in outcomes if isinstance(item, DownloadRecord)]
+    errors = [item for item in outcomes if isinstance(item, Exception)]
+    assert len(successes) <= 1
+    assert len(successes) + len(errors) == 2
     final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
     assert final.is_file()
     assert final.read_bytes() == b"fake-video"
@@ -889,8 +894,19 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
     assert len({call[2] for call in driver.calls}) == 2
     recorded = downloads.get("EP500_DOWNLOAD", "SCENE_001")
     assert recorded is not None
-    assert recorded.state == DownloadState.DOWNLOADED
-    assert recorded.output_path == str(final)
+    if successes:
+        assert len(errors) == 1
+        assert recorded.state == DownloadState.DOWNLOADED
+        assert recorded.output_path == str(final)
+        assert successes[0] == recorded
+    else:
+        assert len(errors) == 2
+        assert recorded.state == DownloadState.ATTENTION_REQUIRED
+        assert recorded.output_path is None
+        with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+            service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+        assert len(driver.calls) == 2
+    assert final.read_bytes() == b"fake-video"
     assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
 
 
