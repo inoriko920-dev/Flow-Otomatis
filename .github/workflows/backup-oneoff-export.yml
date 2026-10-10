@@ -1,4 +1,4 @@
-name: One-off repository archive (Flow-Otomatis only)
+name: One-off final repository backup package (Flow-Otomatis only)
 on:
   push:
     branches:
@@ -7,53 +7,27 @@ on:
       - .github/workflows/backup-oneoff-export.yml
 permissions:
   contents: read
+  actions: read
 jobs:
   export:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
-      - name: Export all Git refs and source from repository
-        shell: bash
+      - name: Checkout isolated backup-tools branch
+        uses: actions/checkout@v4
+        with:
+          ref: backup/oneoff-export-20261011-wib
+          persist-credentials: false
+      - name: Build and verify self-contained repository backup
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          export LC_ALL=C
-          mkdir -p export/GIT export/SOURCE export/META
-          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" mirror.git
-          git -C mirror.git fsck --full --no-reflogs
-          git -C mirror.git for-each-ref --format='%(refname) %(objectname)' | sort > export/META/ALL_REFS.txt
-          git -C mirror.git for-each-ref refs/heads --format='%(refname:short) %(objectname)' | sort > export/META/BRANCHES.txt
-          git -C mirror.git for-each-ref refs/tags --format='%(refname:short) %(objectname)' | sort > export/META/TAGS.txt
-          git -C mirror.git log --all --format='%H %aI %s' > export/META/COMMIT_HISTORY.txt
-          git -C mirror.git rev-list --all --count > export/META/COMMIT_COUNT.txt
-          git -C mirror.git rev-parse refs/heads/main > export/META/MAIN_COMMIT.txt
-          git -C mirror.git bundle create "$PWD/export/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" --all
-          git -C mirror.git bundle verify "$PWD/export/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" | tee export/META/GIT_BUNDLE_VERIFY.txt
-          git -C mirror.git bundle list-heads "$PWD/export/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" > export/META/GIT_BUNDLE_REFS.txt
-          git -C mirror.git archive --format=zip --output="$PWD/export/SOURCE/Flow-Otomatis-SOURCE-MAIN.zip" refs/heads/main
-          git clone --mirror "$PWD/export/GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" restore_check.git
-          git -C restore_check.git fsck --full --no-reflogs
-          git -C restore_check.git for-each-ref --format='%(refname) %(objectname)' | sort > export/META/RESTORED_REFS.txt
-          diff -u export/META/ALL_REFS.txt export/META/RESTORED_REFS.txt
-          git -C mirror.git lfs ls-files --all > export/META/LFS_FILES.txt 2> export/META/LFS_INFO.txt || true
-          if [ -s export/META/LFS_FILES.txt ]; then
-            echo 'LFS_PRESENT_FETCH_REQUIRED' > export/META/LFS_STATUS.txt
-          else
-            echo 'NO_LFS_FILES_DETECTED' > export/META/LFS_STATUS.txt
-          fi
-          python - <<'PY'
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-          from pathlib import Path
-          p=Path('export/META/EXPORT_INFO.txt')
-          p.write_text('Repository: '+__import__('os').environ['GITHUB_REPOSITORY']+'\nGenerated WIB: '+datetime.now(ZoneInfo('Asia/Jakarta')).isoformat()+'\nBackup excludes passwords and GitHub Actions secrets.\n',encoding='utf-8')
-          PY
-          (cd export && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > export/SHA256SUMS.txt
-          (cd export && sha256sum -c SHA256SUMS.txt)
-      - name: Upload portable repository backup
+          python backup_tools/build_final_backup.py
+      - name: Upload one complete ZIP payload
         uses: actions/upload-artifact@v4
         with:
-          name: FLOW-OTOMATIS-GIT-BUNDLE-AND-SOURCE-20261011
-          path: export/
+          name: Flow-Otomatis-FULL-BACKUP-2026-10-11-WIB
+          path: final/
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
