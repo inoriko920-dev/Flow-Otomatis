@@ -375,9 +375,14 @@ class GeneratedMediaDownloadService:
             take=normalized_take,
             generation_remote_result_id=remote_result_id,
         )
-        if not self._download_repository.save_if_current_generate(
-            record, remote_result_id, expected_reviewed_download=reviewed_download
-        ):
+        saved = (
+            self._download_repository.save_if_current_generate(record, remote_result_id)
+            if reviewed_download is None
+            else self._download_repository.save_if_current_generate(
+                record, remote_result_id, expected_reviewed_download=reviewed_download
+            )
+        )
+        if not saved:
             # The Generate result or the reviewed Download revision changed
             # after our reads. Keep MP4 bytes and SQLite history intact.
             raise InternalInvariantError(
