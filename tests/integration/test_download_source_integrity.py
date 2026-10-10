@@ -301,6 +301,6 @@ def test_sol09_late_source_change_after_atomic_save_does_not_return_success(
         service.download_scene(_EPISODE, _SCENE)
     stored = original.get(_EPISODE, _SCENE)
     assert stored is not None
-    assert stored.state is DownloadState.DOWNLOADED
+    assert stored.state == DownloadState.DOWNLOADED
     assert Path(stored.output_path or "").read_bytes() == b"preserved-synthetic-mp4"
     assert not rig.results.snapshot(_EPISODE).handoff_ready
