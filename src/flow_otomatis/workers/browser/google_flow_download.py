@@ -142,7 +142,26 @@ class GoogleFlowDownloadProvider:
                 "Flow browser attempt stopped unexpectedly; the outcome is "
                 "uncertain and requires manual reconciliation before retry."
             ) from exc
+        # Do not trust runtime type annotations across the browser-driver
+        # boundary. Unknown/malformed evidence cannot prove a safe failure;
+        # the remote attempt may already have downloaded a file.
+        if (
+            not isinstance(evidence, GoogleFlowDownloadEvidence)
+            or not isinstance(evidence.state, GoogleFlowDownloadState)
+        ):
+            raise MediaDownloadAmbiguousError(
+                "Flow browser returned invalid Download evidence; "
+                "manual reconciliation is required before retry."
+            )
+
         if evidence.state is GoogleFlowDownloadState.DOWNLOADED:
+            # A malformed output path is not authority to publish or to
+            # discard the browser attempt's partial bytes.
+            if not isinstance(evidence.output_path, str) or not evidence.output_path.strip():
+                raise MediaDownloadAmbiguousError(
+                    "Flow browser reported success without a valid output path; "
+                    "manual reconciliation is required before retry."
+                )
             # Do not call resolve() before verifying the driver's original
             # path: a symlink could mask an unrelated file as our partial.
             reported = Path(evidence.output_path or "").expanduser().absolute()
