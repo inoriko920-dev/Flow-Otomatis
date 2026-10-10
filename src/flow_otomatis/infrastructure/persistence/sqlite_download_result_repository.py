@@ -150,7 +150,9 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError("Could not atomically verify and save Download result") from exc
 
-    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
+    def save_failure_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
         """Store a failure only when no success or unresolved ambiguity exists.
 
         The conditional upsert is atomic across competing SQLite connections.
@@ -162,7 +164,12 @@ class SqliteDownloadResultRepository:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                if not self._failure_generate_is_current(connection, record):
+                if (
+                    expected_remote_result_id is not None
+                    and not self._failure_generate_is_current(
+                        connection, record, expected_remote_result_id
+                    )
+                ):
                     # The attempt belongs to an old Generate result. Do not
                     # pollute the new result with a stale failure/ambiguity.
                     connection.rollback()
@@ -200,7 +207,9 @@ class SqliteDownloadResultRepository:
         except sqlite3.Error as exc:
             raise StorageError(f"Could not save download failure: {exc}") from exc
 
-    def save_attention_if_unconfirmed(self, record: DownloadRecord) -> None:
+    def save_attention_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
         """Record sticky ambiguity only if no success or prior ambiguity exists.
 
         The conditional upsert is atomic across competing SQLite connections.
@@ -212,7 +221,12 @@ class SqliteDownloadResultRepository:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                if not self._failure_generate_is_current(connection, record):
+                if (
+                    expected_remote_result_id is not None
+                    and not self._failure_generate_is_current(
+                        connection, record, expected_remote_result_id
+                    )
+                ):
                     # The attempt belongs to an old Generate result. Do not
                     # pollute the new result with a stale failure/ambiguity.
                     connection.rollback()
@@ -252,18 +266,22 @@ class SqliteDownloadResultRepository:
 
     @staticmethod
     def _failure_generate_is_current(
-        connection: sqlite3.Connection, record: DownloadRecord
+        connection: sqlite3.Connection,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
     ) -> bool:
         """Reject stale browser outcomes under the same SQLite write lock.
 
-        Legacy local failure reports intentionally have no remote identity
-        and keep their existing conditional-write behavior.
+        Only browser-originated outcomes opt into Generate identity checks.
+        Legacy local history writers retain their existing behavior.
         """
 
-        remote_id = record.generation_remote_result_id
-        if remote_id is None:
-            return True
-        if not remote_id or remote_id != remote_id.strip():
+        remote_id = expected_remote_result_id
+        if (
+            not remote_id
+            or remote_id != remote_id.strip()
+            or record.generation_remote_result_id != remote_id
+        ):
             return False
         return (
             connection.execute(
