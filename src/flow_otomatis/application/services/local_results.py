@@ -241,6 +241,14 @@ class LocalResultsService:
             )
 
         expected = current_revision()
+        # An update during the FIRST collection can make the displayed
+        # snapshot and persisted revision lists momentarily inconsistent.
+        # Settle on a second read before staging so Hasil can still export
+        # an already-downgraded UNAVAILABLE result; post-stage changes
+        # remain forbidden by the final publication guard.
+        settled = current_revision()
+        if settled != expected:
+            expected = settled
         return self._manifest_writer.write(
             expected[0], recheck=lambda: current_revision() == expected
         )
