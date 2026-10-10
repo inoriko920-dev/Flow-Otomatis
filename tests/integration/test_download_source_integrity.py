@@ -744,3 +744,128 @@ def test_sol13_retry_claim_rejects_changed_sqlite_facts_before_provider(
     assert stored is not None
     if concurrent_change not in {"download_revision", "download_ambiguous"}:
         assert stored == reviewed
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+def test_sol14_crash_between_claim_commit_and_provider_dispatch_requires_re_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, zip_source: bool
+) -> None:
+    """A crash at the exact dispatch boundary must not reuse one review."""
+
+    rig = _setup(tmp_path, zip_source=zip_source)
+    reviewed = _reviewed_retry(rig)
+    assert rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+
+    def crash_before_dispatch(**_kwargs: object) -> GeneratedMediaDownloadRequest:
+        raise SystemExit("simulated crash before provider invocation")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "flow_otomatis.application.services.generated_media_download"
+            ".GeneratedMediaDownloadRequest",
+            crash_before_dispatch,
+        )
+        with pytest.raises(SystemExit, match="simulated crash before provider invocation"):
+            rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
+        actions = [
+            row[0]
+            for row in connection.execute("SELECT action FROM download_reconciliation_audit")
+        ]
+    assert actions == ["OPERATOR_REVIEWED_RETRY", "OPERATOR_REVIEWED_RETRY_CLAIMED"]
+
+    restarted = GeneratedMediaDownloadService(
+        SqliteGenerationJobRepository(rig.root),
+        SqliteDownloadResultRepository(rig.root),
+        rig.provider,
+        rig.root,
+        workspace_repository=SqliteWorkspaceRepository(rig.root),
+        image_verifier=EpisodePackageReader(),
+    )
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        restarted.download_scene(_EPISODE, _SCENE)
+    assert rig.provider.calls == 0
+    row = rig.downloads.get(_EPISODE, _SCENE)
+    assert row is not None
+    assert row.state == DownloadState.ATTENTION_REQUIRED
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
+
+
+@pytest.mark.parametrize("change", ["revision", "fingerprint"])
+def test_sol14_generate_mutated_after_claim_before_provider_blocks_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    rig = _setup(tmp_path)
+    reviewed = _reviewed_retry(rig)
+    original_claim = rig.downloads.claim_reviewed_retry_if_present
+    altered = False
+
+    def commit_claim_then_change_generate(
+        record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
+        nonlocal altered
+        accepted = original_claim(record, expected_generation=expected_generation)
+        if accepted is True:
+            altered = True
+            query = (
+                "UPDATE generation_jobs SET updated_at = ? WHERE scene_id = ?"
+                if change == "revision"
+                else "UPDATE generation_jobs SET request_fingerprint = ? WHERE scene_id = ?"
+            )
+            new_value = (
+                "2040-01-01T00:00:00+00:00"
+                if change == "revision"
+                else "altered-after-claim"
+            )
+            with sqlite3.connect(rig.root / _EPISODE / "project.sqlite3") as connection:
+                connection.execute(query, (new_value, _SCENE))
+                connection.commit()
+        return accepted
+
+    monkeypatch.setattr(
+        rig.downloads, "claim_reviewed_retry_if_present", commit_claim_then_change_generate
+    )
+    with pytest.raises(InternalInvariantError, match="Generate revision changed"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert altered
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+def test_sol14_source_bytes_mutated_after_claim_before_provider_blocks_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, zip_source: bool
+) -> None:
+    rig = _setup(tmp_path, zip_source=zip_source)
+    reviewed = _reviewed_retry(rig)
+    original_claim = rig.downloads.claim_reviewed_retry_if_present
+    altered = False
+
+    def commit_claim_then_change_source(
+        record: DownloadRecord, *, expected_generation: GenerationJob
+    ) -> bool | None:
+        nonlocal altered
+        accepted = original_claim(record, expected_generation=expected_generation)
+        if accepted is True:
+            _change_image(rig.source)
+            altered = True
+        return accepted
+
+    monkeypatch.setattr(
+        rig.downloads, "claim_reviewed_retry_if_present", commit_claim_then_change_source
+    )
+    with pytest.raises(InternalInvariantError, match="source image"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert altered
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) == reviewed
+    assert not rig.downloads.has_confirmed_manual_retry_authorization(reviewed)
+    assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
