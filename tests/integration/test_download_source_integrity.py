@@ -6,8 +6,8 @@ import hashlib
 import json
 import sqlite3
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
