@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 
 import pytest
 
@@ -908,6 +908,77 @@ def test_t20_parallel_attempts_publish_once_and_do_not_erase_success(tmp_path: P
         assert len(driver.calls) == 2
     assert final.read_bytes() == b"fake-video"
     assert jobs.list_for_episode("EP500_DOWNLOAD")[0].remote_result_id == "remote:SCENE_001"
+
+
+def test_parallel_losing_attempt_ambiguity_commits_before_winner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prove that the slower success cannot erase an earlier uncertain result."""
+
+    class ConcurrentDriver(FakeDownloadDriver):
+        def __init__(self) -> None:
+            super().__init__()
+            self.barrier = Barrier(2)
+
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            evidence = super().download_one(
+                profile_id, remote_result_id, destination_path, timeout_ms=timeout_ms
+            )
+            self.barrier.wait(timeout=15)
+            return evidence
+
+    driver = ConcurrentDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    ambiguity_committed = Event()
+    guarded_save = downloads.save_if_current_generate
+    attention_save = downloads.save_attention_if_unconfirmed
+
+    def delay_success_until_ambiguity(record: DownloadRecord, remote_id: str) -> bool:
+        assert ambiguity_committed.wait(timeout=15)
+        return guarded_save(record, remote_id)
+
+    def record_ambiguity_first(record: DownloadRecord) -> None:
+        attention_save(record)
+        ambiguity_committed.set()
+
+    monkeypatch.setattr(downloads, "save_if_current_generate", delay_success_until_ambiguity)
+    monkeypatch.setattr(downloads, "save_attention_if_unconfirmed", record_ambiguity_first)
+
+    def attempt() -> DownloadRecord | Exception:
+        try:
+            return service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+        except (MediaDownloadProviderError, InternalInvariantError) as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(attempt)
+        second = pool.submit(attempt)
+        outcomes = [first.result(timeout=25), second.result(timeout=25)]
+
+    assert len(driver.calls) == 2
+    assert ambiguity_committed.is_set()
+    assert sum(isinstance(item, MediaDownloadAmbiguousError) for item in outcomes) == 1
+    assert sum(isinstance(item, InternalInvariantError) for item in outcomes) == 1
+    assert not any(isinstance(item, DownloadRecord) for item in outcomes)
+    record = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert record is not None and record.state == DownloadState.ATTENTION_REQUIRED
+    assert record.output_path is None
+
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert final.read_bytes() == b"fake-video"
+    partials = list(final.parent.glob(final.name + ".*.part"))
+    assert len(partials) == 1
+    assert partials[0].read_bytes() == b"fake-video"
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 2
 
 
 def test_t21_file_publish_success_db_failure_requires_manual_reconciliation(
