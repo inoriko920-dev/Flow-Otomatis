@@ -1,5 +1,8 @@
 # ADR-020 — Global Credit and Attempt Authority (E12-01)
-Status: **PROPOSED / ASTRA REVIEW** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+Status: **OWNER-APPROVED ARCHITECTURE DESIGN — T06 D01/D02/D06 PASS; NOT IMPLEMENTED / NOT CODE-AUTHORIZED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+
+> **2026-10-09 OWNER SIGNOFF — T06 architecture DESIGN ONLY.** The owner explicitly agreed to D01–D06 after being asked to approve their final design. Full scope and gate consequences: `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. D01 global single-device SQLite attempt/credit ledger and outbox; D02 immutable scoped identity/reservation/lease fencing; D06 additive feature-flagged migration and backup/rollback design. Existing project DB schema-v2 is not replaced, and fake race/crash acceptance has NOT been executed. This does **not** grant permission to code, merge PRs, migrate existing databases, operate Google Flow or spend credits. Any references below to "candidate"/"proposed" describe the historical draft that was accepted as an architecture design, not a claim of implemented behavior.
+
 Scope: new optional coordinator model for future E12 waves, NOT production code.
 Related: ADR-004, ADR-016, ADR-018/019, Master Plan V1.1, E12-01 DOCX.
 

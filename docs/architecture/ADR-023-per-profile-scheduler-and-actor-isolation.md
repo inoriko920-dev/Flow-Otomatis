@@ -1,5 +1,8 @@
 # ADR-023 — Account-Aware Scheduler and Browser Actor Isolation (E12-01)
-Status: **PROPOSED / LIVE PARALLELISM BLOCKED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+Status: **OWNER-APPROVED ARCHITECTURE DESIGN — T06 D03/D05/D06 PASS; LIVE PARALLELISM BLOCKED** • 8 Oct 2026 WIB • Baseline: `978dbb31ce2024da0c70280f260f421e2687382b`
+
+> **2026-10-09 OWNER SIGNOFF — T06 architecture DESIGN ONLY.** The owner explicitly agreed to D01–D06 after being asked to approve their final design. Full scope and gate consequences: `docs/planning/decisions/E12_01_T06_OWNER_APPROVED_SIX_ARCHITECTURE_DECISIONS_2026-10-09.md`. D05 per-profile isolated worker with fresh current-process READY and one global writer, D03 account-specific provider permission/credit eligibility, and D06 fake-only staged rollout accepted as design; no multi-account live actions while G1/G5/G6/G9 are not PASS. This does **not** grant permission to code, merge PRs, migrate existing databases, operate Google Flow or spend credits. Any references below to "candidate"/"proposed" describe the historical draft that was accepted as an architecture design, not a claim of implemented behavior.
+
 Related: ADR-005 existing serial R1 queue, ADR-017 Browser Worker ownership, ADR-020 global authority, ADR-021 policy.
 
 ## Scope and alternatives
@@ -10,12 +13,12 @@ Legacy `LocalGenerationQueueService.run_until_idle()` is serial; `SqliteGenerati
 - Deterministic allocator assigns scene to an opted-in, READY, policy-eligible account whose **fresh available credit** and capabilities cover the precise approved quote. Dry run may use manually entered balances but always labels simulation, and cannot dispatch.
 - User reviews a full project plan (assignments, credits per duration/output, total/per-account budget, skipped scenes, buffer) and approves its digest. Replanning changes revision and requires new approval.
 - One in-flight mutating submit per eligible profile/actor; many profiles may work on **different** scenes only when Google explicitly permits concurrent use. No concurrency assumed from login count. Cap starts at one in fake tests, then two synthetic profiles, then limited live test after G1/G6–G9 gates.
-- Scheduler checks feature flag, global app owner lock, account lease, credit reservation, provider policy, credentials/session and input fingerprint **again** immediately before handoff. Final worker gate must confirm same immutable attempt and fence.
+- Scheduler checks feature flag, global app owner lock, account lease, credit reservation, provider policy, credentials/session and input fingerprint **again** immediately before handoff. The final worker gate must confirm the same immutable attempt/fence **and a session READY verification made in the current application process**, not merely a persisted previous-run status.
 - Pause prevents new claims without claiming it cancels an ambiguous click. Graceful stop drains pre-mutation tasks; in-flight uncertainty enters attention. Fairness/starvation heuristics must be tested and deterministic, not improvised.
 
 ## Browser actor model
 All Chrome/CDP/Playwright handles reside within the account's dedicated worker execution owner. Qt main thread never holds those objects or SQLite handles. Interactions pass sanitized application DTO/events. Human login/MFA only in normal installed Chrome; automation after sign-in and permitted policy only. Do not attach more than one actor to the same account/browser profile.
-Browser actor lifecycle states: `DISCONNECTED -> HUMAN_AUTH_PENDING -> READY_VERIFIED -> BUSY -> READY_VERIFIED`, with `AUTH_REQUIRED/ATTENTION/SHUTDOWN` branches. Restart-ready proof persisted without secrets; it is not a proxy for live provider permission.
+Browser actor lifecycle states: `DISCONNECTED -> HUMAN_AUTH_PENDING -> READY_VERIFIED -> BUSY -> READY_VERIFIED`, with `AUTH_REQUIRED/ATTENTION/SHUTDOWN` branches. On every **full application restart**, the current process starts non-READY and must reverify session availability, account identity, and worker ownership before any `READY_VERIFIED` transition. Restart evidence may be persisted without secrets **for audit only**, never replayed as present READY authority; provider permission/eligibility and the user's consent remain separate dispatch gates.
 - Stable remote ID must bind exact account+attempt and remain invisible to other profile actor except sanitized aggregate UI; prevent cross-account remote download.
 - Periodic health checks never stealth sign-in, never bypass challenges or continuously retry blocked actions.
 
