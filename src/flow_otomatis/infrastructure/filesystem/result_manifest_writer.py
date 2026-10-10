@@ -70,7 +70,7 @@ class ResultManifestWriter:
         return exports
 
     def write(
-        self, results: ProjectResults, *, recheck: Callable[[], ProjectResults] | None = None
+        self, results: ProjectResults, *, recheck: Callable[[], bool] | None = None
     ) -> Path:
         output_dir = self._verified_export_directory(results.episode_id)
         target = output_dir / "FLOW_OTOMATIS_RESULT.json"
@@ -196,7 +196,7 @@ class ResultManifestWriter:
             # Re-read SQLite/Scene/source through the owning service AFTER
             # writing and syncing the temporary JSON. Never publish a success
             # that belonged to an older Download/Generate revision.
-            if recheck is not None and recheck() != results:
+            if recheck is not None and not recheck():
                 raise InternalInvariantError(
                     "Result history changed during manifest export; "
                     "previous manifest and MP4 retained for reconciliation."
