@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
+import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,12 +11,13 @@ from pathlib import Path
 import pytest
 
 from flow_otomatis.application.services import LocalResultsService
+from flow_otomatis.application.services.local_generation_queue import _scene_fingerprint
 from flow_otomatis.domain.errors import InternalInvariantError
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
 from flow_otomatis.domain.project import WorkspaceState
 from flow_otomatis.domain.result import DownloadRecord, DownloadState
 from flow_otomatis.domain.scene import SceneReadiness, WorkspaceScene
-from flow_otomatis.infrastructure.filesystem import ResultManifestWriter
+from flow_otomatis.infrastructure.filesystem import EpisodePackageReader, ResultManifestWriter
 from flow_otomatis.infrastructure.persistence import (
     SqliteDownloadResultRepository,
     SqliteGenerationJobRepository,
@@ -864,3 +867,136 @@ def test_f03_atomic_download_rejects_missing_image_after_initial_service_check(
         guarded.record_downloaded("EP400_RESULTS", "SCENE_001", str(output))
     assert output.read_bytes() == b"keep-when-scene-lost-image"
     assert SqliteDownloadResultRepository(root).get("EP400_RESULTS", "SCENE_001") is None
+
+
+def _verified_image_source_and_result(
+    tmp_path: Path, *, zip_source: bool, imported_baseline: bool = True
+) -> tuple[LocalResultsService, Path, Path, SqliteDownloadResultRepository]:
+    """Use a real local package and the actual SHA-256 verifier; no provider calls."""
+    workspace = _workspace()
+    scene = workspace.scenes[0]
+    image_bytes = b"original-approved-illustration"
+    original_sha = hashlib.sha256(image_bytes).hexdigest()
+    manifest = {
+        "schema_version": "1.0",
+        "episode_id": workspace.episode_id,
+        "project_name": workspace.project_name,
+        "production_profile": {
+            "model": workspace.model,
+            "resolution": workspace.resolution,
+            "aspect_ratio": workspace.aspect_ratio,
+        },
+        "scene_count": 1,
+        "scenes": [
+            {
+                "scene_id": scene.scene_id,
+                "image_file": scene.image_file,
+                "motion_prompt": scene.motion_prompt,
+                "target_duration_s": scene.target_duration_s,
+                "recommended_flow_duration_s": scene.recommended_flow_duration_s,
+                "selected_flow_duration_s": scene.selected_flow_duration_s,
+                "trim_target_s": scene.trim_target_s,
+                "model": scene.model,
+                "resolution": scene.resolution,
+                "aspect_ratio": scene.aspect_ratio,
+                "status": "READY",
+            }
+        ],
+        "created_at": workspace.created_at.isoformat(),
+        "source_versions": {},
+    }
+    if zip_source:
+        source = tmp_path / "verified_source.zip"
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("FLOW_OTOMATIS_IMPORT.json", json.dumps(manifest))
+            archive.writestr(scene.image_file, image_bytes)
+        image_path = source
+    else:
+        source = tmp_path / "verified_source"
+        source.mkdir()
+        (source / "FLOW_OTOMATIS_IMPORT.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        image_path = source / scene.image_file
+        image_path.write_bytes(image_bytes)
+
+    updated_scene = replace(
+        scene, image_sha256_imported=original_sha if imported_baseline else None
+    )
+    workspace = replace(
+        workspace,
+        source_package_path=str(source),
+        scenes=(updated_scene,),
+    )
+    root = tmp_path / "projects"
+    workspaces = SqliteWorkspaceRepository(root)
+    workspaces.save(workspace)
+    jobs = SqliteGenerationJobRepository(root)
+    initial = _queue_one(jobs)
+    # ensure_jobs on a queued job does not rewrite its immutable request;
+    # explicitly prepare a coherent offline fingerprint before the claim.
+    with sqlite3.connect(root / workspace.episode_id / "project.sqlite3") as connection:
+        connection.execute(
+            "UPDATE generation_jobs SET request_fingerprint = ? WHERE job_id = ?",
+            (
+                _scene_fingerprint(workspace.episode_id, updated_scene, original_sha),
+                initial.job_id,
+            ),
+        )
+    assert jobs.claim_next(workspace.episode_id, "verified-source-owner", lease_seconds=60)
+    jobs.mark_generated(initial.job_id, "remote:verified-source", "verified-source-owner")
+    downloads = SqliteDownloadResultRepository(root)
+    service = LocalResultsService(
+        workspaces, jobs, downloads, ResultManifestWriter(root),
+        image_verifier=EpisodePackageReader(),
+    )
+    video = tmp_path / "verified-result.mp4"
+    video.write_bytes(b"existing-confirmed-local-video")
+    service.record_downloaded(workspace.episode_id, scene.scene_id, str(video))
+    assert service.snapshot(workspace.episode_id).handoff_ready
+    return service, image_path, video, downloads
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+@pytest.mark.parametrize("imported_baseline", [False, True])
+def test_sol08_changed_image_bytes_without_renaming_never_certifies_handoff(
+    tmp_path: Path, zip_source: bool, imported_baseline: bool
+) -> None:
+    service, image_source, video, downloads = _verified_image_source_and_result(
+        tmp_path, zip_source=zip_source, imported_baseline=imported_baseline
+    )
+    old = downloads.get("EP400_RESULTS", "SCENE_001")
+    assert old is not None
+    if zip_source:
+        with zipfile.ZipFile(image_source, "a") as archive:
+            # The last duplicate member is read by zipfile, but the canonical
+            # package reader rejects ambiguous ZIP names before hashing.
+            archive.writestr("SCENE_001.png", b"tampered-image-unchanged-name")
+    else:
+        image_source.write_bytes(b"tampered-image-unchanged-name")
+
+    result = service.snapshot("EP400_RESULTS")
+    assert result.handoff_ready is False
+    assert result.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert result.downloaded_count == 0
+    with pytest.raises(InternalInvariantError, match="previous Scene revision"):
+        service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
+    manifest = json.loads(service.export_manifest("EP400_RESULTS").read_text(encoding="utf-8"))
+    assert manifest["scenes"][0]["download_status"] == "UNAVAILABLE"
+    assert downloads.get("EP400_RESULTS", "SCENE_001") == old
+    assert video.read_bytes() == b"existing-confirmed-local-video"
+
+
+def test_sol08_missing_source_image_fails_closed_despite_stale_ready_metadata(
+    tmp_path: Path,
+) -> None:
+    service, image_source, video, downloads = _verified_image_source_and_result(
+        tmp_path, zip_source=False
+    )
+    image_source.unlink()
+    current = service.snapshot("EP400_RESULTS")
+    assert not current.handoff_ready
+    assert current.scenes[0].download_state == DownloadState.UNAVAILABLE
+    assert downloads.get("EP400_RESULTS", "SCENE_001") is not None
+    assert video.read_bytes() == b"existing-confirmed-local-video"
+
