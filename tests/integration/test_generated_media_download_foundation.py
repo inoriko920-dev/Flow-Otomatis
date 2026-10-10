@@ -987,15 +987,13 @@ def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
     }
     with pytest.raises(InternalInvariantError, match="Manual provider"):
         service.release_retry_after_manual_review(
-            "EP500_DOWNLOAD", "SCENE_001",
-            reviewed_provider_and_local_files=False, **args
+            "EP500_DOWNLOAD", "SCENE_001", reviewed_provider_and_local_files=False, **args
         )
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == ambiguous
     assert len(driver.calls) == 1
 
     released = service.release_retry_after_manual_review(
-        "EP500_DOWNLOAD", "SCENE_001",
-        reviewed_provider_and_local_files=True, **args
+        "EP500_DOWNLOAD", "SCENE_001", reviewed_provider_and_local_files=True, **args
     )
     assert released.state == DownloadState.FAILED
     assert released.generation_remote_result_id == "remote:SCENE_001"
@@ -1019,8 +1017,7 @@ def test_operator_review_releases_ambiguous_download_with_audit_without_retry(
     # The old reviewer revision is no longer valid and cannot release again.
     with pytest.raises(InternalInvariantError, match="evidence changed"):
         service.release_retry_after_manual_review(
-            "EP500_DOWNLOAD", "SCENE_001",
-            reviewed_provider_and_local_files=True, **args
+            "EP500_DOWNLOAD", "SCENE_001", reviewed_provider_and_local_files=True, **args
         )
     driver.state = GoogleFlowDownloadState.DOWNLOADED
     confirmed = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
@@ -1050,8 +1047,7 @@ def test_ambiguous_reconciliation_rejects_stale_generate_and_download_revisions(
     }
     with pytest.raises(InternalInvariantError, match="evidence changed"):
         service.release_retry_after_manual_review(
-            "EP500_DOWNLOAD", "SCENE_001",
-            expected_updated_at="2020-01-01T00:00:00+00:00", **base
+            "EP500_DOWNLOAD", "SCENE_001", expected_updated_at="2020-01-01T00:00:00+00:00", **base
         )
     with sqlite3.connect(database) as conn:
         conn.execute(
@@ -1062,14 +1058,16 @@ def test_ambiguous_reconciliation_rejects_stale_generate_and_download_revisions(
 
     with pytest.raises(InternalInvariantError, match="retry is not authorized"):
         service.release_retry_after_manual_review(
-            "EP500_DOWNLOAD", "SCENE_001",
-            expected_updated_at=expected_time, **base
+            "EP500_DOWNLOAD", "SCENE_001", expected_updated_at=expected_time, **base
         )
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == original
     with sqlite3.connect(database) as conn:
-        assert conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
-        ).fetchone() is None
+        assert (
+            conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
+            ).fetchone()
+            is None
+        )
     assert len(driver.calls) == 1
 
 
@@ -1088,7 +1086,8 @@ def test_manual_review_refuses_existing_canonical_mp4_and_keeps_ambiguous_histor
     video.write_bytes(b"possible-existing-download")
     with pytest.raises(InternalInvariantError, match="destination exists"):
         service.release_retry_after_manual_review(
-            "EP500_DOWNLOAD", "SCENE_001",
+            "EP500_DOWNLOAD",
+            "SCENE_001",
             expected_remote_result_id="remote:SCENE_001",
             expected_updated_at=previous.updated_at.isoformat(),
             reviewed_provider_and_local_files=True,
@@ -1096,6 +1095,9 @@ def test_manual_review_refuses_existing_canonical_mp4_and_keeps_ambiguous_histor
     assert video.read_bytes() == b"possible-existing-download"
     assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == previous
     with sqlite3.connect(root / "EP500_DOWNLOAD" / "project.sqlite3") as conn:
-        assert conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
-        ).fetchone() is None
+        assert (
+            conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'download_reconciliation_audit'"
+            ).fetchone()
+            is None
+        )
