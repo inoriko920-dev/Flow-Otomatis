@@ -24,12 +24,16 @@ class DownloadResultRepositoryPort(Protocol):
         """
         ...
 
-    def save_failure_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Never replace a success or unresolved ambiguous outcome with failure."""
+    def save_failure_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Never replace success/ambiguity; optionally verify browser Generate identity."""
         ...
 
-    def save_attention_if_unconfirmed(self, record: DownloadRecord) -> None:
-        """Persist a sticky ambiguous outcome without clobbering prior success/attention."""
+    def save_attention_if_unconfirmed(
+        self, record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        """Keep sticky ambiguity; optionally verify browser Generate identity."""
         ...
 
     def matches_current_generated_download(self, record: DownloadRecord) -> bool:
