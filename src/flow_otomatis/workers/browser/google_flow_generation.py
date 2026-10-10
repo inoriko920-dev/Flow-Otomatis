@@ -14,7 +14,7 @@ from typing import Protocol
 from flow_otomatis.application.ports.generation_provider import (
     GenerationAuthenticationRequiredError,
     GenerationCancelledError,
-    GenerationProviderError,
+    GenerationSafeFailureError,
     GenerationProviderResult,
     GenerationRequest,
     GenerationSubmissionAmbiguousError,
@@ -81,7 +81,12 @@ class GoogleFlowGenerationProvider:
             request,
             timeout_ms=self._timeout_ms,
         )
-        detail = evidence.detail[:500]
+        # Never forward provider-controlled detail into an error boundary.
+        # Contradictory evidence cannot establish a safely rejected submit.
+        if evidence.remote_result_id and evidence.state is not GoogleFlowSubmitState.ACCEPTED:
+            raise GenerationSubmissionAmbiguousError(
+                "Flow returned contradictory submit evidence."
+            )
 
         if evidence.state is GoogleFlowSubmitState.ACCEPTED:
             remote_result_id = (evidence.remote_result_id or "").strip()
@@ -92,14 +97,17 @@ class GoogleFlowGenerationProvider:
             return GenerationProviderResult(remote_result_id=remote_result_id)
 
         if evidence.state is GoogleFlowSubmitState.AMBIGUOUS:
-            raise GenerationSubmissionAmbiguousError(detail or "Flow submit outcome is ambiguous.")
+            raise GenerationSubmissionAmbiguousError("Flow submit outcome is ambiguous.")
 
         if evidence.state is GoogleFlowSubmitState.AUTH_REQUIRED:
-            raise GenerationAuthenticationRequiredError(
-                detail or "Google session requires manual login."
-            )
+            raise GenerationAuthenticationRequiredError("Google session requires manual login.")
 
         if evidence.state is GoogleFlowSubmitState.CANCELLED:
-            raise GenerationCancelledError(detail or "Generation was cancelled safely.")
+            raise GenerationCancelledError("Generation was cancelled safely.")
 
-        raise GenerationProviderError(detail or "Google Flow rejected the generation request.")
+        if evidence.state is GoogleFlowSubmitState.SAFE_FAILURE and evidence.detail.strip():
+            raise GenerationSafeFailureError("Flow rejected the request before acceptance.")
+
+        raise GenerationSubmissionAmbiguousError(
+            "Flow evidence is insufficient to establish a safe rejection."
+        )
