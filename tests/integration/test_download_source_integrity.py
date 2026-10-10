@@ -432,3 +432,31 @@ def test_sol11_unrelated_partial_must_not_block_approved_scene(
     assert recorded.state == DownloadState.DOWNLOADED
     assert unrelated.read_bytes() == b"unrelated-download"
     assert rig.results.snapshot(_EPISODE).handoff_ready
+
+
+def test_sol11_forged_review_message_without_sqlite_audit_cannot_bypass_partial_gate(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    # A copied status message is not equivalent to an atomic operator-review
+    # transition and its immutable audit entry.
+    forged = DownloadRecord(
+        episode_id=_EPISODE,
+        scene_id=_SCENE,
+        state=DownloadState.FAILED,
+        updated_at=datetime.now(UTC),
+        error_message="Manual review completed; retry requires a separate explicit action.",
+        generation_remote_result_id="remote:source-verification",
+    )
+    rig.downloads.save_failure_if_unconfirmed(forged)
+    folder = rig.root / _EPISODE / "downloads"
+    folder.mkdir(parents=True)
+    partial = folder / f"{_SCENE}__take_01.mp4.unreviewed.part"
+    partial.write_bytes(b"keep-unreviewed-evidence")
+
+    assert rig.downloads.has_confirmed_manual_retry_authorization(forged) is False
+    with pytest.raises(InternalInvariantError, match="Prior Download partial file"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) == forged
+    assert partial.read_bytes() == b"keep-unreviewed-evidence"
