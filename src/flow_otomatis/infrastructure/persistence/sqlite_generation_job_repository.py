@@ -258,9 +258,17 @@ class SqliteGenerationJobRepository:
         if not db_path.is_file():
             return ()
         try:
-            with sqlite3.connect(db_path) as connection:
+            # Read-only URI prevents list/snapshot from creating tables, WAL
+            # journals, or implicitly migrating a historical project.
+            with sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True) as connection:
                 connection.row_factory = sqlite3.Row
-                self._ensure_schema(connection)
+                connection.execute("BEGIN")
+                self._check_supported_schema(connection)
+                exists = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'generation_jobs'"
+                ).fetchone()
+                if exists is None:
+                    return ()
                 rows = connection.execute(
                     """
                     SELECT * FROM generation_jobs
@@ -270,8 +278,8 @@ class SqliteGenerationJobRepository:
                     (episode_id,),
                 ).fetchall()
                 return tuple(self._row_to_job(row) for row in rows)
-        except sqlite3.Error as exc:
-            raise StorageError(f"Could not list generation jobs: {exc}") from exc
+        except (sqlite3.Error, ValueError, TypeError, KeyError) as exc:
+            raise StorageError("Generation history could not be read safely") from exc
 
     def _prepare_one(
         self,
@@ -487,11 +495,33 @@ class SqliteGenerationJobRepository:
     def _db_path(self, episode_id: str) -> Path:
         return self._projects_root / episode_id / "project.sqlite3"
 
+    def _check_supported_schema(self, connection: sqlite3.Connection) -> None:
+        """Reject future schema markers on both read and write, without repair."""
+
+        marker = connection.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'generation_job_schema'"
+        ).fetchone()
+        if marker is None:
+            return
+        row = connection.execute(
+            "SELECT schema_version FROM generation_job_schema WHERE singleton = 1"
+        ).fetchone()
+        if row is None:
+            raise StorageError("Generation history schema marker is incomplete")
+        try:
+            version = int(row[0])
+        except (TypeError, ValueError) as exc:
+            raise StorageError("Generation history schema marker is invalid") from exc
+        if version > _SCHEMA_VERSION or version < 1:
+            raise StorageError("Unsupported generation history schema version")
+
     def _ensure_schema(self, connection: sqlite3.Connection) -> None:
         """Create or transactionally migrate the queue schema to version 2."""
 
         try:
             connection.execute("BEGIN IMMEDIATE")
+            self._check_supported_schema(connection)
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS generation_job_schema (
@@ -619,7 +649,11 @@ class SqliteGenerationJobRepository:
         return self._row_to_job(row) if row is not None else None
 
     def _row_to_job(self, row: sqlite3.Row) -> GenerationJob:
-        attention_raw = row["attention_code"]
+        # Pre-v2 records can be decoded without mutating their schema.
+        def optional(column: str) -> object | None:
+            return row[column] if column in row.keys() else None
+
+        attention_raw = optional("attention_code")
         return GenerationJob(
             job_id=str(row["job_id"]),
             episode_id=str(row["episode_id"]),
@@ -629,30 +663,30 @@ class SqliteGenerationJobRepository:
             state=GenerationJobState(str(row["state"])),
             created_at=datetime.fromisoformat(str(row["created_at"])),
             updated_at=datetime.fromisoformat(str(row["updated_at"])),
-            image_file=str(row["image_file"]) if row["image_file"] is not None else None,
-            motion_prompt=(str(row["motion_prompt"]) if row["motion_prompt"] is not None else None),
-            model=str(row["model"]) if row["model"] is not None else None,
-            resolution=str(row["resolution"]) if row["resolution"] is not None else None,
-            aspect_ratio=(str(row["aspect_ratio"]) if row["aspect_ratio"] is not None else None),
+            image_file=str(optional("image_file")) if optional("image_file") is not None else None,
+            motion_prompt=(str(optional("motion_prompt")) if optional("motion_prompt") is not None else None),
+            model=str(optional("model")) if optional("model") is not None else None,
+            resolution=str(optional("resolution")) if optional("resolution") is not None else None,
+            aspect_ratio=(str(optional("aspect_ratio")) if optional("aspect_ratio") is not None else None),
             request_fingerprint=(
-                str(row["request_fingerprint"]) if row["request_fingerprint"] is not None else None
+                str(optional("request_fingerprint")) if optional("request_fingerprint") is not None else None
             ),
             remote_result_id=(
-                str(row["remote_result_id"]) if row["remote_result_id"] is not None else None
+                str(optional("remote_result_id")) if optional("remote_result_id") is not None else None
             ),
-            error_message=(str(row["error_message"]) if row["error_message"] is not None else None),
+            error_message=(str(optional("error_message")) if optional("error_message") is not None else None),
             attention_code=(
                 GenerationAttentionCode(str(attention_raw)) if attention_raw is not None else None
             ),
-            owner_id=str(row["owner_id"]) if row["owner_id"] is not None else None,
+            owner_id=str(optional("owner_id")) if optional("owner_id") is not None else None,
             lease_expires_at=(
-                datetime.fromisoformat(str(row["lease_expires_at"]))
-                if row["lease_expires_at"] is not None
+                datetime.fromisoformat(str(optional("lease_expires_at")))
+                if optional("lease_expires_at") is not None
                 else None
             ),
             submit_started_at=(
-                datetime.fromisoformat(str(row["submit_started_at"]))
-                if row["submit_started_at"] is not None
+                datetime.fromisoformat(str(optional("submit_started_at")))
+                if optional("submit_started_at") is not None
                 else None
             ),
         )
