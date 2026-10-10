@@ -127,6 +127,27 @@ class GeneratedMediaDownloadService:
                 f"manual reconciliation required: {destination.name}"
             )
 
+        # A crash/forced termination may have left a browser-owned .part
+        # without any ATTENTION_REQUIRED SQLite row. The absence of a ledger
+        # entry does not prove the previous transfer never started. Never
+        # silently launch a second provider attempt over that evidence.
+        try:
+            interrupted_partial_exists = os.path.lexists(
+                destination.with_name(f"{destination.name}.part")
+            ) or any(
+                destination.parent.glob(f"{glob_escape(destination.name)}.*.part")
+            )
+        except (OSError, RuntimeError, ValueError):
+            raise InternalInvariantError(
+                "Prior Download partial evidence cannot be inspected; "
+                "manual reconciliation required."
+            ) from None
+        if interrupted_partial_exists:
+            raise InternalInvariantError(
+                "Prior Download partial file exists without a confirmed result; "
+                "manual reconciliation required before another attempt."
+            )
+
         # Folder creation and prior Download-row lookup are separate I/O.
         # Re-read source bytes immediately before the provider boundary so
         # a changed input cannot begin a new download unnoticed.
