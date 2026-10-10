@@ -19,8 +19,7 @@ APP = BASE / "APP_001_Flow-Otomatis"
 MIRROR = Path("mirror-full-backup.git")
 BUNDLE = APP / "GIT" / "Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle"
 SOURCE = APP / "SOURCE" / "Flow-Otomatis-SOURCE-MAIN.zip"
-BUILDS = [(11676024973, "Flow-Otomatis-Win11-Preview-CI-Main.zip"),
-          (11677951299, "Flow-Otomatis-Offline-Simulator-CI.zip")]
+BUILDS = [(11676024973, "Flow-Otomatis-Win11-Preview-CI-Main.zip")]
 STAMP = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d %H:%M:%S WIB")
 def run(*args, cwd=None, output=None):
     if output is None:
@@ -130,7 +129,7 @@ def main():
     write(APP/"BUILD"/"BUILD_STATUS.txt",
           "CI artifact only: manual Windows end-to-end acceptance NOT confirmed.\n"
           "Full main build from run 38071157920, artifact 11676024973.\n"
-          "Offline simulator from run 38073395062, artifact 11677951299.\n"
+          "Offline simulator CI artifact deliberately omitted to satisfy archive delivery size limit.\n"
           "There were no GitHub Releases at time of inspection.\n")
     restore_script=r'''param(
  [string]$NewRepoUrl = "",
