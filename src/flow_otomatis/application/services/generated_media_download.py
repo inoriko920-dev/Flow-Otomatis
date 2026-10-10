@@ -191,7 +191,8 @@ class GeneratedMediaDownloadService:
                 scene_id,
                 normalized_take,
                 remote_result_id,
-                "Download provider returned invalid success evidence; manual reconciliation required.",
+                "Download provider returned invalid success evidence; "
+                "manual reconciliation required.",
             )
 
         try:
@@ -225,7 +226,8 @@ class GeneratedMediaDownloadService:
                 scene_id,
                 normalized_take,
                 remote_result_id,
-                "Download provider returned a mismatched output path; manual reconciliation required.",
+                "Download provider returned a mismatched output path; "
+                "manual reconciliation required.",
             )
         if not is_available_output(str(output)):
             self._reject_unverified_success(
@@ -233,7 +235,8 @@ class GeneratedMediaDownloadService:
                 scene_id,
                 normalized_take,
                 remote_result_id,
-                "Download provider returned an unavailable or redirected MP4; manual reconciliation required.",
+                "Download provider returned an unavailable or redirected MP4; "
+                "manual reconciliation required.",
             )
         # The Generate job may be invalidated while the browser worker is
         # downloading. A completed MP4 is not authorization to persist an old
