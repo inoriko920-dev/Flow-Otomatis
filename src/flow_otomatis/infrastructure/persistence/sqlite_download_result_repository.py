@@ -64,6 +64,10 @@ class SqliteDownloadResultRepository:
         remote_id = expected_remote_result_id.strip()
         if not remote_id:
             raise ValueError("Expected Generate remote ID must not be blank")
+        # A caller must not ask this adapter to certify bytes as belonging to
+        # a different Generate result. Validate before opening the database.
+        if record.generation_remote_result_id != remote_id:
+            raise ValueError("Download record Generate identity does not match expected ID")
         try:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
@@ -229,6 +233,24 @@ class SqliteDownloadResultRepository:
         )
 
     def _db_path(self, episode_id: str) -> Path:
+        # DB reads and failure writes can be called without the browser
+        # Download service. Reject traversal/Windows aliases at this boundary,
+        # before any filesystem access, including SQLite mode=ro reads.
+        forbidden = '<>:"/\\|?*'
+        reserved = (
+            {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+            | {f"COM{i}" for i in range(1, 10)}
+            | {f"LPT{i}" for i in range(1, 10)}
+        )
+        if (
+            not isinstance(episode_id, str)
+            or not episode_id
+            or episode_id in {".", ".."}
+            or episode_id.endswith((".", " "))
+            or any(char in forbidden or ord(char) < 32 for char in episode_id)
+            or episode_id.split(".", 1)[0].upper() in reserved
+        ):
+            raise StorageError("Unsafe project episode identifier")
         return self._projects_root / episode_id / "project.sqlite3"
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
