@@ -184,7 +184,7 @@ class GeneratedMediaDownloadService:
             not isinstance(result, GeneratedMediaDownloadResult)
             or not isinstance(result.output_path, str)
             or not result.output_path.strip()
-            or "\\0" in result.output_path
+            or "\0" in result.output_path
         ):
             self._reject_unverified_success(
                 episode_id,
