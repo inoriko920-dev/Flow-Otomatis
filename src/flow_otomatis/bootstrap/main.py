@@ -67,6 +67,7 @@ def build_main_window(fixture_code: str = DEFAULT_FIXTURE_CODE) -> MainWindow:
         job_repository,
         download_repository,
         ResultManifestWriter(paths.projects_root),
+        image_verifier=package_reader,
     )
     chrome_pool = SystemChromeCdpPool()
     google_session_worker = GoogleSessionWorker(
