@@ -664,9 +664,10 @@ def test_ambiguous_download_is_visible_in_results_and_cannot_be_downgraded(
         generation_remote_result_id="remote:unverified",
     )
     repo.save_attention_if_unconfirmed(ambiguous)
-    assert service.record_download_failed(
-        "EP400_RESULTS", "SCENE_001", "late safe failure"
-    ) == ambiguous
+    assert (
+        service.record_download_failed("EP400_RESULTS", "SCENE_001", "late safe failure")
+        == ambiguous
+    )
     assert repo.get("EP400_RESULTS", "SCENE_001") == ambiguous
 
     snapshot = service.snapshot("EP400_RESULTS")
