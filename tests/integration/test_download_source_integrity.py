@@ -363,3 +363,72 @@ def test_sol10_image_mutates_during_empty_history_lookup_provider_not_called(
     assert rig.provider.calls == 0
     assert rig.downloads.get(_EPISODE, _SCENE) is None
     assert not (rig.root / _EPISODE / "downloads" / f"{_SCENE}__take_01.mp4").exists()
+
+
+@pytest.mark.parametrize("zip_source", [False, True])
+@pytest.mark.parametrize("partial_name", ["attempt", "legacy"])
+@pytest.mark.parametrize("partial_bytes", [b"", b"interrupted-browser-bytes"])
+def test_sol11_crashed_browser_partial_without_sqlite_row_blocks_new_attempt(
+    tmp_path: Path, zip_source: bool, partial_name: str, partial_bytes: bytes
+) -> None:
+    rig = _setup(tmp_path, zip_source=zip_source)
+    folder = rig.root / _EPISODE / "downloads"
+    folder.mkdir(parents=True)
+    destination = folder / f"{_SCENE}__take_01.mp4"
+    partial = (
+        destination.with_name(f"{destination.name}.part")
+        if partial_name == "legacy"
+        else destination.with_name(f"{destination.name}.abandoned-worker.part")
+    )
+    partial.write_bytes(partial_bytes)
+
+    with pytest.raises(InternalInvariantError, match="Prior Download partial file"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) is None
+    assert partial.read_bytes() == partial_bytes
+    assert not destination.exists()
+
+
+def test_sol11_partial_from_interrupted_attempt_preserves_existing_failure_row(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    original_failure = DownloadRecord(
+        episode_id=_EPISODE,
+        scene_id=_SCENE,
+        state=DownloadState.FAILED,
+        updated_at=datetime.now(UTC),
+        error_message="Previously confirmed safe failure",
+        generation_remote_result_id="remote:source-verification",
+    )
+    rig.downloads.save_failure_if_unconfirmed(original_failure)
+    folder = rig.root / _EPISODE / "downloads"
+    folder.mkdir(parents=True)
+    partial = folder / f"{_SCENE}__take_01.mp4.previous-worker.part"
+    partial.write_bytes(b"unreconciled-partial")
+
+    with pytest.raises(InternalInvariantError, match="Prior Download partial file"):
+        rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 0
+    assert rig.downloads.get(_EPISODE, _SCENE) == original_failure
+    assert partial.read_bytes() == b"unreconciled-partial"
+
+
+def test_sol11_unrelated_partial_must_not_block_approved_scene(
+    tmp_path: Path,
+) -> None:
+    rig = _setup(tmp_path)
+    folder = rig.root / _EPISODE / "downloads"
+    folder.mkdir(parents=True)
+    unrelated = folder / "different-scene__take_01.mp4.other-worker.part"
+    unrelated.write_bytes(b"unrelated-download")
+
+    recorded = rig.service.download_scene(_EPISODE, _SCENE)
+
+    assert rig.provider.calls == 1
+    assert recorded.state == DownloadState.DOWNLOADED
+    assert unrelated.read_bytes() == b"unrelated-download"
+    assert rig.results.snapshot(_EPISODE).handoff_ready
