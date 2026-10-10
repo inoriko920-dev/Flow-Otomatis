@@ -85,7 +85,7 @@ class SqliteDownloadResultRepository:
                 if current is None:
                     connection.rollback()
                     return False
-                connection.execute(
+                cursor = connection.execute(
                     """
                     INSERT INTO download_results (
                         episode_id, scene_id, state, updated_at,
@@ -99,6 +99,9 @@ class SqliteDownloadResultRepository:
                         take = excluded.take,
                         error_message = excluded.error_message,
                         generation_remote_result_id = excluded.generation_remote_result_id
+                    WHERE download_results.state <> 'DOWNLOADED'
+                       OR download_results.generation_remote_result_id =
+                          excluded.generation_remote_result_id
                     """,
                     (
                         record.episode_id,
@@ -111,6 +114,12 @@ class SqliteDownloadResultRepository:
                         remote_id,
                     ),
                 )
+                if cursor.rowcount != 1:
+                    # Never replace the only surviving evidence of a different
+                    # Generate result, including legacy records with no remote ID.
+                    # Its MP4 and stored history require explicit reconciliation.
+                    connection.rollback()
+                    return False
                 connection.commit()
                 return True
         except sqlite3.Error as exc:
