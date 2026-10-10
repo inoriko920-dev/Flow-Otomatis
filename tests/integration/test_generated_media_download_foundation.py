@@ -1151,13 +1151,17 @@ def test_reconciliation_accepts_current_generate_with_historical_whitespace(
     assert released.output_path is None
     assert len(driver.calls) == 1
     with sqlite3.connect(database) as connection:
-        assert connection.execute(
-            "SELECT remote_result_id FROM generation_jobs WHERE scene_id = ?",
-            ("SCENE_001",),
-        ).fetchone()[0] == "  remote:SCENE_001  "
-        assert connection.execute(
-            "SELECT COUNT(*) FROM download_reconciliation_audit"
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT remote_result_id FROM generation_jobs WHERE scene_id = ?",
+                ("SCENE_001",),
+            ).fetchone()[0]
+            == "  remote:SCENE_001  "
+        )
+        assert (
+            connection.execute("SELECT COUNT(*) FROM download_reconciliation_audit").fetchone()[0]
+            == 1
+        )
 
 
 def test_ambiguous_reconciliation_rejects_stale_generate_and_download_revisions(
