@@ -64,13 +64,18 @@ class SqliteDownloadResultRepository:
             raise StorageError(f"Could not save download result: {exc}") from exc
 
     def save_if_current_generate(
-        self, record: DownloadRecord, expected_remote_result_id: str
+        self,
+        record: DownloadRecord,
+        expected_remote_result_id: str,
+        *,
+        expected_reviewed_download: DownloadRecord | None = None,
     ) -> bool:
         """Compare current Generate and persist Download in one SQLite write lock.
 
-        The BEGIN IMMEDIATE transaction serializes this check against a
-        concurrent Generate state/ID change from another process. A stale
-        result is rejected without writing any Download row or touching MP4.
+        The BEGIN IMMEDIATE transaction serializes this check against
+        Generate changes. For reviewed retries, the previously approved
+        Download row and its consumed audit must match in that same lock.
+        A stale result is rejected without changing the stored history.
         """
 
         if record.state != DownloadState.DOWNLOADED:
@@ -86,6 +91,69 @@ class SqliteDownloadResultRepository:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
+                if expected_reviewed_download is not None:
+                    # Do not let a reviewed attempt overwrite a newly
+                    # confirmed outcome, a changed FAILED revision, or a
+                    # concurrent operator action. Compare the complete
+                    # approved row and one-shot audit while holding the same
+                    # write lock used to persist the resulting MP4 record.
+                    expected = expected_reviewed_download
+                    if (
+                        expected.episode_id != record.episode_id
+                        or expected.scene_id != record.scene_id
+                        or expected.state != DownloadState.FAILED
+                        or expected.output_path is not None
+                        or expected.take != record.take
+                        or expected.generation_remote_result_id != remote_id
+                        or expected.error_message
+                        != "Manual review completed; retry requires a separate explicit action."
+                    ):
+                        connection.rollback()
+                        return False
+                    previous = connection.execute(
+                        """
+                        SELECT state, updated_at, output_path, take,
+                               error_message, generation_remote_result_id
+                        FROM download_results
+                        WHERE episode_id = ? AND scene_id = ?
+                        """,
+                        (record.episode_id, record.scene_id),
+                    ).fetchone()
+                    if previous != (
+                        expected.state,
+                        expected.updated_at.isoformat(),
+                        expected.output_path,
+                        expected.take,
+                        expected.error_message,
+                        expected.generation_remote_result_id,
+                    ):
+                        connection.rollback()
+                        return False
+                    audit_table = connection.execute(
+                        """
+                        SELECT 1 FROM sqlite_master
+                        WHERE type = 'table' AND name = 'download_reconciliation_audit'
+                        """
+                    ).fetchone()
+                    if audit_table is None or connection.execute(
+                        """
+                        SELECT 1 FROM download_reconciliation_audit
+                        WHERE episode_id = ? AND scene_id = ?
+                          AND generation_remote_result_id = ? AND take = ?
+                          AND prior_updated_at = ?
+                          AND action = 'OPERATOR_REVIEWED_RETRY_CLAIMED'
+                        LIMIT 1
+                        """,
+                        (
+                            expected.episode_id,
+                            expected.scene_id,
+                            remote_id,
+                            expected.take,
+                            expected.updated_at.isoformat(),
+                        ),
+                    ).fetchone() is None:
+                        connection.rollback()
+                        return False
                 current = connection.execute(
                     """
                     SELECT 1 FROM generation_jobs AS g
