@@ -1318,8 +1318,10 @@ def test_parallel_losing_attempt_ambiguity_commits_before_winner(
         assert ambiguity_committed.wait(timeout=15)
         return guarded_save(record, remote_id)
 
-    def record_ambiguity_first(record: DownloadRecord) -> None:
-        attention_save(record)
+    def record_ambiguity_first(
+        record: DownloadRecord, *, expected_remote_result_id: str | None = None
+    ) -> None:
+        attention_save(record, expected_remote_result_id=expected_remote_result_id)
         ambiguity_committed.set()
 
     monkeypatch.setattr(downloads, "save_if_current_generate", delay_success_until_ambiguity)
