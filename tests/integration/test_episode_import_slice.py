@@ -124,6 +124,65 @@ def test_happy_path_validates_recomputes_and_persists_workspace(tmp_path: Path) 
     assert (tmp_path / "projects" / "EP001_STEVE_JOBS" / "project.sqlite3").is_file()
 
 
+
+@pytest.mark.parametrize("timestamp", ["2026-10-10T10:00:00", "2026-10-10 10:00:00"])
+def test_t01_naive_import_timestamp_is_rejected_without_database(
+    tmp_path: Path, timestamp: str
+) -> None:
+    manifest = _manifest()
+    manifest["created_at"] = timestamp
+    package = _write_package(tmp_path / "naive.zip", manifest)
+    root = tmp_path / "projects"
+    importer = EpisodeImportService(EpisodePackageReader(), SqliteWorkspaceRepository(root))
+    with pytest.raises(PackageValidationError) as failure:
+        importer.import_package(package)
+    assert failure.value.code == "MANIFEST_SCHEMA_INVALID"
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("timestamp", [
+    "2026-10-10T10:00:00Z", "2026-10-10T10:00:00+07:00",
+    "2026-10-10T10:00:00-05:30",
+])
+def test_t02_aware_timestamp_roundtrips_without_timezone_shift(
+    tmp_path: Path, timestamp: str
+) -> None:
+    manifest = _manifest()
+    manifest["created_at"] = timestamp
+    package = _write_package(tmp_path / "aware.zip", manifest)
+    importer = EpisodeImportService(
+        EpisodePackageReader(), SqliteWorkspaceRepository(tmp_path / "projects")
+    )
+    expected = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    workspace = importer.import_package(package)
+    assert workspace.created_at == expected
+    assert workspace.created_at.utcoffset() == expected.utcoffset()
+
+
+def test_t03_bad_import_cannot_mutate_existing_project(tmp_path: Path) -> None:
+    importer = EpisodeImportService(
+        EpisodePackageReader(), SqliteWorkspaceRepository(tmp_path / "projects")
+    )
+    importer.import_package(_write_package(tmp_path / "good.zip", _manifest()))
+    db = tmp_path / "projects" / "EP001_STEVE_JOBS" / "project.sqlite3"
+    before = hashlib.sha256(db.read_bytes()).hexdigest()
+    invalid = _manifest()
+    invalid["created_at"] = "2026-10-10T10:00:00"
+    with pytest.raises(PackageValidationError):
+        importer.import_package(_write_package(tmp_path / "bad.zip", invalid))
+    assert hashlib.sha256(db.read_bytes()).hexdigest() == before
+
+
+def test_direct_create_rejects_naive_workspace_before_mkdir(tmp_path: Path) -> None:
+    service = EpisodeImportService(
+        EpisodePackageReader(), SqliteWorkspaceRepository(tmp_path / "projects")
+    )
+    draft = service.validate(_write_package(tmp_path / "good.zip", _manifest()))
+    with pytest.raises(InternalInvariantError, match="timestamps"):
+        service.create_workspace(replace(draft, created_at=draft.created_at.replace(tzinfo=None)))
+    assert not (tmp_path / "projects").exists()
+
+
 def test_target_over_ten_seconds_is_rejected_before_persistence(tmp_path: Path) -> None:
     package = _write_package(
         tmp_path / "invalid-duration.zip",
