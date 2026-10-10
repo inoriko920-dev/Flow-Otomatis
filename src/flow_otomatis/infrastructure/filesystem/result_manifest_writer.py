@@ -137,8 +137,21 @@ class ResultManifestWriter:
                 output.flush()
                 os.fsync(output.fileno())
             # A project directory may have changed while the temp file was
-            # being written. Fail closed before publishing outside the root.
+            # being written. Revalidating the *path* is not enough: a renamed
+            # exports directory can be replaced by another ordinary directory
+            # at the same path. The attempt must not publish into that new
+            # directory or overwrite another manifest.
             self._verified_export_directory(results.episode_id)
+            try:
+                publish_dir_stat = output_dir.stat()
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise InternalInvariantError(
+                    "Result export directory changed before publication"
+                ) from exc
+            if (publish_dir_stat.st_dev, publish_dir_stat.st_ino) != initial_dir_identity:
+                raise InternalInvariantError(
+                    "Result export directory identity changed; preserve temporary for review"
+                )
             if target.is_symlink():
                 raise InternalInvariantError("Result export target was redirected")
             os.replace(temporary, target)
