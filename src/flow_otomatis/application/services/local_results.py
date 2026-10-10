@@ -228,6 +228,17 @@ class LocalResultsService:
     def export_manifest(self, episode_id: str) -> Path:
         """Write the current credential-free local result snapshot."""
 
+        # An effective Hasil can look identical even when a Generate
+        # fingerprint or updated_at changes between reads. Capture full
+        # persisted revision snapshots as well as presentation state.
+        def current_revision() -> tuple[object, ...]:
+            return (
+                self.snapshot(episode_id),
+                self._job_repository.list_for_episode(episode_id),
+                self._download_repository.list_for_episode(episode_id),
+            )
+
+        expected = current_revision()
         return self._manifest_writer.write(
-            self.snapshot(episode_id), recheck=lambda: self.snapshot(episode_id)
+            expected[0], recheck=lambda: current_revision() == expected
         )
