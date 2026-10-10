@@ -279,9 +279,7 @@ def test_f03_cached_video_is_not_reused_when_scene_is_not_ready(
     workspace = workspace_repo.load("EP500_DOWNLOAD")
     assert workspace is not None
     updated = replace(workspace.scenes[0], **scene_change)
-    workspace_repo.update(
-        replace(workspace, scenes=(updated,)), expected_workspace=workspace
-    )
+    workspace_repo.update(replace(workspace, scenes=(updated,)), expected_workspace=workspace)
     assert downloads.matches_current_generated_download(recorded) is False
     with pytest.raises(InternalInvariantError, match="Cached Download no longer matches"):
         service.download_scene("EP500_DOWNLOAD", "SCENE_001")
