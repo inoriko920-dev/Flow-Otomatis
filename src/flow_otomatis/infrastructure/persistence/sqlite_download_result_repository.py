@@ -164,11 +164,8 @@ class SqliteDownloadResultRepository:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                if (
-                    expected_remote_result_id is not None
-                    and not self._failure_generate_is_current(
-                        connection, record, expected_remote_result_id
-                    )
+                if expected_remote_result_id is not None and not self._failure_generate_is_current(
+                    connection, record, expected_remote_result_id
                 ):
                     # The attempt belongs to an old Generate result. Do not
                     # pollute the new result with a stale failure/ambiguity.
@@ -221,11 +218,8 @@ class SqliteDownloadResultRepository:
             with self._connect(record.episode_id) as connection:
                 self._create_schema(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                if (
-                    expected_remote_result_id is not None
-                    and not self._failure_generate_is_current(
-                        connection, record, expected_remote_result_id
-                    )
+                if expected_remote_result_id is not None and not self._failure_generate_is_current(
+                    connection, record, expected_remote_result_id
                 ):
                     # The attempt belongs to an old Generate result. Do not
                     # pollute the new result with a stale failure/ambiguity.
