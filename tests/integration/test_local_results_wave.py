@@ -1105,4 +1105,3 @@ def test_sol17_hasil_manifest_reject_history_changed_after_list_read(
         assert actual.updated_at.isoformat() == "2040-01-01T00:00:00+00:00"
     else:
         assert actual.error_message == "competing revision"
-
