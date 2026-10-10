@@ -32,6 +32,14 @@ class DownloadResultRepositoryPort(Protocol):
         """Persist a sticky ambiguous outcome without clobbering prior success/attention."""
         ...
 
+    def matches_current_generated_download(self, record: DownloadRecord) -> bool:
+        """Read-only snapshot proving Download row and current Generate agree.
+
+        Reuse must check both persisted facts together, not trust a previous
+        job read that might have changed before returning a saved MP4.
+        """
+        ...
+
     def reconcile_attention_for_retry(
         self,
         episode_id: str,
