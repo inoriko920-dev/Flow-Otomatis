@@ -656,6 +656,100 @@ def test_download_provider_rejects_untracked_existing_final_file(tmp_path: Path)
     assert driver.calls == []
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "none",
+        "dictionary",
+        "string_success",
+        "unknown_state",
+        "null_state",
+        "numeric_success_path",
+        "empty_success_path",
+    ],
+)
+@pytest.mark.parametrize("leave_partial", [False, True])
+def test_malformed_browser_evidence_never_authorizes_safe_retry(
+    tmp_path: Path,
+    malformed: str,
+    leave_partial: bool,
+) -> None:
+    """Untrusted browser evidence is ambiguous even without visible partial bytes."""
+
+    class MalformedEvidenceDriver(FakeDownloadDriver):
+        def download_one(
+            self,
+            profile_id: str,
+            remote_result_id: str,
+            destination_path: str,
+            *,
+            timeout_ms: int,
+        ) -> GoogleFlowDownloadEvidence:
+            self.calls.append((profile_id, remote_result_id, destination_path, timeout_ms))
+            if leave_partial:
+                partial = Path(destination_path)
+                partial.parent.mkdir(parents=True, exist_ok=True)
+                partial.write_bytes(b"unknown-browser-result")
+            if malformed == "none":
+                return None  # type: ignore[return-value]
+            if malformed == "dictionary":
+                return {"state": "DOWNLOADED"}  # type: ignore[return-value]
+            if malformed == "string_success":
+                return GoogleFlowDownloadEvidence(
+                    state="DOWNLOADED",  # type: ignore[arg-type]
+                    detail="session-secret=DO_NOT_PERSIST",
+                    output_path=destination_path,
+                )
+            if malformed == "unknown_state":
+                return GoogleFlowDownloadEvidence(
+                    state="PENDING",  # type: ignore[arg-type]
+                    detail="session-secret=DO_NOT_PERSIST",
+                )
+            if malformed == "null_state":
+                return GoogleFlowDownloadEvidence(
+                    state=None,  # type: ignore[arg-type]
+                    detail="session-secret=DO_NOT_PERSIST",
+                )
+            if malformed == "numeric_success_path":
+                return GoogleFlowDownloadEvidence(
+                    state=GoogleFlowDownloadState.DOWNLOADED,
+                    detail="session-secret=DO_NOT_PERSIST",
+                    output_path=42,  # type: ignore[arg-type]
+                )
+            return GoogleFlowDownloadEvidence(
+                state=GoogleFlowDownloadState.DOWNLOADED,
+                detail="session-secret=DO_NOT_PERSIST",
+                output_path="",
+            )
+
+    driver = MalformedEvidenceDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    with pytest.raises(MediaDownloadAmbiguousError, match="manual reconciliation") as error:
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert "DO_NOT_PERSIST" not in str(error.value)
+
+    stored = downloads.get("EP500_DOWNLOAD", "SCENE_001")
+    assert stored is not None
+    assert stored.state == DownloadState.ATTENTION_REQUIRED
+    assert stored.generation_remote_result_id == "remote:SCENE_001"
+    assert stored.output_path is None
+    assert "DO_NOT_PERSIST" not in (stored.error_message or "")
+    assert b"DO_NOT_PERSIST" not in (root / "EP500_DOWNLOAD" / "project.sqlite3").read_bytes()
+
+    final = root / "EP500_DOWNLOAD" / "downloads" / "SCENE_001__take_01.mp4"
+    assert not final.exists()
+    partials = list(final.parent.glob(final.name + ".*.part"))
+    assert len(partials) == int(leave_partial)
+    if leave_partial:
+        assert partials[0].read_bytes() == b"unknown-browser-result"
+
+    with pytest.raises(InternalInvariantError, match="manual reconciliation"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001", take=2)
+    assert len(driver.calls) == 1
+    if leave_partial:
+        assert partials[0].read_bytes() == b"unknown-browser-result"
+
+
 def test_google_flow_provider_rejects_success_at_wrong_path(tmp_path: Path) -> None:
     class WrongPathDriver(FakeDownloadDriver):
         def download_one(
