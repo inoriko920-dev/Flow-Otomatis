@@ -1173,10 +1173,13 @@ def test_sol18_export_detects_db_change_after_staged_manifest_before_publish(
     assert video.read_bytes() == b"real-local-test-video"
     assert not list(previous_manifest.parent.glob("*.tmp"))
     with sqlite3.connect(db) as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM download_results WHERE scene_id = ?",
-            ("SCENE_001",),
-        ).fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM download_results WHERE scene_id = ?",
+                ("SCENE_001",),
+            ).fetchone()[0]
+            == 1
+        )
 
 
 @pytest.mark.parametrize("mp4_change", ["removed", "empty", "html", "other_mp4"])
@@ -1210,7 +1213,8 @@ def test_sol18_export_detects_mp4_changed_while_manifest_is_being_written(
 
     monkeypatch.setattr(writer, "_verified_export_directory", replace_mp4_after_stage)
     with pytest.raises(
-        InternalInvariantError, match="history changed during manifest export|MP4 changed during export"
+        InternalInvariantError,
+        match="history changed during manifest export|MP4 changed during export",
     ):
         service.export_manifest("EP400_RESULTS")
 
