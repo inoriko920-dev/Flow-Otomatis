@@ -42,11 +42,13 @@ class DownloadResultRepositoryPort(Protocol):
         """Keep sticky ambiguity; optionally verify browser Generate identity."""
         ...
 
-    def matches_current_generated_download(self, record: DownloadRecord) -> bool:
-        """Read-only snapshot proving Download row and current Generate agree.
+    def matches_current_generated_download(
+        self, record: DownloadRecord, *, expected_generation: GenerationJob | None = None
+    ) -> bool:
+        """Read-only snapshot proving Download and Generate agree.
 
-        Reuse must check both persisted facts together, not trust a previous
-        job read that might have changed before returning a saved MP4.
+        When supplied, the expected Generate revision is also checked under
+        the same SQLite read snapshot to prevent stale Hasil/manifest claims.
         """
         ...
 
