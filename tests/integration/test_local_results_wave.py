@@ -1242,6 +1242,7 @@ def test_sol18_manifest_with_unchanged_history_and_mp4_still_publishes(
     assert service.snapshot("EP400_RESULTS").handoff_ready
     assert not list(output.parent.glob("*.tmp"))
 
+
 @pytest.mark.parametrize(
     "late_mutation",
     [
@@ -1363,9 +1364,7 @@ def test_sol19_record_local_mp4_rejects_file_changed_after_commit(
     monkeypatch.setattr(repository, "save_if_current_generate", corrupt_after_commit)
     with pytest.raises(InternalInvariantError, match="history or MP4 changed after atomic save"):
         service.record_downloaded("EP400_RESULTS", "SCENE_001", str(video))
-    row = SqliteDownloadResultRepository(tmp_path / "projects").get(
-        "EP400_RESULTS", "SCENE_001"
-    )
+    row = SqliteDownloadResultRepository(tmp_path / "projects").get("EP400_RESULTS", "SCENE_001")
     assert row is not None and row.state == DownloadState.DOWNLOADED
     assert service.snapshot("EP400_RESULTS").handoff_ready is False
     if corruption == "empty":
@@ -1392,4 +1391,3 @@ def test_sol19_unchanged_local_download_record_still_succeeds_and_exports_manife
     manifest = service.export_manifest("EP400_RESULTS")
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["scenes"][0]["download_status"] == DownloadState.DOWNLOADED
-
