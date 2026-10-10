@@ -201,7 +201,25 @@ class GoogleFlowDownloadProvider:
                     "Atomic no-overwrite publication failed; partial preserved "
                     "for manual recovery. No automatic retry is allowed."
                 ) from exc
-            # The final link is safely published; cleanup only this attempt's partial.
+            # Publication and validation are separate operations. A browser
+            # writer can still alter the linked file after the first check,
+            # and an unexpected filesystem actor can alter the final path.
+            # Revalidate the *published* bytes and hard-link identity before
+            # considering success. On mismatch preserve both paths for review.
+            try:
+                published_is_same_file = os.path.samefile(partial_path, final_path)
+            except OSError:
+                published_is_same_file = False
+            if (
+                not published_is_same_file
+                or not is_available_output(str(final_path))
+                or not is_available_output(str(partial_path))
+            ):
+                raise MediaDownloadAmbiguousError(
+                    "Published Download changed during final verification; "
+                    "both file paths are preserved for manual reconciliation."
+                )
+            # The final link is verified; cleanup only this attempt's partial.
             with suppress(OSError):
                 partial_path.unlink()
             return GeneratedMediaDownloadResult(output_path=str(final_path))
