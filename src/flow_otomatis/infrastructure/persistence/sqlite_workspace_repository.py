@@ -35,6 +35,9 @@ class SqliteWorkspaceRepository:
     def create(self, workspace: WorkspaceState) -> None:
         """Create a workspace atomically; never replace an existing episode."""
 
+        if any(value.utcoffset() is None for value in (workspace.created_at, workspace.imported_at)):
+            raise InternalInvariantError("Workspace timestamps must include an explicit timezone")
+
         with self._create_preflight_lock:
             db_path = self._db_path(workspace.episode_id)
             try:
@@ -126,6 +129,9 @@ class SqliteWorkspaceRepository:
         *,
         expected_workspace: WorkspaceState | None = None,
     ) -> None:
+        if any(value.utcoffset() is None for value in (workspace.created_at, workspace.imported_at)):
+            raise InternalInvariantError("Workspace timestamps must include an explicit timezone")
+
         db_path = self._db_path(workspace.episode_id)
         try:
             db_path.parent.mkdir(parents=True, exist_ok=True)
