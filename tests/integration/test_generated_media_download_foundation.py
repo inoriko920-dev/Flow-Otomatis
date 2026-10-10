@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier, Event
@@ -233,6 +234,30 @@ def test_cached_mp4_reuse_rechecks_both_rows_after_first_service_read(
         assert stored.state == DownloadState.ATTENTION_REQUIRED
     else:
         assert stored == original
+
+
+def test_f03_cached_mp4_refuses_old_scene_duration_without_touching_history(
+    tmp_path: Path,
+) -> None:
+    driver = FakeDownloadDriver()
+    root, _jobs, downloads, service = _setup(tmp_path, driver)
+    recorded = service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    mp4 = Path(recorded.output_path or "")
+    original_bytes = mp4.read_bytes()
+    workspace_repo = SqliteWorkspaceRepository(root)
+    workspace = workspace_repo.load("EP500_DOWNLOAD")
+    assert workspace is not None
+    revised = replace(
+        workspace,
+        scenes=(replace(workspace.scenes[0], selected_flow_duration_s=6),),
+    )
+    workspace_repo.update(revised, expected_workspace=workspace)
+
+    with pytest.raises(InternalInvariantError, match="Cached Download no longer matches"):
+        service.download_scene("EP500_DOWNLOAD", "SCENE_001")
+    assert len(driver.calls) == 1
+    assert downloads.get("EP500_DOWNLOAD", "SCENE_001") == recorded
+    assert mp4.read_bytes() == original_bytes
 
 
 def test_cached_mp4_identity_guard_reads_sqlite_without_writes(tmp_path: Path) -> None:
