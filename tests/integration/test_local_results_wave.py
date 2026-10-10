@@ -344,12 +344,42 @@ def test_local_download_failure_without_success_is_persisted(
     failed = service.record_download_failed("EP400_RESULTS", "SCENE_001", "network error")
     repository = SqliteDownloadResultRepository(tmp_path / "projects")
     assert failed.state == DownloadState.FAILED
-    assert failed.error_message == "network error"
+    assert failed.error_message == "Local Download failed; no confirmed MP4 was recorded."
     assert repository.get("EP400_RESULTS", "SCENE_001") == failed
     snapshot = service.snapshot("EP400_RESULTS")
     assert snapshot.downloaded_count == 0
     assert snapshot.handoff_ready is False
     assert snapshot.scenes[0].download_state == DownloadState.FAILED
+
+
+@pytest.mark.parametrize(
+    "unsafe_message",
+    [
+        "https://flow.example.invalid/download?access_token=DO_NOT_PERSIST",
+        "Cookie: auth_session=DO_NOT_PERSIST",
+        "C:\\Users\\private\\AppData\\Local\\DO_NOT_PERSIST",
+        "network failure\\nAuthorization: Bearer DO_NOT_PERSIST",
+    ],
+)
+def test_local_failure_text_never_leaks_into_sqlite_or_exported_manifest(
+    tmp_path: Path,
+    unsafe_message: str,
+) -> None:
+    """Direct local failure recording must redact caller-supplied private data."""
+
+    service, _jobs = _service(tmp_path)
+    saved = service.record_download_failed(
+        "EP400_RESULTS", "SCENE_001", unsafe_message
+    )
+    assert saved.state == DownloadState.FAILED
+    assert saved.error_message == "Local Download failed; no confirmed MP4 was recorded."
+    repository = SqliteDownloadResultRepository(tmp_path / "projects")
+    assert repository.get("EP400_RESULTS", "SCENE_001") == saved
+    assert "DO_NOT_PERSIST" not in str(saved)
+    database = tmp_path / "projects" / "EP400_RESULTS" / "project.sqlite3"
+    assert b"DO_NOT_PERSIST" not in database.read_bytes()
+    manifest = service.export_manifest("EP400_RESULTS")
+    assert "DO_NOT_PERSIST" not in manifest.read_text(encoding="utf-8")
 
 
 def test_local_failure_from_second_service_cannot_clobber_success(
