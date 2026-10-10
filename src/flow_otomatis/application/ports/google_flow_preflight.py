@@ -11,7 +11,12 @@ from typing import Protocol
 class GoogleFlowAccessState(StrEnum):
     """Read-only reachability/auth state; this does not mean generation is proven."""
 
+    # A known Flow host alone does not prove identity or workspace authorization.
     REACHABLE = "REACHABLE"
+    REACHABLE_ONLY = "REACHABLE"  # Backward-compatible public-reachability alias.
+    ACCESS_VERIFIED = "ACCESS_VERIFIED"  # Reserved; requires verified account identity.
+    UNCHECKED = "UNCHECKED"
+    CHECKING = "CHECKING"
     AUTH_REQUIRED = "AUTH_REQUIRED"
     UNAVAILABLE = "UNAVAILABLE"
     UNKNOWN = "UNKNOWN"

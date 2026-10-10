@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import threading
+from concurrent.futures import Future
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLabel, QPushButton
 
+from flow_otomatis.application.ports.google_flow_preflight import (
+    GoogleFlowAccessProbe,
+    GoogleFlowAccessState,
+)
 from flow_otomatis.application.ports.google_session import (
     GoogleSessionProfile,
     GoogleSessionRestartGate,
     GoogleSessionState,
 )
-from flow_otomatis.application.services import GoogleSessionService
+from flow_otomatis.application.services import GoogleFlowPreflightService, GoogleSessionService
 from flow_otomatis.presentation.main_window import MainWindow
 from flow_otomatis.workers.browser.google_session_commands import (
     ThreadedGoogleSessionCommands,
@@ -166,3 +171,187 @@ def test_slow_session_probe_keeps_qt_heartbeat_responsive(qtbot) -> None:
 
     assert window.fixture_code == "REAL_GOOGLE_LOGIN"
     assert service.shutdown(timeout_s=1.0) is True
+
+
+class FixtureFlowPreflight:
+    def __init__(self) -> None:
+        self.checked: list[str] = []
+
+    def check(self, profile_id: str) -> GoogleFlowAccessProbe:
+        self.checked.append(profile_id)
+        return GoogleFlowAccessProbe(
+            profile_id=profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Halaman Flow dapat dijangkau; akses akun belum terverifikasi.",
+        )
+
+    def close(self, profile_id: str) -> None:
+        del profile_id
+
+    def shutdown(self) -> None:
+        pass
+
+
+def test_real_flow_button_uses_only_read_only_preflight(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    flow = FixtureFlowPreflight()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(flow),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+    _button(window, "Cek Akses Flow").click()
+    qtbot.waitUntil(lambda: bool(flow.checked), timeout=1500)
+
+    labels = [label.text() for label in window.findChildren(QLabel)]
+    assert session.profile.profile_id in flow.checked
+    assert "Halaman terjangkau; akses belum terverifikasi" in labels
+    assert "Akses terverifikasi" not in labels
+
+
+def test_flow_button_requires_current_google_ready(qtbot) -> None:
+    session = FixtureSessionPort()
+    flow = FixtureFlowPreflight()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(flow),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+
+    assert not _button(window, "Cek Akses Flow").isEnabled()
+    assert flow.checked == []
+
+
+class DeferredFlowCommands:
+    def __init__(self) -> None:
+        self.requested: list[tuple[str, Future[GoogleFlowAccessProbe]]] = []
+
+    def submit_check_flow(self, profile_id: str) -> Future[GoogleFlowAccessProbe]:
+        future: Future[GoogleFlowAccessProbe] = Future()
+        self.requested.append((profile_id, future))
+        return future
+
+
+def test_flow_reply_from_another_profile_never_populates_selected_account(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+    _button(window, "Cek Akses Flow").click()
+    assert len(commands.requested) == 1
+    assert not _button(window, "Cek Akses Flow").isEnabled()
+
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id="profile-ffffffffffff",
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture only; wrong account.",
+        )
+    )
+    qtbot.waitUntil(lambda: _button(window, "Cek Akses Flow").isEnabled(), timeout=1500)
+    labels = [label.text() for label in window.findChildren(QLabel)]
+    assert "Halaman terjangkau; akses belum terverifikasi" not in labels
+    assert "Belum diperiksa" in labels
+
+
+def test_flow_reply_after_session_epoch_invalidated_is_ignored(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+    _button(window, "Cek Akses Flow").click()
+
+    window._invalidate_google_flow(session.profile.profile_id)
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id=session.profile.profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture only; stale callback.",
+        )
+    )
+    qtbot.wait(50)
+    assert session.profile.profile_id not in window._google_flow_probes
+
+
+def test_pending_flow_preflight_does_not_block_qt_heartbeat(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+
+    heartbeat: list[int] = []
+    timer = QTimer(window)
+    timer.setInterval(10)
+    timer.timeout.connect(lambda: heartbeat.append(len(heartbeat) + 1))
+    timer.start()
+    _button(window, "Cek Akses Flow").click()
+    assert len(commands.requested) == 1
+
+    qtbot.wait(120)
+    assert len(heartbeat) >= 3
+    assert not _button(window, "Cek Akses Flow").isEnabled()
+
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id=session.profile.profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture read-only preflight.",
+        )
+    )
+    qtbot.waitUntil(lambda: _button(window, "Cek Akses Flow").isEnabled(), timeout=1500)
+
+
+def test_flow_reply_after_window_closed_does_not_change_status(qtbot) -> None:
+    session = FixtureSessionPort()
+    session.check_profile(session.profile.profile_id)
+    commands = DeferredFlowCommands()
+    window = MainWindow(
+        google_session_service=GoogleSessionService(session),
+        google_flow_preflight_service=GoogleFlowPreflightService(
+            FixtureFlowPreflight(), commands=commands
+        ),
+    )
+    qtbot.addWidget(window)
+    window.show_google_login(session.profile)
+    _button(window, "Cek Akses Flow").click()
+    assert len(commands.requested) == 1
+
+    window.close()
+    commands.requested[0][1].set_result(
+        GoogleFlowAccessProbe(
+            profile_id=session.profile.profile_id,
+            state=GoogleFlowAccessState.REACHABLE_ONLY,
+            checked_at=datetime.now(UTC),
+            detail="Fixture stale response after close.",
+        )
+    )
+    qtbot.wait(50)
+    assert window._google_flow_probes == {}
