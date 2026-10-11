@@ -1,0 +1,143 @@
+name: One-off GitHub assets backup Flow-Otomatis
+on:
+  push:
+    branches:
+      - backup/oneoff-export-20261011-wib
+    paths:
+      - .github/workflows/backup-all-assets-oneoff.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Prepare full repository backup
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export LC_ALL=C
+          ROOT=Flow-Otomatis-RECOVERY
+          mkdir -p "$ROOT"/{01_GIT,02_SOURCE,03_DOCS_MAIN,04_UI_LINTAS_BRANCH,05_PROMPTS,06_BUILD,07_MANIFEST,08_RECOVERY,09_KETERBATASAN}
+          git clone --mirror "https://github.com/$GITHUB_REPOSITORY.git" "$RUNNER_TEMP/repo.git"
+          M="$RUNNER_TEMP/repo.git"
+          git -C "$M" fsck --full --no-reflogs
+          git -C "$M" for-each-ref --format='%(refname) %(objectname)' | sort > "$ROOT/07_MANIFEST/ALL_REFS.txt"
+          git -C "$M" for-each-ref refs/heads --format='%(refname:short) %(objectname)' | sort > "$ROOT/07_MANIFEST/BRANCHES.txt"
+          git -C "$M" for-each-ref refs/tags --format='%(refname:short) %(objectname)' | sort > "$ROOT/07_MANIFEST/TAGS.txt"
+          git -C "$M" log --all --date=iso-strict --format='%H %aI %s' > "$ROOT/07_MANIFEST/COMMIT_HISTORY.txt"
+          git -C "$M" rev-parse refs/heads/main > "$ROOT/07_MANIFEST/MAIN_COMMIT.txt"
+          git -C "$M" archive --format=zip --output="$PWD/$ROOT/02_SOURCE/Flow-Otomatis-SOURCE-MAIN.zip" refs/heads/main
+          git -C "$M" bundle create "$PWD/$ROOT/01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" --all
+          git -C "$M" bundle verify "$PWD/$ROOT/01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" > "$ROOT/07_MANIFEST/BUNDLE_VERIFY.txt" 2>&1
+          git -C "$M" bundle list-heads "$PWD/$ROOT/01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" > "$ROOT/07_MANIFEST/BUNDLE_REFS.txt"
+          git clone --mirror "$PWD/$ROOT/01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" "$RUNNER_TEMP/restored.git"
+          git -C "$RUNNER_TEMP/restored.git" fsck --full --no-reflogs
+          git -C "$RUNNER_TEMP/restored.git" for-each-ref --format='%(refname) %(objectname)' | sort > "$ROOT/07_MANIFEST/RESTORED_REFS.txt"
+          diff -u "$ROOT/07_MANIFEST/ALL_REFS.txt" "$ROOT/07_MANIFEST/RESTORED_REFS.txt"
+          git -C "$M" archive --format=tar refs/heads/main docs AGENTS.md PLAN.md TASKS.md PROJECT_STATE.md README.md | tar -xf - -C "$ROOT/03_DOCS_MAIN"
+          git -C "$M" archive --format=tar refs/heads/docs/e12-02-uix-prompt-only-20261008 docs/ui/final docs/ui/original_uncompressed | tar -xf - -C "$ROOT/04_UI_LINTAS_BRANCH"
+          cp -a "$ROOT/03_DOCS_MAIN/docs/ui/prompts/." "$ROOT/05_PROMPTS/"
+          cat > "$ROOT/09_KETERBATASAN/EXTERNAL_LIBRARY_NOT_INCLUDED.txt" <<'ENDLIB'
+          IMPORTANT: This archive is GitHub-only.
+          ChatGPT Library originals have NOT been merged, including:
+          FLOW_OTOMATIS_ASTRA_AUDIT_DAN_RENCANA_SOL_2026-10-10.docx
+          FLOW_OTOMATIS_ASTRA_AUDIT_DAN_RENCANA_SOL_2026-10-10.txt
+          Standalone UI mockup PNGs stored outside GitHub, and any external logos.
+          Do not call this a complete all-sources project backup.
+          The 22 UI reference PNGs stored in a Git branch ARE included.
+          ENDLIB
+          cat > "$ROOT/08_RECOVERY/PETUNJUK_PEMULIHAN_WINDOWS11.txt" <<'ENDRESTORE'
+          1. Extract this archive.
+          2. Install Git for Windows.
+          3. Verify SHA256SUMS.txt in 07_MANIFEST before restore.
+          4. Open PowerShell inside the extracted Flow-Otomatis-RECOVERY folder.
+          5. Run: git clone --mirror "01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle" "Flow-Otomatis-restored.git"
+          6. Create a new EMPTY GitHub repository.
+          7. Run: cd Flow-Otomatis-restored.git
+          8. Run: git remote set-url origin https://github.com/NEW-ACCOUNT/Flow-Otomatis.git
+          9. Run: git push origin --all
+          10. Run: git push origin --tags
+          11. Manually recreate provider secrets, Actions settings, and other platform-specific data.
+          WARNING: PR threads, Github settings, account data and original secrets are NOT backed up by Git Bundle.
+          ENDRESTORE
+          cat > "$ROOT/08_RECOVERY/VERIFY_ALL.ps1" <<'ENDPS'
+          $ErrorActionPreference = 'Stop'
+          $root = Split-Path -Parent $PSScriptRoot
+          Push-Location $root
+          try {
+            $errors = 0
+            foreach ($line in (Get-Content "07_MANIFEST/SHA256SUMS.txt")) {
+              if ($line -notmatch '^([a-f0-9]{64})  (.+)$') { throw "Bad manifest line: $line" }
+              $expected = $Matches[1]
+              $path = $Matches[2]
+              if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $errors++; Write-Host "Missing: $path"; continue }
+              $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($expected -ne $actual) { $errors++; Write-Host "Mismatch: $path" }
+            }
+            if ($errors -gt 0) { throw "$errors files failed SHA256 verification" }
+            Write-Host 'SHA256 verification PASS'
+            git bundle list-heads '01_GIT/Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle'
+            if ($LASTEXITCODE -ne 0) { throw 'Git bundle invalid' }
+          } finally { Pop-Location }
+          ENDPS
+          for entry in "11677836609:Flow-Otomatis-UIX22-Offline-Win11-x64.zip" "11677951299:Flow-Otomatis-OFFLINE-Simulator-Win11-x64.zip"; do
+            aid="$(echo "$entry" | cut -d ':' -f1)"
+            name="$(echo "$entry" | cut -d ':' -f2)"
+            if gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid/zip" > "$ROOT/06_BUILD/$name.part" 2>/dev/null && unzip -tq "$ROOT/06_BUILD/$name.part" >/dev/null 2>&1; then
+              mv "$ROOT/06_BUILD/$name.part" "$ROOT/06_BUILD/$name"
+              echo "$name: CI_BUILD_INCLUDED_NOT_STABLE_LIVE" >> "$ROOT/07_MANIFEST/BUILD_STATUS.txt"
+            else
+              rm -f "$ROOT/06_BUILD/$name.part"
+              echo "$name: BUILD_NOT_AVAILABLE" >> "$ROOT/07_MANIFEST/BUILD_STATUS.txt"
+            fi
+          done
+          export ROOT
+          python - <<'PY'
+          import os, hashlib, zipfile
+          from pathlib import Path
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          root=Path(os.environ['ROOT'])
+          assets=list((root/'04_UI_LINTAS_BRANCH/docs/ui/final/assets').glob('*.png'))
+          assert len(assets)==22, f'Expected 22 PNG: {len(assets)}'
+          with zipfile.ZipFile(root/'02_SOURCE/Flow-Otomatis-SOURCE-MAIN.zip') as z:
+              assert len(z.namelist())>150
+              assert z.testzip() is None
+          t=datetime.now(ZoneInfo('Asia/Jakarta'))
+          (root/'07_MANIFEST/BACKUP_WIB.txt').write_text(t.isoformat())
+          (root/'07_MANIFEST/STATUS.txt').write_text('GIT_VERIFIED; ALL_REFS_RESTORED; PNG_UI_22_INCLUDED; LIBRARY_NOT_INCLUDED; HISTORICAL_SECRETS_NOT_AUDITED\n')
+          files=sorted(p for p in root.rglob('*') if p.is_file() and p.name!='SHA256SUMS.txt')
+          checks=[]
+          for p in files:
+              h=hashlib.sha256()
+              with p.open('rb') as f:
+                  for chunk in iter(lambda:f.read(1024*1024),b''):h.update(chunk)
+              checks.append(f'{h.hexdigest()}  {p.relative_to(root).as_posix()}')
+          (root/'07_MANIFEST/SHA256SUMS.txt').write_text('\n'.join(checks)+'\n')
+          out=Path('FLOW-OTOMATIS-GITHUB-DOCS-UI-GIT-'+t.strftime('%Y-%m-%d_%H-%M')+'-WIB.zip')
+          with zipfile.ZipFile(out,'w',allowZip64=True) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file():
+                      z.write(p,str(p),compress_type=zipfile.ZIP_STORED if p.suffix.lower() in {'.zip','.bundle','.docx','.png'} else zipfile.ZIP_DEFLATED)
+          with zipfile.ZipFile(out) as z:
+              assert z.testzip() is None
+              assert any(n.endswith('Flow-Otomatis-COMPLETE-GIT-HISTORY.bundle') for n in z.namelist())
+          (Path('SHA256_ARCHIVE.txt')).write_text(hashlib.file_digest(out.open('rb'),'sha256').hexdigest()+'  '+out.name+'\n')
+          print('RESULT',out.name,'BYTES',out.stat().st_size,'PNG',len(assets),'BRANCHES',len((root/'07_MANIFEST/BRANCHES.txt').read_text().splitlines()),'FILES',len(files))
+          PY
+          (cd "$ROOT" && sha256sum -c 07_MANIFEST/SHA256SUMS.txt >/dev/null)
+      - name: Upload one ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-GitHub-UI-Docs-20261011
+          path: |
+            FLOW-OTOMATIS-GITHUB-DOCS-UI-GIT-*.zip
+            SHA256_ARCHIVE.txt
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
