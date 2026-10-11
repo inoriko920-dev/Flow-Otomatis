@@ -1,0 +1,148 @@
+name: Split exact 535MB Flow-Otomatis backup into four download parts
+on:
+  push:
+    branches:
+      - backup/oneoff-export-20261011-wib
+    paths:
+      - .github/workflows/split-535mb-backup-oneoff.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  split_backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Download unchanged original artifact and split into four verified parts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p parts/part01 parts/part02 parts/part03 parts/part04
+          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 30 \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/11679320584/zip" \
+            --output original.zip
+          printf '%s  %s\n' "d250b01d9d77e3169399d61b000a8ebd1b40aadef6cf3613d85b870824403e6e" original.zip | sha256sum --check
+          unzip -tq original.zip
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import math
+          import zipfile
+          p=Path("original.zip")
+          basename="FLOW-OTOMATIS-FULL-BACKUP-2026-10-11_01-34-WIB.zip"
+          expected="d250b01d9d77e3169399d61b000a8ebd1b40aadef6cf3613d85b870824403e6e"
+          size=p.stat().st_size
+          assert size==535791414,f"Wrong original artifact size: {size}"
+          chunksize=math.ceil(size/4)
+          manifest=[]
+          with p.open("rb") as src:
+              for n in range(1,5):
+                  dest=Path("parts")/f"part{n:02d}"/f"{basename}.{n:03d}"
+                  with dest.open("wb") as dst:
+                      amount=min(chunksize,size-(n-1)*chunksize)
+                      remaining=amount
+                      h=hashlib.sha256()
+                      while remaining:
+                          data=src.read(min(4*1024*1024,remaining))
+                          assert data, "Unexpected EOF while splitting"
+                          dst.write(data)
+                          h.update(data)
+                          remaining-=len(data)
+                  manifest.append((dest.name,dest.stat().st_size,h.hexdigest()))
+          join=Path("joined-test.zip")
+          with join.open("wb") as dst:
+              for n in range(1,5):
+                  srcfile=Path("parts")/f"part{n:02d}"/f"{basename}.{n:03d}"
+                  with srcfile.open("rb") as src:
+                      while b:=src.read(4*1024*1024):
+                          dst.write(b)
+          with join.open("rb") as f:
+              verify=hashlib.file_digest(f,"sha256").hexdigest()
+          assert verify==expected,f"Rejoined SHA incorrect: {verify}"
+          with zipfile.ZipFile(join) as z:
+              assert z.testzip() is None
+              contents=z.namelist()
+              assert len(contents)>0
+          ps=r"""$ErrorActionPreference = 'Stop'
+          $folder=Split-Path -Parent $MyInvocation.MyCommand.Path
+          $base='FLOW-OTOMATIS-FULL-BACKUP-2026-10-11_01-34-WIB.zip'
+          $expected='d250b01d9d77e3169399d61b000a8ebd1b40aadef6cf3613d85b870824403e6e'
+          $out=Join-Path $folder $base
+          if (Test-Path -LiteralPath $out) { throw "Output already exists. Move/delete it before retrying: $out" }
+          foreach ($n in 1..4) {
+            $part=Join-Path $folder ($base+'.'+$n.ToString('000'))
+            if (!(Test-Path -LiteralPath $part -PathType Leaf)) { throw "Missing part: $part" }
+          }
+          $dest=[System.IO.File]::Open($out,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write)
+          try {
+            foreach ($n in 1..4) {
+              $part=Join-Path $folder ($base+'.'+$n.ToString('000'))
+              $inputStream=[System.IO.File]::OpenRead($part)
+              try { $inputStream.CopyTo($dest) } finally { $inputStream.Dispose() }
+              Write-Host "Joined part $n / 4"
+            }
+          } finally { $dest.Dispose() }
+          $actual=(Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            Remove-Item -LiteralPath $out -Force
+            throw "SHA-256 mismatch! Expected $expected, got $actual. Output removed. Re-download parts."
+          }
+          Write-Host "PASS: Original 535.8 MB backup reassembled without modification: $out"
+          Write-Host "SHA-256: $actual"
+          """
+          Path("parts/part01/GABUNG-4-PART.ps1").write_text(ps,encoding="utf-8")
+          info=("PETUNJUK BACKUP FLOW-OTOMATIS 4 PART (WINDOWS 11)\n"
+                "Asal: backup asli 11 Oktober 2026, 01.34 WIB, 535.791.414 byte.\n"
+                "1. Download keempat arsip PART-01, PART-02, PART-03, PART-04 dari GitHub Artifacts.\n"
+                "2. Extract masing-masing arsip PART ke SATU folder yang sama.\n"
+                "3. Pastikan terdapat empat file .zip.001, .zip.002, .zip.003, .zip.004 di folder itu.\n"
+                "4. Klik kanan GABUNG-4-PART.ps1 lalu Run with PowerShell, atau jalankan:\n"
+                "   powershell -ExecutionPolicy Bypass -File .\\GABUNG-4-PART.ps1\n"
+                "5. Script memeriksa SHA-256. Bila PASS, terbentuk ZIP asli yang sama persis.\n"
+                "6. Baru ekstrak ZIP hasil penggabungan untuk mengakses backup.\n"
+                "Jangan mengubah nama empat file .001-.004.\n"
+                f"SHA-256 arsip asli: {expected}\n")
+          Path("parts/part01/BACA_DULU.txt").write_text(info,encoding="utf-8")
+          sums="\n".join(f"{h}  {name} ({sz} bytes)" for name,sz,h in manifest)
+          Path("parts/part01/SHA256_PARTS.txt").write_text(sums+"\n",encoding="utf-8")
+          for name,sz,h in manifest: print("PART",name,"BYTES",sz,"SHA256",h)
+          print("RECONSTRUCTED_SHA256",verify,"MATCHES_ORIGINAL",verify==expected)
+          print("ORIGINAL_ZIP_MEMBERS",len(contents))
+          PY
+      - name: Upload PART 01 of 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-FULL-BACKUP-PART-01-of-04
+          path: parts/part01/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload PART 02 of 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-FULL-BACKUP-PART-02-of-04
+          path: parts/part02/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload PART 03 of 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-FULL-BACKUP-PART-03-of-04
+          path: parts/part03/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload PART 04 of 04
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flow-Otomatis-FULL-BACKUP-PART-04-of-04
+          path: parts/part04/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
