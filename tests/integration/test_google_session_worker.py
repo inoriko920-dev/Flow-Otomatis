@@ -88,7 +88,8 @@ def test_google_session_worker_persists_only_safe_metadata(tmp_path: Path) -> No
         driver=driver,
     ).list_profiles()
     assert len(reloaded) == 1
-    assert reloaded[0].state is GoogleSessionState.READY
+    assert reloaded[0].state is GoogleSessionState.UNKNOWN
+    assert "verifikasi ulang" in reloaded[0].detail
 
 
 def test_google_session_worker_cancel_and_delete_are_profile_scoped(tmp_path: Path) -> None:
@@ -200,3 +201,124 @@ def test_restart_gate_requires_current_ready_state(tmp_path: Path) -> None:
     assert gate.restart_verified_at is not None
     assert gate.current_state is GoogleSessionState.NEEDS_LOGIN
     assert gate.ready_after_restart is False
+
+
+def test_third_instance_never_inherits_historical_restart_ready_without_probe(
+    tmp_path: Path,
+) -> None:
+    driver = FixtureBrowserDriver()
+    driver.state = GoogleSessionState.READY
+    root = tmp_path / "Sessions"
+    first = GoogleSessionWorker(root, driver=driver, instance_id="instance-a")
+    profile = first.create_profile("Akun historis")
+    first.check_profile(profile.profile_id)
+
+    second = GoogleSessionWorker(root, driver=driver, instance_id="instance-b")
+    second.check_profile(profile.profile_id)
+    second_gate = second.get_restart_gate(profile.profile_id)
+    assert second_gate.ready_after_restart is True
+
+    third = GoogleSessionWorker(root, driver=driver, instance_id="instance-c")
+    before_probe = third.get_restart_gate(profile.profile_id)
+    assert before_probe.restart_verified_at == second_gate.restart_verified_at
+    assert before_probe.current_state is GoogleSessionState.UNKNOWN
+    assert before_probe.ready_after_restart is False
+
+    history = json.loads(
+        (root / "google" / profile.profile_id / "profile.json").read_text(encoding="utf-8")
+    )
+    assert history["state"] == "READY"
+    assert third.check_profile(profile.profile_id).state is GoogleSessionState.READY
+    assert third.get_restart_gate(profile.profile_id).ready_after_restart is True
+
+
+def test_login_cancel_shutdown_and_failed_rechecks_revoke_runtime_readiness(
+    tmp_path: Path,
+) -> None:
+    driver = FixtureBrowserDriver()
+    driver.state = GoogleSessionState.READY
+    root = tmp_path / "Sessions"
+    first = GoogleSessionWorker(root, driver=driver, instance_id="instance-a")
+    profile = first.create_profile("Akun")
+    first.check_profile(profile.profile_id)
+    worker = GoogleSessionWorker(root, driver=driver, instance_id="instance-b")
+    worker.check_profile(profile.profile_id)
+    assert worker.get_restart_gate(profile.profile_id).ready_after_restart
+
+    worker.open_login(profile.profile_id)
+    assert not worker.get_restart_gate(profile.profile_id).ready_after_restart
+    worker.check_profile(profile.profile_id)
+    assert worker.get_restart_gate(profile.profile_id).ready_after_restart
+
+    worker.cancel_profile(profile.profile_id)
+    assert not worker.get_restart_gate(profile.profile_id).ready_after_restart
+    worker.check_profile(profile.profile_id)
+    assert worker.get_restart_gate(profile.profile_id).ready_after_restart
+
+    driver.state = GoogleSessionState.NEEDS_LOGIN
+    worker.check_profile(profile.profile_id)
+    assert not worker.get_restart_gate(profile.profile_id).ready_after_restart
+    driver.state = GoogleSessionState.READY
+    worker.check_profile(profile.profile_id)
+    assert worker.get_restart_gate(profile.profile_id).ready_after_restart
+
+    worker.shutdown()
+    assert not worker.get_restart_gate(profile.profile_id).ready_after_restart
+
+
+def test_third_instance_blocks_generation_downstream_even_with_saved_restart_proof(
+    tmp_path: Path,
+) -> None:
+    from flow_otomatis.application.ports.generation_provider import (
+        GenerationAuthenticationRequiredError,
+        GenerationProviderResult,
+        GenerationRequest,
+    )
+    from flow_otomatis.application.services.google_sessions import GoogleSessionService
+    from flow_otomatis.application.services.restart_gated_generation import (
+        RestartGatedGenerationProvider,
+    )
+
+    driver = FixtureBrowserDriver()
+    driver.state = GoogleSessionState.READY
+    root = tmp_path / "Sessions"
+    first = GoogleSessionWorker(root, driver=driver, instance_id="instance-a")
+    profile = first.create_profile("Akun")
+    first.check_profile(profile.profile_id)
+    second = GoogleSessionWorker(root, driver=driver, instance_id="instance-b")
+    second.check_profile(profile.profile_id)
+    assert second.get_restart_gate(profile.profile_id).ready_after_restart
+
+    class Downstream:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, request: GenerationRequest) -> GenerationProviderResult:
+            self.calls += 1
+            return GenerationProviderResult(remote_result_id="test-only")
+
+    downstream = Downstream()
+    third = GoogleSessionWorker(root, driver=driver, instance_id="instance-c")
+    guarded = RestartGatedGenerationProvider(
+        profile.profile_id, GoogleSessionService(third), downstream
+    )
+    request = GenerationRequest(
+        episode_id="EP1",
+        scene_id="SCENE_001",
+        image_file="asset.png",
+        motion_prompt="slow camera",
+        target_duration_s=3.5,
+        flow_duration_s=4,
+        model="Omni Flash 1.1",
+        resolution="720p",
+        aspect_ratio="16:9",
+    )
+    import pytest
+
+    with pytest.raises(GenerationAuthenticationRequiredError):
+        guarded.generate(request)
+    assert downstream.calls == 0
+
+    third.check_profile(profile.profile_id)
+    assert guarded.generate(request).remote_result_id == "test-only"
+    assert downstream.calls == 1
