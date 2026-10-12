@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import sqlite3
+import warnings
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from flow_otomatis.application.services import EpisodeImportService
+from flow_otomatis.application.services import EpisodeImportService, ScenePlanningService
+from flow_otomatis.application.services.local_scene_preflight import (
+    prepare_local_scene_preflight,
+)
 from flow_otomatis.domain.errors import (
+    InternalInvariantError,
     PackageSecurityError,
     PackageValidationError,
+    StorageError,
     WorkspaceAlreadyExistsError,
 )
 from flow_otomatis.domain.job import GenerationJob, GenerationJobState
@@ -318,4 +327,267 @@ def test_atomic_create_allows_only_one_concurrent_creator(tmp_path: Path) -> Non
         outcomes = list(executor.map(lambda _index: create_once(), range(2)))
 
     assert sorted(outcomes) == ["created", "duplicate"]
+    assert repository.load(workspace.episode_id) == workspace
+
+
+def test_import_pins_sha256_and_detects_same_path_image_modification(tmp_path: Path) -> None:
+    """Changing bytes at a valid source path must not inherit initial approval."""
+    package = _write_folder_package(tmp_path / "episode", _manifest())
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    service = EpisodeImportService(reader, repository, image_verifier=reader)
+    workspace = service.import_package(package)
+    original = repository.load(workspace.episode_id)
+    assert original == workspace
+    expected_hash = hashlib.sha256(b"synthetic-image-17").hexdigest()
+    assert workspace.scenes[1].image_sha256_imported == expected_hash
+    assert len(workspace.scenes[0].image_sha256_imported or "") == 64
+
+    initial = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert initial["baseline_match_count"] == 2
+    assert initial["baseline_mismatch_count"] == 0
+    assert initial["baseline_missing_count"] == 0
+    assert initial["image_baselines_verified"] is True
+
+    image = package / "08_APPROVED_IMAGES" / "EP001__IMAGE__SCENE_017__v1.0.png"
+    image.write_bytes(b"modified-image-17")
+    changed = prepare_local_scene_preflight(workspace, image_verifier=reader)
+    assert changed["baseline_match_count"] == 1
+    assert changed["baseline_mismatch_count"] == 1
+    assert changed["image_baselines_verified"] is False
+    assert changed["held_count"] == 2
+    assert any("GAMBAR BERUBAH SEJAK IMPOR" in row["issues"] for row in changed["held"])
+    assert "modified-image" not in json.dumps(changed)
+    assert str(tmp_path) not in json.dumps(changed)
+    assert repository.load(workspace.episode_id) == original
+
+    planning = ScenePlanningService(reader, repository)
+    planning.select_flow_duration(workspace.episode_id, "SCENE_016", 8)
+    reloaded = repository.load(workspace.episode_id)
+    assert reloaded is not None
+    assert reloaded.scenes[1].image_sha256_imported == expected_hash
+
+
+def test_legacy_workspace_loads_without_baseline_and_migrates_only_on_write(
+    tmp_path: Path,
+) -> None:
+    """Old projects must not be rewritten or assigned fake historical digests."""
+    package = _write_package(tmp_path / "episode.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    reader = EpisodePackageReader()
+    legacy = EpisodeImportService(reader, repository).import_package(package)
+    db = tmp_path / "projects" / legacy.episode_id / "project.sqlite3"
+
+    # Emulate the previously released scenes schema with no digest column.
+    with sqlite3.connect(db) as connection:
+        connection.execute("ALTER TABLE scenes DROP COLUMN image_sha256_imported")
+    initial_bytes = db.read_bytes()
+    restored = repository.load(legacy.episode_id)
+    assert restored == legacy
+    assert all(scene.image_sha256_imported is None for scene in restored.scenes)
+    assert db.read_bytes() == initial_bytes
+
+    report = prepare_local_scene_preflight(restored, image_verifier=reader)
+    assert report["baseline_missing_count"] == 2
+    assert report["baseline_match_count"] == 0
+    assert report["image_baselines_verified"] is False
+    assert "GAMBAR BERUBAH SEJAK IMPOR" not in json.dumps(report)
+
+    planner = ScenePlanningService(reader, repository)
+    updated = planner.select_flow_duration(legacy.episode_id, "SCENE_016", 8)
+    assert updated.scenes[0].selected_flow_duration_s == 8
+    assert all(scene.image_sha256_imported is None for scene in updated.scenes)
+    with sqlite3.connect(db) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(scenes)")}
+    assert "image_sha256_imported" in columns
+
+
+@pytest.mark.parametrize(
+    "extra_name",
+    [
+        "EP001_STEVE_JOBS_COMPLETE/08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__v1.0.png",
+        "EP001_STEVE_JOBS_COMPLETE/08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__V1.0.PNG",
+    ],
+)
+def test_ambiguous_zip_image_entries_never_import_or_hash(tmp_path: Path, extra_name: str) -> None:
+    package = _write_package(tmp_path / "duplicate_images.zip", _manifest())
+    # zipfile deliberately allows duplicate names; a read-by-name then resolves
+    # the last member, which is not an acceptable source for pinned SHA-256.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with zipfile.ZipFile(package, "a") as archive:
+            archive.writestr(extra_name, b"shadow-image-content")
+    reader = EpisodePackageReader()
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        reader.load(package)
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        reader.image_digest(
+            package,
+            "SCENE_016",
+            "../08_APPROVED_IMAGES/EP001__IMAGE__SCENE_016__v1.0.png",
+        )
+    projects = tmp_path / "projects"
+    with pytest.raises(PackageSecurityError, match="duplicate or ambiguous"):
+        EpisodeImportService(
+            reader,
+            SqliteWorkspaceRepository(projects),
+            image_verifier=reader,
+        ).import_package(package)
+    assert not projects.exists()
+
+
+def test_workspace_concurrent_edits_cannot_both_commit_from_same_revision(
+    tmp_path: Path,
+) -> None:
+    """The second editor must receive a conflict, never silently lose a change."""
+    package = _write_package(tmp_path / "two_editors.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    original = EpisodeImportService(EpisodePackageReader(), repository).import_package(package)
+
+    def candidate(duration: int):
+        first = replace(
+            original.scenes[0],
+            selected_flow_duration_s=duration,
+            readiness=SceneReadiness.READY,
+        )
+        return replace(original, scenes=(first, original.scenes[1]))
+
+    choices = (candidate(8), candidate(10))
+
+    def write_once(workspace):
+        try:
+            repository.update(workspace, expected_workspace=original)
+        except InternalInvariantError:
+            return "conflict"
+        return "saved"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(write_once, choices))
+    assert sorted(outcomes) == ["conflict", "saved"]
+
+    saved = repository.load(original.episode_id)
+    assert saved in choices
+    assert saved is not None
+    assert saved.scenes[1] == original.scenes[1]
+    other = choices[1] if saved == choices[0] else choices[0]
+    with pytest.raises(InternalInvariantError, match="berubah saat disimpan"):
+        repository.update(other, expected_workspace=original)
+    assert repository.load(original.episode_id) == saved
+
+    # After an explicit refresh, another edit is allowed without data loss.
+    follow_up = replace(
+        saved,
+        scenes=(
+            saved.scenes[0],
+            replace(saved.scenes[1], motion_prompt="Fresh second editor change"),
+        ),
+    )
+    repository.update(follow_up, expected_workspace=saved)
+    assert repository.load(saved.episode_id) == follow_up
+
+
+def test_conflicting_write_to_legacy_workspace_does_not_fabricate_checksum(
+    tmp_path: Path,
+) -> None:
+    """A stale write may not migrate/modify an older project's database."""
+    package = _write_package(tmp_path / "legacy_conflict.zip", _manifest())
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    original = EpisodeImportService(EpisodePackageReader(), repository).import_package(package)
+    db = tmp_path / "projects" / original.episode_id / "project.sqlite3"
+    with sqlite3.connect(db) as connection:
+        connection.execute("ALTER TABLE scenes DROP COLUMN image_sha256_imported")
+    old = repository.load(original.episode_id)
+    assert old is not None
+    first = replace(
+        old,
+        scenes=(
+            replace(old.scenes[0], selected_flow_duration_s=8, readiness=SceneReadiness.READY),
+            old.scenes[1],
+        ),
+    )
+    repository.update(first, expected_workspace=old)
+    current = repository.load(old.episode_id)
+    assert current == first
+
+    before = db.read_bytes()
+    with pytest.raises(InternalInvariantError, match="berubah saat disimpan"):
+        repository.update(old, expected_workspace=old)
+    assert repository.load(old.episode_id) == current
+    assert db.read_bytes() == before
+    assert all(scene.image_sha256_imported is None for scene in current.scenes)
+
+
+def test_storage_rejects_resolved_db_symlink_escape_before_read_or_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Emulate Windows junction / symlink resolution without OS privilege needs."""
+    root = tmp_path / "projects"
+    outside = tmp_path / "outside" / "project.sqlite3"
+    package = _write_package(tmp_path / "safe_package.zip", _manifest())
+    workspace = EpisodeImportService(
+        EpisodePackageReader(), SqliteWorkspaceRepository(root)
+    ).validate(package)
+    db_path = root / workspace.episode_id / "project.sqlite3"
+    original_resolve = Path.resolve
+
+    def redirected_path(path: Path, *args, **kwargs) -> Path:
+        if path == db_path:
+            return outside
+        return original_resolve(path, *args, **kwargs)
+
+    repository = SqliteWorkspaceRepository(root)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "resolve", redirected_path)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.load(workspace.episode_id)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.create(workspace)
+        with pytest.raises(StorageError, match="outside the local storage root"):
+            repository.update(workspace)
+    assert not outside.exists()
+    assert not db_path.exists()
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("folder_name", ["nested-package", "nested-package.zip"])
+def test_nonstandard_nested_manifest_folder_pins_and_rescans_image_bytes(
+    tmp_path: Path, folder_name: str
+) -> None:
+    """Directory image evidence must use the approved folder, not its nested manifest."""
+    package = _write_folder_package(tmp_path / folder_name, _manifest())
+    default_prompts = package / "09_FLOW_PROMPTS_AND_TAKES"
+    custom_prompts = package / "CUSTOM_PROMPTS"
+    default_prompts.rename(custom_prompts)
+
+    reader = EpisodePackageReader()
+    repository = SqliteWorkspaceRepository(tmp_path / "projects")
+    service = EpisodeImportService(reader, repository, image_verifier=reader)
+    workspace = service.import_package(package)
+    assert Path(workspace.source_package_path) == package.resolve()
+    assert (
+        workspace.scenes[0].image_sha256_imported
+        == hashlib.sha256(b"synthetic-image-16").hexdigest()
+    )
+    assert (
+        workspace.scenes[1].image_sha256_imported
+        == hashlib.sha256(b"synthetic-image-17").hexdigest()
+    )
+    assert (
+        prepare_local_scene_preflight(workspace, image_verifier=reader)["image_baselines_verified"]
+        is True
+    )
+
+    planner = ScenePlanningService(reader, repository, image_verifier=reader)
+    assert planner.rescan_images(workspace.episode_id) == workspace
+
+    # A direct manifest import never inherits the broader folder's access.
+    with pytest.raises(PackageSecurityError):
+        reader.load(custom_prompts / "FLOW_OTOMATIS_IMPORT.json")
+
+    source_image = package / "08_APPROVED_IMAGES" / "EP001__IMAGE__SCENE_017__v1.0.png"
+    source_image.write_bytes(b"tampered-after-import")
+    with pytest.raises(PackageValidationError) as error:
+        planner.rescan_images(workspace.episode_id)
+    assert error.value.code == "IMAGE_CHANGED_SINCE_IMPORT"
     assert repository.load(workspace.episode_id) == workspace

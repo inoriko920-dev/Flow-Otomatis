@@ -91,3 +91,4 @@ class WorkspaceScene:
     model: str
     resolution: str
     aspect_ratio: str
+    image_sha256_imported: str | None = None

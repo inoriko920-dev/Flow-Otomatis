@@ -287,9 +287,18 @@ class LocalGenerationQueueService:
 
         if self._image_verifier is None:
             raise InternalInvariantError("Generation input verifier is not configured")
-        return self._image_verifier.image_digest(
+        digest = self._image_verifier.image_digest(
             Path(source_package_path), scene.scene_id, scene.image_file
         )
+        pinned = scene.image_sha256_imported
+        if pinned is not None and digest != pinned:
+            # Reject tampering between import and queue preparation, even if the
+            # current file is still readable and its pathname has not changed.
+            raise PackageValidationError(
+                "Source image changed since import; Scene requires operator review",
+                code="IMAGE_CHANGED_SINCE_IMPORT",
+            )
+        return digest
 
     def _scene(
         self,
